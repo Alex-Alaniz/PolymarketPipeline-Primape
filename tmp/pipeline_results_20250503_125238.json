@@ -1,0 +1,28 @@
+{
+  "timestamp": "2025-05-03 12:52:38",
+  "tasks": {
+    "task1": {
+      "status": "success",
+      "markets_count": 2
+    },
+    "task2": {
+      "status": "success",
+      "approved_count": 0,
+      "rejected_count": 0,
+      "timed_out_count": 2,
+      "test_approved_count": 2
+    },
+    "task3": {
+      "status": "failed",
+      "error": "No markets with banners",
+      "final_approved_count": 0,
+      "final_rejected_count": 0,
+      "failed_count": 2,
+      "test_final_approved_count": 0
+    },
+    "task4": {
+      "status": "pending"
+    }
+  },
+  "overall_status": "failed"
+}

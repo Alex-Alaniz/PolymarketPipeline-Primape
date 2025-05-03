@@ -258,9 +258,17 @@ class MessagingClient:
                                 "text": "*Generated Banner Image*:"
                             }
                         })
+                        # Use the correct image URL format for blocks
+                        # Slack expects image_url to be a direct public URL to the image
+                        # Get the permalink_public if available, or use other available URLs
+                        image_url = upload_response["file"].get("permalink_public", 
+                                   upload_response["file"].get("url_private", 
+                                   upload_response["file"].get("thumb_480", 
+                                   upload_response["file"].get("permalink"))))
+                        
                         blocks.insert(2, {
                             "type": "image",
-                            "image_url": upload_response["file"]["permalink"],
+                            "image_url": image_url,
                             "alt_text": f"Banner for {question}"
                         })
                 except Exception as e:

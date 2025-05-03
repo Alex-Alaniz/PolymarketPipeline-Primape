@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-05-03 12:51:52",
+  "deployed_markets": [
+    {
+      "id": "market_btc_100k",
+      "question": "Will Bitcoin reach $100,000 by the end of 2025?",
+      "type": "binary",
+      "category": "Crypto",
+      "sub_category": "Bitcoin",
+      "expiry": 1767139200000,
+      "options": [
+        {
+          "name": "Yes",
+          "probability": 0.65
+        },
+        {
+          "name": "No",
+          "probability": 0.35
+        }
+      ],
+      "banner_path": "tmp/market_btc_100k.png",
+      "status": "deployed",
+      "github_commit_url": "https://github.com/https://github.com/example/frontend-repo/commit/mock-commit-hash",
+      "blockchain_tx": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    },
+    {
+      "id": "market_premier_league",
+      "question": "Will Manchester City win the Premier League?",
+      "type": "binary",
+      "category": "Sports",
+      "sub_category": "Soccer",
+      "expiry": 1748649600000,
+      "options": [
+        {
+          "name": "Yes",
+          "probability": 0.7
+        },
+        {
+          "name": "No",
+          "probability": 0.3
+        }
+      ],
+      "banner_path": "tmp/market_premier_league.png",
+      "status": "deployed",
+      "github_commit_url": "https://github.com/https://github.com/example/frontend-repo/commit/mock-commit-hash",
+      "blockchain_tx": "0x0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  ],
+  "failed_markets": []
+}
