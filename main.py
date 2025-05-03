@@ -151,10 +151,41 @@ HTML_TEMPLATE = """
             <p>This application runs the Polymarket Pipeline, automating the process of:</p>
             <ol>
                 <li>Extracting Polymarket data</li>
+                <li>AI-powered market trend prediction preview</li>
                 <li>Facilitating two-stage approvals via Slack</li>
                 <li>Generating banner images with OpenAI</li>
                 <li>Deploying approved markets to ApeChain</li>
             </ol>
+        </div>
+        
+        <!-- Market Trend Prediction Section -->
+        <div style="margin-top: 30px; border-top: 1px solid #eee; padding-top: 20px;">
+            <h3>AI-Powered Market Trend Prediction</h3>
+            <p>Generate AI-powered trend predictions and insights for a market.</p>
+            
+            <div style="margin-bottom: 15px;">
+                <input type="text" id="market-id" placeholder="Market ID" style="padding: 8px; width: 200px;">
+                <input type="text" id="market-question" placeholder="Market Question" style="padding: 8px; width: 400px; margin-left: 10px;">
+            </div>
+            
+            <div style="margin-bottom: 15px;">
+                <select id="market-category" style="padding: 8px; width: 200px;">
+                    <option value="Politics">Politics</option>
+                    <option value="Crypto">Crypto</option>
+                    <option value="Sports">Sports</option>
+                    <option value="Entertainment">Entertainment</option>
+                    <option value="Finance">Finance</option>
+                    <option value="Science">Science</option>
+                    <option value="Other">Other</option>
+                </select>
+                
+                <button id="generate-prediction" class="button" style="margin-left: 10px;" onclick="generatePrediction()">Generate Prediction</button>
+            </div>
+            
+            <div id="prediction-result" style="margin-top: 20px; display: none; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background-color: #f9f9f9;">
+                <h4>Market Trend Prediction Results</h4>
+                <div id="prediction-content"></div>
+            </div>
         </div>
         
         <h3>Log Messages</h3>
@@ -195,6 +226,92 @@ HTML_TEMPLATE = """
             window.location.reload();
         }, 5000);
         {% endif %}
+        
+        function generatePrediction() {
+            // Get form values
+            const marketId = document.getElementById('market-id').value;
+            const marketQuestion = document.getElementById('market-question').value;
+            const marketCategory = document.getElementById('market-category').value;
+            
+            // Validate input
+            if (!marketId || !marketQuestion) {
+                alert('Please enter both Market ID and Market Question');
+                return;
+            }
+            
+            // Prepare market data
+            const marketData = {
+                id: marketId,
+                question: marketQuestion,
+                category: marketCategory
+            };
+            
+            // Show loading indicator
+            const resultDiv = document.getElementById('prediction-result');
+            const contentDiv = document.getElementById('prediction-content');
+            resultDiv.style.display = 'block';
+            contentDiv.innerHTML = '<p>Generating AI prediction, please wait... (this may take 15-30 seconds)</p>';
+            
+            // Call API
+            fetch('/market-trend-prediction', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(marketData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Format prediction result
+                    const prediction = data.prediction;
+                    let html = '<div style="color: #333;">';
+                    
+                    html += `<div style="margin-bottom: 15px;">
+                        <strong>Market:</strong> ${prediction.market_question}<br>
+                        <strong>Generated at:</strong> ${prediction.generated_at}<br>
+                        <strong>Based on:</strong> ${prediction.based_on_markets} historical markets
+                    </div>`;
+                    
+                    html += `<div style="display: flex; flex-wrap: wrap; gap: 20px;">
+                        <div style="flex: 1; min-width: 200px; padding: 15px; background-color: #f0f8ff; border-radius: 4px; border-left: 4px solid #4682b4;">
+                            <h4 style="margin-top: 0;">Market Interest</h4>
+                            <p><strong>Level:</strong> <span style="color: ${prediction.interest_level === 'high' ? '#2e8b57' : (prediction.interest_level === 'medium' ? '#daa520' : '#cd5c5c')};">${prediction.interest_level.toUpperCase()}</span></p>
+                            <p><strong>Reasoning:</strong> ${prediction.interest_reasoning}</p>
+                        </div>
+                        
+                        <div style="flex: 1; min-width: 200px; padding: 15px; background-color: #fff8e1; border-radius: 4px; border-left: 4px solid #ffa000;">
+                            <h4 style="margin-top: 0;">Volume Prediction</h4>
+                            <p><strong>Level:</strong> <span style="color: ${prediction.volume_prediction === 'high' ? '#2e8b57' : (prediction.volume_prediction === 'medium' ? '#daa520' : '#cd5c5c')};">${prediction.volume_prediction.toUpperCase()}</span></p>
+                            <p><strong>Strategic Timing:</strong> ${prediction.strategic_timing}</p>
+                        </div>
+                    </div>`;
+                    
+                    // Historical context and volatility
+                    html += `<div style="margin-top: 20px;">
+                        <h4>Historical Context</h4>
+                        <ul>
+                            ${prediction.historical_context.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                        
+                        <h4>Volatility Factors</h4>
+                        <ul>
+                            ${prediction.volatility_factors.map(item => `<li>${item}</li>`).join('')}
+                        </ul>
+                    </div>`;
+                    
+                    html += '</div>';
+                    contentDiv.innerHTML = html;
+                } else {
+                    // Show error
+                    contentDiv.innerHTML = `<p style="color: #cc0000;">Error: ${data.error}</p>`;
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                contentDiv.innerHTML = `<p style="color: #cc0000;">Error: Failed to generate prediction. Please try again.</p>`;
+            });
+        }
     </script>
 </body>
 </html>
@@ -353,6 +470,53 @@ def get_runs():
             return jsonify({
                 "error": str(e)
             }), 500
+
+@app.route('/market-trend-prediction', methods=['POST'])
+def predict_market_trend():
+    """API endpoint to generate AI-powered market trend prediction"""
+    try:
+        # Get market details from request
+        data = request.get_json()
+        if not data:
+            return jsonify({
+                "error": "No market data provided"
+            }), 400
+            
+        # Extract market data
+        market_id = data.get('id')
+        market_question = data.get('question')
+        
+        if not market_id or not market_question:
+            return jsonify({
+                "error": "Market ID and question are required"
+            }), 400
+        
+        # Initialize trend predictor
+        from utils.trend_prediction import MarketTrendPredictor
+        trend_predictor = MarketTrendPredictor()
+        
+        # Generate prediction
+        prediction = trend_predictor.generate_trend_preview(data)
+        
+        if prediction and 'error' not in prediction:
+            return jsonify({
+                "success": True,
+                "market_id": market_id,
+                "prediction": prediction
+            })
+        else:
+            error_msg = prediction.get('error', 'Unknown error')
+            return jsonify({
+                "success": False,
+                "market_id": market_id,
+                "error": error_msg
+            }), 500
+            
+    except Exception as e:
+        return jsonify({
+            "success": False,
+            "error": str(e)
+        }), 500
 
 # This allows running the script directly
 if __name__ == "__main__":

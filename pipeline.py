@@ -111,6 +111,14 @@ class PolymarketPipeline:
             logger.error("Failed to initialize BannerGenerator")
         
         try:
+            from utils.trend_prediction import MarketTrendPredictor
+            self.trend_predictor = MarketTrendPredictor()
+            logger.info("Market trend predictor initialized")
+        except Exception as e:
+            self.trend_predictor = None
+            logger.error(f"Failed to initialize MarketTrendPredictor: {str(e)}")
+        
+        try:
             self.github_client = GitHubClient()
         except:
             self.github_client = None
@@ -170,6 +178,27 @@ class PolymarketPipeline:
                         {"step": "start", "time": datetime.now().isoformat()}
                     ]
                 }
+                
+                # Optional Step: Generate AI trend prediction preview
+                if hasattr(self, 'trend_predictor') and self.trend_predictor:
+                    try:
+                        logger.info(f"Generating trend prediction for market {market_id}")
+                        prediction = self.trend_predictor.generate_trend_preview(market)
+                        
+                        # Add prediction to market summary
+                        if prediction and 'error' not in prediction:
+                            self.summary["markets"][market_id]["trend_prediction"] = prediction
+                            self.summary["markets"][market_id]["timeline"].append({
+                                "step": "trend_prediction",
+                                "time": datetime.now().isoformat(),
+                                "status": "complete"
+                            })
+                            logger.info(f"Successfully generated trend prediction for market {market_id}")
+                        else:
+                            error_msg = prediction.get('error', 'Unknown error')
+                            logger.warning(f"Failed to generate trend prediction for market {market_id}: {error_msg}")
+                    except Exception as e:
+                        logger.warning(f"Error generating trend prediction for market {market_id}: {str(e)}")
                 
                 # Step 2: Post market for initial approval
                 logger.info(f"Posting market {market_id} for initial approval")
