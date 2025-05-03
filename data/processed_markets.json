@@ -1,0 +1,24 @@
+{
+  "markets": [
+    {
+      "original_market_id": "market1",
+      "transformed_market_id": "group_will entity win the premier league?",
+      "processed_date": "2025-05-03T02:31:49.337125"
+    },
+    {
+      "original_market_id": "market2",
+      "transformed_market_id": "group_will entity win the premier league?",
+      "processed_date": "2025-05-03T02:31:49.337150"
+    },
+    {
+      "original_market_id": "market3",
+      "transformed_market_id": "group_will entity win the premier league?",
+      "processed_date": "2025-05-03T02:31:49.337154"
+    },
+    {
+      "original_market_id": "market4",
+      "transformed_market_id": "market4",
+      "processed_date": "2025-05-03T02:31:49.337165"
+    }
+  ]
+}

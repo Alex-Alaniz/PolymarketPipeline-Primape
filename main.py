@@ -13,11 +13,27 @@ from datetime import datetime
 # Add the current directory to sys.path
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Import the pipeline module
+# Import modules
 from pipeline import PolymarketPipeline
+from models import db, Market, ApprovalEvent, PipelineRun
 
 # Create Flask app
 app = Flask(__name__)
+
+# Configure database
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Initialize database with app
+db.init_app(app)
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 # Global variables to track pipeline status
 pipeline_status = {
@@ -205,6 +221,7 @@ def run_pipeline():
     sys.stderr = log_capture
     
     try:
+        # Update UI status
         pipeline_status["running"] = True
         pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         pipeline_status["status"] = "running"
@@ -212,24 +229,58 @@ def run_pipeline():
         # Log pipeline start
         print("Starting Polymarket pipeline...")
         
+        # Create database entry for this run
+        with app.app_context():
+            pipeline_run = PipelineRun(
+                start_time=datetime.now(),
+                status="running"
+            )
+            db.session.add(pipeline_run)
+            db.session.commit()
+            run_id = pipeline_run.id
+            print(f"Created pipeline run record with ID: {run_id}")
+        
         # Run the pipeline
-        pipeline = PolymarketPipeline()
+        pipeline = PolymarketPipeline(db_run_id=run_id)
         exit_code = pipeline.run()
         
-        # Update status based on exit code
+        # Update UI status based on exit code
         pipeline_status["running"] = False
         pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         pipeline_status["status"] = "completed" if exit_code == 0 else "failed"
+        
+        # Update database record
+        with app.app_context():
+            pipeline_run = PipelineRun.query.get(run_id)
+            if pipeline_run:
+                pipeline_run.end_time = datetime.now()
+                pipeline_run.status = "completed" if exit_code == 0 else "failed"
+                db.session.commit()
         
         # Log pipeline end
         print(f"Pipeline {pipeline_status['status']} with exit code {exit_code}")
         
     except Exception as e:
         # Log any exceptions
-        print(f"Pipeline failed with exception: {str(e)}")
+        error_message = str(e)
+        print(f"Pipeline failed with exception: {error_message}")
+        
+        # Update UI status
         pipeline_status["running"] = False
         pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         pipeline_status["status"] = "failed"
+        
+        # Update database record if possible
+        try:
+            with app.app_context():
+                pipeline_run = PipelineRun.query.filter_by(status="running").order_by(PipelineRun.id.desc()).first()
+                if pipeline_run:
+                    pipeline_run.end_time = datetime.now()
+                    pipeline_run.status = "failed"
+                    pipeline_run.error = error_message
+                    db.session.commit()
+        except Exception as db_error:
+            print(f"Failed to update pipeline run record: {str(db_error)}")
     
     finally:
         # Restore stdout and stderr
@@ -264,6 +315,36 @@ def start_pipeline():
 def get_status():
     """API endpoint to get the pipeline status"""
     return jsonify(pipeline_status)
+
+@app.route('/markets')
+def get_markets():
+    """API endpoint to get all markets from the database"""
+    with app.app_context():
+        try:
+            markets = Market.query.all()
+            return jsonify({
+                "count": len(markets),
+                "markets": [market.to_dict() for market in markets]
+            })
+        except Exception as e:
+            return jsonify({
+                "error": str(e)
+            }), 500
+
+@app.route('/runs')
+def get_runs():
+    """API endpoint to get all pipeline runs from the database"""
+    with app.app_context():
+        try:
+            runs = PipelineRun.query.order_by(PipelineRun.id.desc()).all()
+            return jsonify({
+                "count": len(runs),
+                "runs": [run.to_dict() for run in runs]
+            })
+        except Exception as e:
+            return jsonify({
+                "error": str(e)
+            }), 500
 
 # This allows running the script directly
 if __name__ == "__main__":

@@ -1,0 +1,80 @@
+{
+  "markets": [
+    {
+      "id": "market1",
+      "question": "Will Manchester City win the Premier League?",
+      "outcomes": [
+        {
+          "name": "Yes",
+          "probability": 0.75,
+          "volume": 1000000
+        },
+        {
+          "name": "No",
+          "probability": 0.25,
+          "volume": 500000
+        }
+      ],
+      "end_timestamp": 1748831509335,
+      "category": "Sports",
+      "sub_category": "Football"
+    },
+    {
+      "id": "market2",
+      "question": "Will Arsenal win the Premier League?",
+      "outcomes": [
+        {
+          "name": "Yes",
+          "probability": 0.2,
+          "volume": 800000
+        },
+        {
+          "name": "No",
+          "probability": 0.8,
+          "volume": 1200000
+        }
+      ],
+      "end_timestamp": 1748831509335,
+      "category": "Sports",
+      "sub_category": "Football"
+    },
+    {
+      "id": "market3",
+      "question": "Will Liverpool win the Premier League?",
+      "outcomes": [
+        {
+          "name": "Yes",
+          "probability": 0.15,
+          "volume": 700000
+        },
+        {
+          "name": "No",
+          "probability": 0.85,
+          "volume": 900000
+        }
+      ],
+      "end_timestamp": 1748831509335,
+      "category": "Sports",
+      "sub_category": "Football"
+    },
+    {
+      "id": "market4",
+      "question": "Will Bitcoin reach $100,000 by the end of 2025?",
+      "outcomes": [
+        {
+          "name": "Yes",
+          "probability": 0.35,
+          "volume": 2000000
+        },
+        {
+          "name": "No",
+          "probability": 0.65,
+          "volume": 3000000
+        }
+      ],
+      "end_timestamp": 1777775509335,
+      "category": "Crypto",
+      "sub_category": "Bitcoin"
+    }
+  ]
+}

@@ -20,12 +20,22 @@ import time
 import json
 from datetime import datetime
 from typing import Dict, List, Tuple, Any, Optional
+from flask import current_app
 
 # Import configuration
 from config import (
     POLYMARKET_BASE_URL, APPROVAL_WINDOW_MINUTES, MESSAGING_PLATFORM,
-    DATA_DIR, TMP_DIR, LOGS_DIR, STATE_FILE
+    DATA_DIR, TMP_DIR, LOGS_DIR, STATE_FILE, FRONTEND_IMG_PATH
 )
+
+# Import database models (inside functions to avoid circular imports)
+try:
+    from models import db, Market, ApprovalEvent, PipelineRun
+    from utils.database import store_market, update_market_status, store_approval_event, update_pipeline_run
+    DB_AVAILABLE = True
+except ImportError:
+    DB_AVAILABLE = False
+    print("Warning: Database models not available, database integration disabled")
 
 # Import utility modules
 try:
@@ -61,9 +71,15 @@ except NameError:
 class PolymarketPipeline:
     """Main pipeline for processing Polymarket data."""
     
-    def __init__(self):
-        """Initialize the pipeline."""
+    def __init__(self, db_run_id=None):
+        """
+        Initialize the pipeline.
+        
+        Args:
+            db_run_id (int, optional): Database run ID for tracking in the database
+        """
         logger.info("Initializing Polymarket pipeline")
+        self.db_run_id = db_run_id
         
         # Create directories if they don't exist
         for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
