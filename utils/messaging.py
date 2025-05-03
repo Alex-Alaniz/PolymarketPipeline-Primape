@@ -40,8 +40,17 @@ class MessagingClient:
                 raise ValueError("Slack configuration incomplete")
             
             self.client = WebClient(token=SLACK_BOT_TOKEN)
-            self.channel = SLACK_CHANNEL
-            logger.info(f"Initialized Slack client with channel {SLACK_CHANNEL}")
+            
+            # Debug Slack token
+            logger.info(f"Using Slack token: {SLACK_BOT_TOKEN[:4]}...{SLACK_BOT_TOKEN[-4:]}")
+            
+            # Ensure channel starts with # if it's not an ID
+            if SLACK_CHANNEL and not SLACK_CHANNEL.startswith('C'):
+                self.channel = f"#{SLACK_CHANNEL}"
+            else:
+                self.channel = SLACK_CHANNEL
+                
+            logger.info(f"Initialized Slack client with channel {self.channel}")
             
         elif self.platform == "discord":
             # Discord implementation would go here
@@ -115,6 +124,8 @@ class MessagingClient:
         Returns:
             Optional[str]: Message ID if successful, None if failed
         """
+        # Debug channel information
+        logger.info(f"Posting to Slack channel: {self.channel}")
         try:
             # Extract market data
             market_id = market.get("id", "unknown")

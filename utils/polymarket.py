@@ -90,12 +90,12 @@ class PolymarketExtractor:
             # The API endpoint for active markets
             url = f"{self.base_url}/markets"
             
-            # API parameters
+            # API parameters - different for each API endpoint
+            # Try new API format first
             params = {
-                "status": "open",  # Only get open markets
-                "limit": 50,       # Limit to 50 markets
-                "sort": "volume",  # Sort by volume (most popular)
-                "desc": True       # Descending order
+                "filters[status][$eq]": "open",  # Only get open markets
+                "pagination[limit]": 50,         # Limit to 50 markets
+                "sort[0]": "volume:desc",        # Sort by volume (most popular)
             }
             
             # Make the request
@@ -103,7 +103,15 @@ class PolymarketExtractor:
             
             if response.status_code == 200:
                 data = response.json()
-                markets = data.get("markets", [])
+                # The API format might be different than expected
+                # Try different formats
+                if "data" in data:
+                    # New API format 
+                    markets = data.get("data", [])
+                else:
+                    # Legacy API format
+                    markets = data.get("markets", [])
+                
                 logger.info(f"Fetched {len(markets)} active markets from Polymarket API")
                 
                 # Save the raw data for reference
