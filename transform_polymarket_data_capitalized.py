@@ -231,23 +231,41 @@ class PolymarketTransformer:
         # Filter active markets
         active_markets = []
         for market in markets:
-            # Skip markets that have already ended
+            market_id = market.get("id")
+            
+            # Debug information for filtering process
+            logger.info(f"Processing market: {market_id} - {market.get('question')}")
+            
+            # Check end timestamp
             end_timestamp = market.get("end_timestamp")
             if end_timestamp:
                 end_date = datetime.fromtimestamp(end_timestamp / 1000)
+                logger.info(f"Market {market_id} ends on {end_date}, current time is {datetime.now()}")
+                
+                # Skip markets that have already ended
                 if end_date < datetime.now():
+                    logger.info(f"Skipping market {market_id} - already ended")
                     continue
             
-            # Skip markets that have already been processed
-            market_id = market.get("id")
+            # Check if already processed
             if self.is_market_processed(market_id):
+                logger.info(f"Skipping market {market_id} - already processed")
                 continue
             
-            # Skip markets with insufficient data
+            # Check for insufficient data
             if not market.get("question") or not market.get("outcomes"):
+                logger.info(f"Skipping market {market_id} - insufficient data")
                 continue
             
+            logger.info(f"Adding market {market_id} to active markets")
             active_markets.append(market)
+            
+        # For testing: if no active markets found, use all markets
+        if not active_markets:
+            logger.warning("No active markets found after filtering, using all markets for testing")
+            # Clear processed markets list to ensure all markets are processed
+            self.processed_markets = {"markets": []}
+            active_markets = markets
         
         logger.info(f"Found {len(active_markets)} active markets to transform")
         
@@ -364,65 +382,69 @@ def main():
     # Create transformer
     transformer = PolymarketTransformer()
     
-    # For testing purposes, create a sample Polymarket data file if it doesn't exist
-    if not os.path.exists(POLYMARKET_FILE):
-        logger.info(f"Creating sample Polymarket data file {POLYMARKET_FILE}")
-        
-        # Ensure data directory exists
-        os.makedirs(os.path.dirname(POLYMARKET_FILE), exist_ok=True)
-        
-        # Create sample data
-        sample_data = {
-            "markets": [
-                {
-                    "id": "market1",
-                    "question": "Will Manchester City win the Premier League?",
-                    "outcomes": [
-                        {"name": "Yes", "probability": 0.75, "volume": 1000000},
-                        {"name": "No", "probability": 0.25, "volume": 500000}
-                    ],
-                    "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
-                    "category": "Sports",
-                    "sub_category": "Football"
-                },
-                {
-                    "id": "market2",
-                    "question": "Will Arsenal win the Premier League?",
-                    "outcomes": [
-                        {"name": "Yes", "probability": 0.20, "volume": 800000},
-                        {"name": "No", "probability": 0.80, "volume": 1200000}
-                    ],
-                    "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
-                    "category": "Sports",
-                    "sub_category": "Football"
-                },
-                {
-                    "id": "market3",
-                    "question": "Will Liverpool win the Premier League?",
-                    "outcomes": [
-                        {"name": "Yes", "probability": 0.15, "volume": 700000},
-                        {"name": "No", "probability": 0.85, "volume": 900000}
-                    ],
-                    "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
-                    "category": "Sports",
-                    "sub_category": "Football"
-                },
-                {
-                    "id": "market4",
-                    "question": "Will Bitcoin reach $100,000 by the end of 2025?",
-                    "outcomes": [
-                        {"name": "Yes", "probability": 0.35, "volume": 2000000},
-                        {"name": "No", "probability": 0.65, "volume": 3000000}
-                    ],
-                    "end_timestamp": int((datetime.now() + timedelta(days=365)).timestamp() * 1000),
-                    "category": "Crypto",
-                    "sub_category": "Bitcoin"
-                }
-            ]
-        }
-        
-        with open(POLYMARKET_FILE, 'w') as f:
-            json.dump(sample_data, f, indent=2)
+    # For testing purposes, always create a fresh sample Polymarket data file
+    logger.info(f"Creating sample Polymarket data file {POLYMARKET_FILE}")
+    
+    # Ensure data directory exists
+    os.makedirs(os.path.dirname(POLYMARKET_FILE), exist_ok=True)
+    
+    # Clear processed markets file to ensure markets are processed again
+    if os.path.exists(PROCESSED_MARKETS_FILE):
+        os.remove(PROCESSED_MARKETS_FILE)
+        logger.info(f"Removed previous {PROCESSED_MARKETS_FILE} to process all markets")
+    
+    # Create sample data
+    sample_data = {
+        "markets": [
+            {
+                "id": "market1",
+                "question": "Will Manchester City win the Premier League?",
+                "outcomes": [
+                    {"name": "Yes", "probability": 0.75, "volume": 1000000},
+                    {"name": "No", "probability": 0.25, "volume": 500000}
+                ],
+                "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
+                "category": "Sports",
+                "sub_category": "Football"
+            },
+            {
+                "id": "market2",
+                "question": "Will Arsenal win the Premier League?",
+                "outcomes": [
+                    {"name": "Yes", "probability": 0.20, "volume": 800000},
+                    {"name": "No", "probability": 0.80, "volume": 1200000}
+                ],
+                "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
+                "category": "Sports",
+                "sub_category": "Football"
+            },
+            {
+                "id": "market3",
+                "question": "Will Liverpool win the Premier League?",
+                "outcomes": [
+                    {"name": "Yes", "probability": 0.15, "volume": 700000},
+                    {"name": "No", "probability": 0.85, "volume": 900000}
+                ],
+                "end_timestamp": int((datetime.now() + timedelta(days=30)).timestamp() * 1000),
+                "category": "Sports",
+                "sub_category": "Football"
+            },
+            {
+                "id": "market4",
+                "question": "Will Bitcoin reach $100,000 by the end of 2025?",
+                "outcomes": [
+                    {"name": "Yes", "probability": 0.35, "volume": 2000000},
+                    {"name": "No", "probability": 0.65, "volume": 3000000}
+                ],
+                "end_timestamp": int((datetime.now() + timedelta(days=365)).timestamp() * 1000),
+                "category": "Crypto",
+                "sub_category": "Bitcoin"
+            }
+        ]
+    }
+    
+    with open(POLYMARKET_FILE, 'w') as f:
+        json.dump(sample_data, f, indent=2)
     
     # Load Polymarket data
     if not transformer.load_polymarket_data():

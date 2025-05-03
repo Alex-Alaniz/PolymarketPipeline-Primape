@@ -27,7 +27,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Git repository configuration
 FRONTEND_REPO = os.getenv("FRONTEND_REPO")
-FRONTEND_IMG_PATH = os.getenv("IMG_PATH")
+FRONTEND_IMG_PATH = os.getenv("IMG_PATH", "https://raw.githubusercontent.com/apechain/market-frontend/main/public/images/markets")
 
 # Blockchain configuration
 APECHAIN_RPC = os.getenv("APECHAIN_RPC")
