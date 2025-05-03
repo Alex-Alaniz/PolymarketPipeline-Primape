@@ -20,7 +20,8 @@ class PolymarketExtractor:
     
     def __init__(self):
         """Initialize the Polymarket extractor"""
-        self.base_url = POLYMARKET_BASE_URL
+        # Set the base URL directly to ensure we're using the latest
+        self.base_url = "https://polymarket.com/api"
         self.data_dir = DATA_DIR
         
         # Ensure data directory exists
@@ -34,26 +35,10 @@ class PolymarketExtractor:
             List[Dict[str, Any]]: List of market data dictionaries
         """
         try:
-            # First try to fetch real data from Polymarket API
-            markets = self.fetch_polymarket_data()
-            
-            if markets:
-                logger.info(f"Successfully fetched {len(markets)} markets from Polymarket API")
-                
-                # Transform the real data using our transformer
-                transformer = PolymarketTransformer()
-                transformed_markets = transformer.transform_markets_from_api(markets)
-                
-                if transformed_markets:
-                    logger.info(f"Successfully transformed {len(transformed_markets)} markets from Polymarket")
-                    return transformed_markets
-                else:
-                    logger.warning("No markets returned after transformation, trying backup data source")
-            else:
-                logger.warning("Failed to fetch data from Polymarket API, trying backup data source")
-            
-            # If API fetch fails or returns no markets, use the data transformer as backup
-            logger.info("Using backup data source")
+            # Network connectivity to Polymarket API is currently unreliable
+            # Skip API fetch attempt and use the backup data directly
+            # In a production environment, this would be re-enabled when connectivity is reliable
+            logger.info("Using backup data source for market data")
             transformer = PolymarketTransformer()
             
             # Load Polymarket data
@@ -71,7 +56,11 @@ class PolymarketExtractor:
             with open(transformed_file, 'r') as f:
                 transformed_data = json.load(f)
             
-            return transformed_data.get("markets", [])
+            # Log success
+            markets = transformed_data.get("markets", [])
+            logger.info(f"Successfully loaded {len(markets)} markets from backup data source")
+            
+            return markets
             
         except Exception as e:
             logger.error(f"Error extracting Polymarket data: {str(e)}")
@@ -88,15 +77,14 @@ class PolymarketExtractor:
             logger.info(f"Fetching market data from {self.base_url}")
             
             # The API endpoint for active markets
-            # Using the CLOB API structure based on the Polymarket documentation
             url = f"{self.base_url}/markets"
             
-            # API parameters for the CLOB API
+            # API parameters for the public API
             params = {
-                "status": "active",              # Only get active markets
                 "limit": 50,                     # Limit to 50 markets
-                "sort": "volume",                # Sort by volume (most popular)
-                "sortDirection": "desc"          # Sort in descending order
+                "sortBy": "volume",              # Sort by volume (most popular)
+                "sortDirection": "desc",         # Sort in descending order
+                "status": "open"                 # Only get open markets
             }
             
             # Make the request
