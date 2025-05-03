@@ -3,36 +3,38 @@ Banner generation utilities for the Polymarket pipeline.
 """
 import os
 import json
-import time
+import logging
+import tempfile
 import requests
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 from config import OPENAI_API_KEY, TMP_DIR
 
-# Try to import OpenAI
-try:
-    from openai import OpenAI
-    OPENAI_AVAILABLE = bool(OPENAI_API_KEY)
-except ImportError:
-    OPENAI_AVAILABLE = False
-    print("Warning: openai package not installed, image generation disabled")
+logger = logging.getLogger("banner_generator")
 
 class BannerGenerator:
     """Generates banner images for markets using OpenAI DALL-E."""
     
     def __init__(self):
         """Initialize the banner generator."""
-        # Create tmp directory if it doesn't exist
-        os.makedirs(TMP_DIR, exist_ok=True)
-        
-        # Initialize OpenAI client if available
-        self.openai_client = None
-        if OPENAI_AVAILABLE:
+        if OPENAI_API_KEY:
             try:
-                self.openai_client = OpenAI(api_key=OPENAI_API_KEY)
-                print("OpenAI client initialized")
+                from openai import OpenAI
+                self.client = OpenAI(api_key=OPENAI_API_KEY)
+                logger.info("OpenAI client initialized")
+            except ImportError:
+                logger.error("OpenAI SDK not installed")
+                self.client = None
             except Exception as e:
-                print(f"Error initializing OpenAI client: {str(e)}")
+                logger.error(f"Error initializing OpenAI client: {str(e)}")
+                self.client = None
+        else:
+            logger.warning("OPENAI_API_KEY not set, banner generation will be mocked")
+            self.client = None
+        
+        # Ensure tmp directory exists
+        os.makedirs(TMP_DIR, exist_ok=True)
     
     def generate_banner(self, market: Dict[str, Any]) -> Optional[str]:
         """
@@ -44,42 +46,47 @@ class BannerGenerator:
         Returns:
             Optional[str]: Path to generated banner image, or None if failed
         """
-        if not self.openai_client:
-            print("OpenAI client not available for banner generation")
-            return self._generate_placeholder_banner(market)
+        # Get market info
+        market_id = market.get("id")
+        question = market.get("question", "Unknown market")
+        category = market.get("category", "General")
+        sub_category = market.get("sub_category", "Other")
         
-        try:
-            # Extract market information
-            market_id = market.get("id")
-            question = market.get("question")
-            category = market.get("category", "Other")
-            sub_category = market.get("sub_category", "Other")
-            
-            # Create a prompt for DALL-E
-            prompt = self._create_banner_prompt(question, category, sub_category)
-            print(f"Generated prompt for market {market_id}: {prompt}")
-            
-            # Generate image using DALL-E
-            response = self.openai_client.images.generate(
-                model="dall-e-3",  # Using the latest DALL-E model available
-                prompt=prompt,
-                n=1,
-                size="1024x1024",  # Standard banner size
-                quality="standard",
-                response_format="url"
-            )
-            
-            # Get image URL
-            image_url = response.data[0].url
-            
-            # Download image
-            output_path = os.path.join(TMP_DIR, f"{market_id}.png")
-            self._download_image(image_url, output_path)
-            
-            return output_path
-            
-        except Exception as e:
-            print(f"Error generating banner: {str(e)}")
+        # Create output path
+        output_path = os.path.join(TMP_DIR, f"{market_id}.png")
+        
+        # If OpenAI client is available, use it to generate an image
+        if self.client:
+            try:
+                # Create prompt for DALL-E
+                prompt = self._create_banner_prompt(question, category, sub_category)
+                logger.info(f"Generating banner for market {market_id} with prompt: {prompt}")
+                
+                # Generate image with DALL-E
+                response = self.client.images.generate(
+                    model="dall-e-3",
+                    prompt=prompt,
+                    n=1,
+                    size="1024x1024",
+                )
+                
+                # Get image URL
+                image_url = response.data[0].url
+                
+                # Download image
+                if self._download_image(image_url, output_path):
+                    logger.info(f"Banner generated for market {market_id} at {output_path}")
+                    return output_path
+                else:
+                    logger.error(f"Failed to download banner image for market {market_id}")
+                    return self._generate_placeholder_banner(market)
+                
+            except Exception as e:
+                logger.error(f"Error generating banner for market {market_id}: {str(e)}")
+                return self._generate_placeholder_banner(market)
+        else:
+            # If no OpenAI client, generate a placeholder banner
+            logger.warning(f"OpenAI client not available, generating placeholder banner for market {market_id}")
             return self._generate_placeholder_banner(market)
     
     def _create_banner_prompt(self, question: str, category: str, sub_category: str) -> str:
@@ -94,40 +101,29 @@ class BannerGenerator:
         Returns:
             str: Prompt for DALL-E
         """
-        # Basic template for the prompt
-        base_prompt = """Create a professional, visually appealing banner image for a prediction market about: "{question}". 
-The style should be sleek, modern and suitable for a financial/betting platform.
-The image should be symbolic or metaphorical rather than literal, with high-quality graphics.
-Avoid using any text in the image. Use a cohesive color scheme that fits the subject matter.
-The image should be appropriate for a professional audience and have a clean, polished look."""
+        # Extract key elements from the question
+        # Remove "Will" and question mark
+        topic = question.replace("Will ", "").rstrip("?")
         
-        # Customize based on category
-        category_specifics = ""
-        if category.lower() == "politics":
-            category_specifics = """Use subtle political imagery that is neutral and not partisan.
-Consider motifs like capitol buildings, flags, vote ballots, or other neutral political symbols."""
-        elif category.lower() == "sports":
-            category_specifics = """Use dynamic sports imagery related to {sub_category}.
-Include relevant equipment, venues, or abstract representations of the sport."""
+        # Create base prompt
+        base_prompt = f"Create a professional, high-quality banner image for a prediction market about '{topic}'. The image should be visually appealing, suitable for a financial prediction platform, with subtle visual elements relevant to {category}/{sub_category}."
+        
+        # Add category-specific guidance
+        if category.lower() == "sports":
+            prompt = f"{base_prompt} Include subtle sports imagery related to {sub_category}, but keep it clean and professional without any team logos or specific player likenesses. Use a color scheme that evokes the sport."
         elif category.lower() == "crypto":
-            category_specifics = """Use imagery reflecting blockchain, digital technology, and finance.
-Consider abstract representations of cryptocurrencies with a high-tech aesthetic."""
+            prompt = f"{base_prompt} Include abstract visual elements suggesting cryptocurrency or blockchain technology, with a modern, tech-oriented aesthetic. Avoid specific crypto logos or symbols."
+        elif category.lower() == "politics":
+            prompt = f"{base_prompt} Create a dignified image suggesting politics or governance without partisan symbols or specific political figures. Use a balanced, neutral color scheme."
         elif category.lower() == "entertainment":
-            category_specifics = """Use imagery related to {sub_category} entertainment.
-For movies or TV, consider film-related motifs; for music, use musical elements."""
-        elif category.lower() == "finance":
-            category_specifics = """Use clean, professional financial imagery.
-Consider graphs, markets, stock symbols, or abstract representations of economic concepts."""
+            prompt = f"{base_prompt} Design an eye-catching banner related to {sub_category} entertainment, using visual elements suggesting the subject without specific copyrighted images or celebrities."
+        else:
+            prompt = f"{base_prompt} Use a clean, professional style with abstract elements suggesting the subject matter. The image should be suitable for a financial predictions platform."
         
-        # Combine prompts
-        full_prompt = base_prompt + "\n" + category_specifics
+        # Add general styling guidelines
+        prompt += " The image should be high contrast with good legibility when text is overlaid, avoiding cluttered backgrounds or overly busy designs. Render in a photorealistic style with professional lighting and composition."
         
-        # Format with actual values
-        return full_prompt.format(
-            question=question,
-            category=category,
-            sub_category=sub_category
-        )
+        return prompt
     
     def _download_image(self, url: str, output_path: str) -> bool:
         """
@@ -148,10 +144,10 @@ Consider graphs, markets, stock symbols, or abstract representations of economic
                         f.write(chunk)
                 return True
             else:
-                print(f"Failed to download image: HTTP {response.status_code}")
+                logger.error(f"Failed to download image: HTTP {response.status_code}")
                 return False
         except Exception as e:
-            print(f"Error downloading image: {str(e)}")
+            logger.error(f"Error downloading image: {str(e)}")
             return False
     
     def _generate_placeholder_banner(self, market: Dict[str, Any]) -> Optional[str]:
@@ -165,22 +161,22 @@ Consider graphs, markets, stock symbols, or abstract representations of economic
             Optional[str]: Path to placeholder banner, or None if failed
         """
         try:
+            # Get market info
             market_id = market.get("id")
+            question = market.get("question", "Unknown market")
+            category = market.get("category", "General")
             
-            # For demo/testing purposes, we'll just create a simple placeholder
-            # In a real implementation, this would generate a basic image using PIL or similar
-            
-            # Create a placeholder file path
+            # Create output path
             output_path = os.path.join(TMP_DIR, f"{market_id}.png")
             
-            # Since we can't generate an actual image here,
-            # we'll make note of it in the logs
-            print(f"Would generate placeholder banner for market {market_id}")
+            # For now, we'll create a very simple placeholder file (empty PNG)
+            with open(output_path, 'wb') as f:
+                # A minimal valid PNG file (1x1 transparent pixel)
+                f.write(bytes.fromhex('89504e470d0a1a0a0000000d494844520000000100000001010300000025db56ca00000003504c5445000000a77a3dda0000000174524e530040e6d8660000000a4944415408d76360000000020001e221bc330000000049454e44ae426082'))
             
-            # For testing, we'll use a placeholder URL if available
-            # or return None to indicate failure
+            logger.info(f"Created placeholder banner for market {market_id} at {output_path}")
             return output_path
             
         except Exception as e:
-            print(f"Error generating placeholder banner: {str(e)}")
+            logger.error(f"Error creating placeholder banner: {str(e)}")
             return None
