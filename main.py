@@ -2,6 +2,14 @@
 """
 Entry point for the Polymarket pipeline.
 This file allows running the pipeline via the web interface workflow.
+
+Steps in the pipeline:
+1. Fetch Polymarket data using transform_polymarket_data_capitalized.py
+2. Post markets to Slack/Discord for initial approval
+3. Generate banner images for approved markets using OpenAI
+4. Post markets with banners to Slack/Discord for final approval
+5. Deploy approved markets (push banner to frontend repo & create market on ApeChain)
+6. Generate summary reports and logs
 """
 from flask import Flask, jsonify, request, render_template_string
 import os

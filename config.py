@@ -2,89 +2,97 @@
 Configuration module for the Polymarket pipeline.
 Loads environment variables and sets up configuration parameters.
 """
+
 import os
+import sys
+import logging
 from datetime import datetime
 
+# Load environment variables from .env file if it exists
 try:
     from dotenv import load_dotenv
-    # Load environment variables from .env file
     load_dotenv()
 except ImportError:
-    print("Warning: python-dotenv not installed, using environment variables directly")
+    # dotenv not installed, continue without it
+    pass
 
-# Base configuration
-# Try multiple Polymarket API endpoints in order of preference
-POLYMARKET_API_ENDPOINTS = [
-    # Primary Polymarket API URL (from environment variable if set)
-    os.getenv("POLYMARKET_BASE", "https://polymarket.com/api"),
-    # Alternative API base URLs to try if the primary one fails
-    "https://strapi-matic.poly.market/api",
-    "https://strapi.polymarket.com/api",
-    "https://api.polymarket.com",
-    "https://api-matic.poly.market",
-    "https://graph.polymarket.com",
-    "https://clob-api.polymarket.com",
-    "https://markets.polymarket.com",
-    "https://info.polymarket.com",
-    "https://pure-markets-yxlb7.ondigitalocean.app/api"
-]
-POLYMARKET_BASE_URL = POLYMARKET_API_ENDPOINTS[0]  # Default to first endpoint
-APPROVAL_WINDOW_MINUTES = int(os.getenv("WINDOWS", "30"))
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout),
+        logging.FileHandler(f"transform_data.log")
+    ]
+)
 
-# Messaging configuration
-SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
-SLACK_CHANNEL = os.getenv("SLACK_CHANNEL_ID")  # Use SLACK_CHANNEL_ID directly
-DISCORD_TOKEN = os.getenv("DISCORD_TOKEN")
-DISCORD_CHANNEL = os.getenv("DISCORD_CHANNEL")
+# Create a logger
+logger = logging.getLogger("config")
 
-# Image generation configuration
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-
-# Git repository configuration
-FRONTEND_REPO = os.getenv("FRONTEND_REPO")
-FRONTEND_IMG_PATH = os.getenv("IMG_PATH", "https://raw.githubusercontent.com/apechain/market-frontend/main/public/images/markets")
-
-# Blockchain configuration
-APECHAIN_RPC = os.getenv("APECHAIN_RPC")
-MARKET_FACTORY_ADDR = os.getenv("MARKET_FACTORY_ADDR")
-PRIVATE_KEY = os.getenv("PRIVATE_KEY")
-
-# Directories
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+# Base paths and directories
+BASE_DIR = os.path.abspath(os.path.dirname(__file__))
 DATA_DIR = os.path.join(BASE_DIR, "data")
 TMP_DIR = os.path.join(BASE_DIR, "tmp")
 LOGS_DIR = os.path.join(BASE_DIR, "logs")
 
-# State file
-STATE_FILE = os.path.join(DATA_DIR, "state.json")
-
-# Log file
-LOG_DATE = datetime.now().strftime("%Y-%m-%d")
-LOG_FILE = os.path.join(LOGS_DIR, f"pipeline_{LOG_DATE}.log")
-
-# Ensure directories exist
+# Create directories if they don't exist
 for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
     os.makedirs(directory, exist_ok=True)
 
-# Determine messaging platform
-if SLACK_BOT_TOKEN and SLACK_CHANNEL:
-    MESSAGING_PLATFORM = "slack"
-elif DISCORD_TOKEN and DISCORD_CHANNEL:
-    MESSAGING_PLATFORM = "discord"
+# Polymarket configuration
+POLYMARKET_BASE = os.environ.get("POLYMARKET_BASE", "https://polymarket.com")
+POLYMARKET_API = os.environ.get("POLYMARKET_API", "https://strapi-matic.poly.market/api")
+POLYMARKET_GQL = os.environ.get("POLYMARKET_GQL", "https://gamma-api.poly.market/graphql")
+
+# Slack configuration
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_CHANNEL = os.environ.get("SLACK_CHANNEL_ID")
+
+# Discord configuration (optional, if using Discord instead of Slack)
+DISCORD_TOKEN = os.environ.get("DISCORD_TOKEN")
+DISCORD_CHANNEL = os.environ.get("DISCORD_CHANNEL")
+
+# Messaging platform (slack or discord)
+MESSAGING_PLATFORM = os.environ.get("MESSAGING_PLATFORM", "slack")
+
+# OpenAI API key for banner generation
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
+
+# Frontend repository configuration
+FRONTEND_REPO = os.environ.get("FRONTEND_REPO", "https://github.com/example/frontend-repo")
+FRONTEND_IMG_PATH = os.environ.get("FRONTEND_IMG_PATH", "public/images/markets")
+
+# Blockchain configuration for ApeChain
+APECHAIN_RPC = os.environ.get("APECHAIN_RPC", "https://rpc.apechain.io")
+MARKET_FACTORY_ADDR = os.environ.get("MARKET_FACTORY_ADDR", "0xMarketFactory")
+PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
+
+# Pipeline configuration
+APPROVAL_WINDOW_MINUTES = int(os.environ.get("APPROVAL_WINDOW_MINUTES", "30"))
+MAX_MARKETS_PER_RUN = int(os.environ.get("MAX_MARKETS_PER_RUN", "10"))
+
+# Get the current timestamp
+TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
+
+# Display configuration summary (excluding secrets)
+logger.info(f"Polymarket base URL: {POLYMARKET_BASE}")
+logger.info(f"Messaging platform: {MESSAGING_PLATFORM}")
+logger.info(f"Approval window: {APPROVAL_WINDOW_MINUTES} minutes")
+logger.info(f"Data directory: {DATA_DIR}")
+logger.info(f"Temporary directory: {TMP_DIR}")
+logger.info(f"Logs directory: {LOGS_DIR}")
+
+# Check if required environment variables are set
+required_vars = {
+    "SLACK_BOT_TOKEN": SLACK_BOT_TOKEN,
+    "SLACK_CHANNEL_ID": SLACK_CHANNEL,
+    "OPENAI_API_KEY": OPENAI_API_KEY
+}
+
+missing_vars = [name for name, value in required_vars.items() if not value]
+
+if missing_vars:
+    logger.warning(f"Missing required environment variables: {', '.join(missing_vars)}")
+    logger.warning("Some functionality may not work correctly.")
 else:
-    # Default to slack for development without raising an error
-    MESSAGING_PLATFORM = "slack"
-    print("Warning: Slack or Discord configuration not complete, defaulting to Slack for development")
-
-# Validate required configuration - using softer validation for development
-if not POLYMARKET_BASE_URL:
-    print("Warning: POLYMARKET_BASE environment variable not set, using default")
-
-if not OPENAI_API_KEY:
-    print("Warning: OPENAI_API_KEY environment variable not set, image generation will fail")
-
-if not FRONTEND_REPO or not FRONTEND_IMG_PATH:
-    print("Warning: FRONTEND_REPO and/or IMG_PATH environment variables not set, banner deployment will fail")
-
-if not APECHAIN_RPC or not MARKET_FACTORY_ADDR or not PRIVATE_KEY:
-    print("Warning: Blockchain configuration incomplete, market deployment will fail")
+    logger.info("All required environment variables are set.")

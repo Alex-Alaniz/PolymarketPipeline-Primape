@@ -1,8 +1,8 @@
 """
-Task 1: Fetching Polymarket Data and Initial Approval
+Task 1: Slack/Discord Integration + Market Data Fetching
 
-This module is responsible for fetching Polymarket data and posting market information
-to the messaging platform (Slack or Discord) for initial approval.
+This module is responsible for fetching Polymarket data and posting it to Slack/Discord
+for initial approval.
 """
 
 import os
@@ -10,34 +10,31 @@ import sys
 import json
 import logging
 import time
-from typing import Dict, Any, List, Tuple, Optional
+from typing import Dict, Any, List, Tuple
 from datetime import datetime, timezone
 
 # Import utilities
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.polymarket import PolymarketExtractor
 from utils.messaging import MessagingClient
-from config import DATA_DIR, TMP_DIR, MESSAGING_PLATFORM
+from transform_polymarket_data_capitalized import PolymarketTransformer
+from config import DATA_DIR, TMP_DIR
 
 logger = logging.getLogger("task1")
 
 def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Run Task 1: Extract Polymarket data and post for initial approval
+    Run Task 1: Fetch Polymarket data and post for initial approval
     
     Args:
-        messaging_client: MessagingClient instance for posting to Slack/Discord
+        messaging_client: MessagingClient instance for interacting with Slack/Discord
         
     Returns:
-        Tuple[List[Dict[str, Any]], Dict[str, Any]]: Extracted markets and task statistics
+        Tuple[List[Dict[str, Any]], Dict[str, Any]]: Markets posted and task statistics
     """
-    logger.info("Starting Task 1: Fetching market data and posting to Slack")
+    logger.info("Starting Task 1: Fetching Polymarket data and posting for initial approval")
     
     # Start the clock for this task
     start_time = time.time()
-    
-    # Initialize the Polymarket extractor
-    extractor = PolymarketExtractor()
     
     # Dictionary to store statistics
     stats = {
@@ -51,80 +48,106 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
     }
     
     try:
-        # Extract market data from Polymarket
-        # We require real data - no fallbacks allowed
-        markets = extractor.extract_data()
+        # Create a PolymarketTransformer to fetch and transform data
+        transformer = PolymarketTransformer()
         
-        # Update statistics
-        if markets:
-            stats["markets_fetched"] = len(markets)
-            logger.info(f"Fetched {len(markets)} markets from Polymarket")
-        else:
-            logger.error("Failed to fetch any markets from Polymarket")
-            stats["errors"].append("Failed to fetch markets from Polymarket")
-            stats["status"] = "failed"
-            return [], stats
+        # Fetch data from Polymarket API
+        logger.info("Fetching data from Polymarket API")
+        polymarket_data = transformer.load_polymarket_data()
+        
+        if not polymarket_data:
+            # Attempt to fetch from blockchain as a backup
+            logger.warning("No data from Polymarket API, attempting to fetch from blockchain")
+            try:
+                # Import dynamically to avoid circular imports
+                from utils.polymarket_blockchain import PolymarketBlockchainClient
+                
+                # Initialize blockchain client
+                blockchain_client = PolymarketBlockchainClient()
+                
+                # Fetch market data from blockchain
+                blockchain_markets = blockchain_client.fetch_markets(limit=20)
+                
+                if blockchain_markets:
+                    logger.info(f"Successfully fetched {len(blockchain_markets)} markets from blockchain")
+                    
+                    # Transform the blockchain markets to the required format
+                    polymarket_data = transformer.transform_markets_from_api(blockchain_markets)
+                else:
+                    raise Exception("Failed to fetch markets from both API and blockchain")
+            except Exception as e:
+                logger.error(f"Error fetching from blockchain: {str(e)}")
+                stats["errors"].append(f"Failed to fetch market data: {str(e)}")
+                stats["status"] = "failed"
+                return [], stats
+        
+        # Update stats with number of markets fetched
+        stats["markets_fetched"] = len(polymarket_data)
+        logger.info(f"Fetched {stats['markets_fetched']} markets from Polymarket")
         
         # Create output directory if it doesn't exist
         os.makedirs(TMP_DIR, exist_ok=True)
         
-        # Save fetched markets to file for persistence
-        markets_file = os.path.join(TMP_DIR, f"task1_markets_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
-        with open(markets_file, 'w') as f:
-            json.dump({"markets": markets}, f, indent=2)
+        # Save the raw data for reference
+        raw_data_path = os.path.join(TMP_DIR, "polymarket_raw_data.json")
+        with open(raw_data_path, 'w') as f:
+            json.dump({"markets": polymarket_data}, f, indent=2)
         
-        logger.info(f"Saved {len(markets)} markets to {markets_file}")
+        # Markets to post to Slack/Discord
+        posted_markets = []
         
-        # Post markets to Slack/Discord for approval
-        for market in markets:
-            # Update market specific stats before posting
-            market_stats = {
-                "market_id": market.get("id"),
-                "question": market.get("question"),
-                "status": "pending",
-                "message_id": None
-            }
-            
-            # Check if this is a binary or multiple-option market for formatting
-            market_type = market.get("type", "binary")
-            
-            # Format message differently based on market type
-            if market_type == "binary":
-                message = format_binary_market(market)
-            else:
-                message = format_multiple_market(market)
-            
-            # Post message to Slack/Discord
+        # Limit to 10 markets for initial post (avoid spam)
+        markets_to_post = polymarket_data[:10]
+        
+        # Post each market to Slack/Discord for initial approval
+        for idx, market in enumerate(markets_to_post):
             try:
+                market_id = market.get("id", f"unknown-{idx}")
+                question = market.get("question", "Unknown question")
+                
+                # Format the message
+                message = format_market_message(market)
+                
+                # Post to messaging platform
                 message_id = messaging_client.post_message(message)
                 
                 if message_id:
                     # Add reactions for approval/rejection
                     messaging_client.add_reactions(message_id, ["white_check_mark", "x"])
                     
-                    # Update market stats
-                    market_stats["message_id"] = message_id
-                    market_stats["status"] = "posted"
+                    # Add to posted markets list
+                    posted_markets.append({
+                        "market_id": market_id,
+                        "question": question,
+                        "message_id": message_id,
+                        "status": "posted"
+                    })
                     
-                    # Update overall stats
+                    # Update stats
                     stats["markets_posted"] += 1
+                    stats["market_list"].append({
+                        "market_id": market_id,
+                        "question": question,
+                        "message_id": message_id,
+                        "status": "posted"
+                    })
                     
-                    logger.info(f"Posted market {market.get('id')} for approval (message ID: {message_id})")
+                    logger.info(f"Posted market {market_id} for initial approval (message ID: {message_id})")
                 else:
-                    logger.error(f"Failed to post market {market.get('id')} for approval")
-                    market_stats["status"] = "failed"
-                    stats["errors"].append(f"Failed to post market {market.get('id')}")
+                    logger.error(f"Failed to post market {market_id}")
+                    stats["errors"].append(f"Failed to post market {market_id}")
             
             except Exception as e:
-                logger.error(f"Error posting market {market.get('id')}: {str(e)}")
-                market_stats["status"] = "failed"
-                stats["errors"].append(f"Error posting market {market.get('id')}: {str(e)}")
-            
-            # Add market stats to the stats list
-            stats["market_list"].append(market_stats)
+                logger.error(f"Error posting market {idx}: {str(e)}")
+                stats["errors"].append(f"Error posting market {idx}: {str(e)}")
             
             # Sleep to avoid rate limiting
             time.sleep(1)
+        
+        # Save posted markets to file for persistence
+        posted_file = os.path.join(TMP_DIR, f"task1_posted_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        with open(posted_file, 'w') as f:
+            json.dump({"markets": posted_markets}, f, indent=2)
         
         # Calculate task duration
         stats["duration"] = time.time() - start_time
@@ -135,8 +158,8 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         else:
             stats["status"] = "failed"
         
-        logger.info(f"Task 1 completed: {stats['markets_posted']} markets posted for approval")
-        return markets, stats
+        logger.info(f"Task 1 completed: {stats['markets_posted']} markets posted for initial approval")
+        return posted_markets, stats
         
     except Exception as e:
         # Handle any errors
@@ -146,124 +169,56 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         stats["duration"] = time.time() - start_time
         return [], stats
 
-def format_binary_market(market: Dict[str, Any]) -> str:
+def format_market_message(market: Dict[str, Any]) -> str:
     """
-    Format a binary market for posting to Slack/Discord
+    Format a market message for posting to Slack/Discord
     
     Args:
-        market: Market data dictionary
+        market: Market data
         
     Returns:
         str: Formatted message text
     """
-    question = market.get("question", "Unknown question")
     market_id = market.get("id", "unknown")
+    question = market.get("question", "Unknown question")
     category = market.get("category", "Uncategorized")
     sub_category = market.get("sub_category", "")
+    expiry = market.get("expiry", 0)
     
-    # Format options
-    options = market.get("options", [])
-    options_text = "\n".join([f"• {option.get('name')}" for option in options])
-    
-    # Format expiry date
-    expiry = market.get("expiry")
-    expiry_text = "Not specified"
+    # Format expiry date if available
+    expiry_date = ""
     if expiry:
         try:
-            # Expiry can be in seconds or milliseconds
-            if expiry > 1e10:  # Likely milliseconds
-                expiry_date = datetime.fromtimestamp(expiry / 1000)
-            else:
-                expiry_date = datetime.fromtimestamp(expiry)
-            expiry_text = expiry_date.strftime("%Y-%m-%d")
-        except Exception:
-            pass
+            # Convert milliseconds to seconds if needed
+            if expiry > 10000000000:  # Likely milliseconds
+                expiry = expiry / 1000
+            expiry_date = datetime.fromtimestamp(expiry, tz=timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        except:
+            expiry_date = "Unknown"
     
-    # Build the message
-    if MESSAGING_PLATFORM == "slack":
-        message = (
-            f"*INITIAL APPROVAL NEEDED*\n\n"
-            f"*Question:* {question}\n"
-            f"*Market ID:* {market_id}\n"
-            f"*Type:* Binary\n"
-            f"*Category:* {category}\n"
-            f"*Sub-category:* {sub_category}\n"
-            f"*Options:*\n{options_text}\n"
-            f"*Expiry:* {expiry_text}\n\n"
-            f"React with :white_check_mark: to approve or :x: to reject"
-        )
-    else:  # Discord
-        message = (
-            f"**INITIAL APPROVAL NEEDED**\n\n"
-            f"**Question:** {question}\n"
-            f"**Market ID:** {market_id}\n"
-            f"**Type:** Binary\n"
-            f"**Category:** {category}\n"
-            f"**Sub-category:** {sub_category}\n"
-            f"**Options:**\n{options_text}\n"
-            f"**Expiry:** {expiry_text}\n\n"
-            f"React with ✅ to approve or ❌ to reject"
-        )
-    
-    return message
-
-def format_multiple_market(market: Dict[str, Any]) -> str:
-    """
-    Format a multiple-option market for posting to Slack/Discord
-    
-    Args:
-        market: Market data dictionary
-        
-    Returns:
-        str: Formatted message text
-    """
-    question = market.get("question", "Unknown question")
-    market_id = market.get("id", "unknown")
-    category = market.get("category", "Uncategorized")
-    sub_category = market.get("sub_category", "")
-    
-    # Format options
+    # Get options (binary or multi-option)
     options = market.get("options", [])
-    options_text = "\n".join([f"• {option.get('name')}" for option in options])
+    if not options:
+        options_str = "Yes/No"
+    else:
+        options_str = ", ".join([opt.get("name", str(i)) for i, opt in enumerate(options)])
     
-    # Format expiry date
-    expiry = market.get("expiry")
-    expiry_text = "Not specified"
-    if expiry:
-        try:
-            # Expiry can be in seconds or milliseconds
-            if expiry > 1e10:  # Likely milliseconds
-                expiry_date = datetime.fromtimestamp(expiry / 1000)
-            else:
-                expiry_date = datetime.fromtimestamp(expiry)
-            expiry_text = expiry_date.strftime("%Y-%m-%d")
-        except Exception:
-            pass
+    # Format the message
+    message = (
+        f"*MARKET APPROVAL NEEDED*\n\n"
+        f"*Question:* {question}\n"
+        f"*Market ID:* {market_id}\n"
+        f"*Category:* {category}"
+    )
     
-    # Build the message
-    if MESSAGING_PLATFORM == "slack":
-        message = (
-            f"*INITIAL APPROVAL NEEDED*\n\n"
-            f"*Question:* {question}\n"
-            f"*Market ID:* {market_id}\n"
-            f"*Type:* Multiple-option\n"
-            f"*Category:* {category}\n"
-            f"*Sub-category:* {sub_category}\n"
-            f"*Options:*\n{options_text}\n"
-            f"*Expiry:* {expiry_text}\n\n"
-            f"React with :white_check_mark: to approve or :x: to reject"
-        )
-    else:  # Discord
-        message = (
-            f"**INITIAL APPROVAL NEEDED**\n\n"
-            f"**Question:** {question}\n"
-            f"**Market ID:** {market_id}\n"
-            f"**Type:** Multiple-option\n"
-            f"**Category:** {category}\n"
-            f"**Sub-category:** {sub_category}\n"
-            f"**Options:**\n{options_text}\n"
-            f"**Expiry:** {expiry_text}\n\n"
-            f"React with ✅ to approve or ❌ to reject"
-        )
+    if sub_category:
+        message += f" > {sub_category}"
+    
+    message += f"\n*Options:* {options_str}"
+    
+    if expiry_date:
+        message += f"\n*Expiry:* {expiry_date}"
+    
+    message += "\n\nPlease react with :white_check_mark: to approve or :x: to reject this market."
     
     return message

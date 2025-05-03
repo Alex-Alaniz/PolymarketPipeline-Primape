@@ -24,8 +24,8 @@ from flask import current_app
 
 # Import configuration
 from config import (
-    POLYMARKET_BASE_URL, APPROVAL_WINDOW_MINUTES, MESSAGING_PLATFORM,
-    DATA_DIR, TMP_DIR, LOGS_DIR, STATE_FILE, FRONTEND_IMG_PATH
+    POLYMARKET_BASE, POLYMARKET_API, APPROVAL_WINDOW_MINUTES, MESSAGING_PLATFORM,
+    DATA_DIR, TMP_DIR, LOGS_DIR, FRONTEND_IMG_PATH
 )
 
 # Import database models (inside functions to avoid circular imports)
