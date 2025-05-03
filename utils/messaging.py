@@ -1,50 +1,56 @@
 """
-Messaging client for the Polymarket pipeline.
-Handles posting markets to Slack/Discord and checking approvals.
+Messaging client for Slack/Discord integration.
+
+This module handles posting markets to Slack/Discord and checking for reactions.
 """
 import os
+import json
 import logging
 import time
-from typing import Dict, Any, Tuple, Optional
+from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Tuple
 
 # Import configuration
-from config import MESSAGING_PLATFORM, SLACK_BOT_TOKEN, SLACK_CHANNEL
+from config import (
+    MESSAGING_PLATFORM,
+    SLACK_BOT_TOKEN,
+    SLACK_CHANNEL,
+    DISCORD_TOKEN,
+    DISCORD_CHANNEL
+)
 
-logger = logging.getLogger("messaging_client")
+# Configure logger
+logger = logging.getLogger("messaging")
+
+# Import platform-specific libraries
+if MESSAGING_PLATFORM == "slack":
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
 
 class MessagingClient:
-    """Client for messaging platforms (Slack/Discord)"""
+    """Client for interacting with messaging platforms (Slack/Discord)."""
     
     def __init__(self):
-        """Initialize the messaging client"""
+        """Initialize the messaging client based on configuration."""
         self.platform = MESSAGING_PLATFORM
         
-        # Initialize Slack client if using Slack
         if self.platform == "slack":
-            try:
-                from slack_sdk import WebClient
-                from slack_sdk.errors import SlackApiError
-                
-                self.slack_client = WebClient(token=SLACK_BOT_TOKEN)
-                
-                # Test connection
-                response = self.slack_client.auth_test()
-                logger.info(f"Connected to Slack as {response['user']}")
-                
-            except ImportError:
-                logger.error("slack_sdk not installed")
-                self.slack_client = None
-            except Exception as e:
-                logger.error(f"Error initializing Slack client: {str(e)}")
-                self.slack_client = None
-        
-        # Initialize Discord client if using Discord
+            if not SLACK_BOT_TOKEN or not SLACK_CHANNEL:
+                logger.error("Slack configuration incomplete: SLACK_BOT_TOKEN and SLACK_CHANNEL_ID required")
+                raise ValueError("Slack configuration incomplete")
+            
+            self.client = WebClient(token=SLACK_BOT_TOKEN)
+            self.channel = SLACK_CHANNEL
+            logger.info(f"Initialized Slack client with channel {SLACK_CHANNEL}")
+            
         elif self.platform == "discord":
-            logger.error("Discord not implemented yet")
-            self.discord_client = None
-        
+            # Discord implementation would go here
+            logger.error("Discord integration not implemented yet")
+            raise NotImplementedError("Discord integration not implemented")
+            
         else:
             logger.error(f"Unsupported messaging platform: {self.platform}")
+            raise ValueError(f"Unsupported messaging platform: {self.platform}")
     
     def post_initial_market(self, market: Dict[str, Any]) -> Optional[str]:
         """
@@ -54,29 +60,13 @@ class MessagingClient:
             market (Dict[str, Any]): Market data
             
         Returns:
-            Optional[str]: Message ID if successful, None otherwise
+            Optional[str]: Message ID if successful, None if failed
         """
-        if self.platform == "slack" and self.slack_client:
-            try:
-                # Prepare market message
-                blocks = self._format_initial_market_slack(market)
-                
-                # Post message
-                response = self.slack_client.chat_postMessage(
-                    channel=SLACK_CHANNEL,
-                    text=f"New market for initial approval: {market.get('question', 'Unknown')}",
-                    blocks=blocks
-                )
-                
-                return response["ts"]
-                
-            except Exception as e:
-                logger.error(f"Error posting to Slack: {str(e)}")
-                return None
-        
-        # For testing: auto-approve markets
-        logger.info(f"Auto-approving market {market.get('id')} (initial)")
-        return "mock_message_id"
+        if self.platform == "slack":
+            return self._post_market_to_slack(market, is_final=False)
+        elif self.platform == "discord":
+            # Discord implementation would go here
+            return None
     
     def post_final_market(self, market: Dict[str, Any], banner_path: str) -> Optional[str]:
         """
@@ -87,202 +77,239 @@ class MessagingClient:
             banner_path (str): Path to banner image
             
         Returns:
-            Optional[str]: Message ID if successful, None otherwise
+            Optional[str]: Message ID if successful, None if failed
         """
-        if self.platform == "slack" and self.slack_client:
-            try:
-                # Prepare market message
-                blocks = self._format_final_market_slack(market, banner_path)
-                
-                # Post message
-                response = self.slack_client.chat_postMessage(
-                    channel=SLACK_CHANNEL,
-                    text=f"Market with banner for final approval: {market.get('question', 'Unknown')}",
-                    blocks=blocks
-                )
-                
-                return response["ts"]
-                
-            except Exception as e:
-                logger.error(f"Error posting to Slack: {str(e)}")
-                return None
-        
-        # For testing: auto-approve markets
-        logger.info(f"Auto-approving market {market.get('id')} (final)")
-        return "mock_message_id"
+        if self.platform == "slack":
+            return self._post_market_to_slack(market, is_final=True, banner_path=banner_path)
+        elif self.platform == "discord":
+            # Discord implementation would go here
+            return None
     
-    def check_approval(self, message_id: str, timeout_minutes: int) -> Tuple[str, Optional[str]]:
+    def check_approval(self, message_id: str, timeout_minutes: int = 30) -> Tuple[str, Optional[str]]:
         """
-        Check if a market has been approved/rejected.
+        Check if a market has been approved or rejected.
         
         Args:
             message_id (str): Message ID to check
             timeout_minutes (int): Timeout in minutes
             
         Returns:
-            Tuple[str, Optional[str]]: Status and reason
+            Tuple[str, Optional[str]]: Status and reason. 
+                Status can be: "approved", "rejected", "timeout", "error"
         """
-        if self.platform == "slack" and self.slack_client:
-            try:
-                # In a real implementation, this would poll for reactions or replies
-                # For now, just auto-approve after a short delay
-                time.sleep(1)
-                return "approved", "Auto-approved for testing"
-                
-            except Exception as e:
-                logger.error(f"Error checking approval in Slack: {str(e)}")
-                return "failed", f"Error: {str(e)}"
-        
-        # For testing: auto-approve markets
-        return "approved", "Auto-approved for testing"
+        if self.platform == "slack":
+            return self._check_slack_approval(message_id, timeout_minutes)
+        elif self.platform == "discord":
+            # Discord implementation would go here
+            return "error", "Discord integration not implemented"
     
-    def post_summary(self, summary: Dict[str, Any]) -> Optional[str]:
+    def _post_market_to_slack(self, market: Dict[str, Any], is_final: bool = False, banner_path: Optional[str] = None) -> Optional[str]:
         """
-        Post a summary of the pipeline run.
+        Post a market to Slack.
         
         Args:
-            summary (Dict[str, Any]): Summary data
+            market (Dict[str, Any]): Market data
+            is_final (bool): Whether this is a final approval
+            banner_path (Optional[str]): Path to banner image
             
         Returns:
-            Optional[str]: Message ID if successful, None otherwise
+            Optional[str]: Message ID if successful, None if failed
         """
-        if self.platform == "slack" and self.slack_client:
-            try:
-                # Prepare summary message
-                blocks = self._format_summary_slack(summary)
+        try:
+            # Extract market data
+            market_id = market.get("id", "unknown")
+            question = market.get("question", "No question provided")
+            market_type = market.get("type", "binary")
+            category = market.get("category", "Uncategorized")
+            sub_category = market.get("sub_category", "")
+            
+            # Create options text
+            options_text = ""
+            options = market.get("options", [])
+            for option in options:
+                name = option.get("name", "Unknown")
+                probability = option.get("probability", 0)
+                probability_percent = f"{probability * 100:.1f}%" if probability else "N/A"
+                options_text += f"• *{name}*: {probability_percent}\n"
+            
+            # Format expiry date if available
+            expiry_text = ""
+            expiry = market.get("expiry")
+            if expiry:
+                # Convert timestamp from milliseconds to seconds if needed
+                if expiry > 1e10:  # Large timestamp is likely in milliseconds
+                    expiry = expiry / 1000
+                expiry_date = datetime.fromtimestamp(expiry).strftime("%Y-%m-%d")
+                expiry_text = f"📆 *Expiry*: {expiry_date}\n"
+            
+            # Approval stage text
+            stage_text = "FINAL APPROVAL (with banner)" if is_final else "INITIAL APPROVAL"
+            
+            # Blocks for Slack message
+            blocks = [
+                {
+                    "type": "header",
+                    "text": {
+                        "type": "plain_text",
+                        "text": f"Market for {stage_text}"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Question*: {question}\n\n*ID*: `{market_id}`\n*Type*: {market_type}\n*Category*: {category} {f'({sub_category})' if sub_category else ''}\n{expiry_text}"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Options*:\n{options_text}"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "React with ✅ to approve or ❌ to reject"
+                        }
+                    ]
+                },
+                {
+                    "type": "divider"
+                }
+            ]
+            
+            # Add banner image block if available (for final approval)
+            if is_final and banner_path:
+                try:
+                    # Upload the image file
+                    upload_response = self.client.files_upload(
+                        channels=self.channel,
+                        file=banner_path,
+                        title=f"Banner for {market_id}"
+                    )
+                    
+                    if upload_response and upload_response.get("file"):
+                        file_id = upload_response["file"]["id"]
+                        
+                        # Add a block referencing the uploaded image
+                        blocks.insert(1, {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": "*Generated Banner Image*:"
+                            }
+                        })
+                        blocks.insert(2, {
+                            "type": "image",
+                            "image_url": upload_response["file"]["permalink"],
+                            "alt_text": f"Banner for {question}"
+                        })
+                except Exception as e:
+                    logger.error(f"Error uploading banner image: {str(e)}")
+                    # Continue without the image if upload fails
+            
+            # Post message
+            response = self.client.chat_postMessage(
+                channel=self.channel,
+                text=f"Market for {stage_text}: {question}",
+                blocks=blocks
+            )
+            
+            # Get message ID (ts)
+            message_id = response.get("ts")
+            
+            if message_id:
+                logger.info(f"Posted market {market_id} to Slack with message ID {message_id}")
                 
-                # Post message
-                response = self.slack_client.chat_postMessage(
-                    channel=SLACK_CHANNEL,
-                    text=f"Pipeline run summary: {summary.get('markets_deployed', 0)} markets deployed",
-                    blocks=blocks
+                # Add initial reactions for voting
+                self.client.reactions_add(
+                    channel=self.channel,
+                    timestamp=message_id,
+                    name="white_check_mark"  # ✅
                 )
                 
-                return response["ts"]
+                self.client.reactions_add(
+                    channel=self.channel,
+                    timestamp=message_id,
+                    name="x"  # ❌
+                )
                 
-            except Exception as e:
-                logger.error(f"Error posting summary to Slack: {str(e)}")
+                return message_id
+            else:
+                logger.error("Failed to get message ID from Slack response")
                 return None
-        
-        # Log summary for testing
-        logger.info(f"Pipeline summary: {summary.get('markets_deployed', 0)} markets deployed")
-        return "mock_message_id"
+                
+        except SlackApiError as e:
+            logger.error(f"SlackApiError: {e.response['error']}")
+            return None
+        except Exception as e:
+            logger.error(f"Error posting to Slack: {str(e)}")
+            return None
     
-    def _format_initial_market_slack(self, market: Dict[str, Any]) -> list:
+    def _check_slack_approval(self, message_id: str, timeout_minutes: int = 30) -> Tuple[str, Optional[str]]:
         """
-        Format a market for initial approval in Slack.
+        Check if a market has been approved or rejected in Slack.
         
         Args:
-            market (Dict[str, Any]): Market data
+            message_id (str): Slack message ID to check
+            timeout_minutes (int): Timeout in minutes
             
         Returns:
-            list: Slack blocks
+            Tuple[str, Optional[str]]: Status and reason
+                Status can be: "approved", "rejected", "timeout", "error"
         """
-        # Simple format for testing
-        return [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Initial Approval Needed*\n\n*Question:* {market.get('question', 'Unknown')}\n*Type:* {market.get('type', 'binary')}\n*Category:* {market.get('category', 'Unknown')}\n*Sub-category:* {market.get('sub_category', 'Unknown')}"
-                }
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Approve"
-                        },
-                        "style": "primary",
-                        "value": f"approve_{market.get('id')}"
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Reject"
-                        },
-                        "style": "danger",
-                        "value": f"reject_{market.get('id')}"
-                    }
-                ]
-            }
-        ]
-    
-    def _format_final_market_slack(self, market: Dict[str, Any], banner_path: str) -> list:
-        """
-        Format a market with banner for final approval in Slack.
-        
-        Args:
-            market (Dict[str, Any]): Market data
-            banner_path (str): Path to banner image
+        try:
+            # Get reactions on the message
+            response = self.client.reactions_get(
+                channel=self.channel,
+                timestamp=message_id
+            )
             
-        Returns:
-            list: Slack blocks
-        """
-        # Simple format for testing
-        return [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Final Approval Needed*\n\n*Question:* {market.get('question', 'Unknown')}\n*Type:* {market.get('type', 'binary')}\n*Category:* {market.get('category', 'Unknown')}\n*Sub-category:* {market.get('sub_category', 'Unknown')}"
-                }
-            },
-            {
-                "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Market Banner"
-                },
-                "image_url": f"file://{banner_path}",
-                "alt_text": "Market Banner"
-            },
-            {
-                "type": "actions",
-                "elements": [
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Approve"
-                        },
-                        "style": "primary",
-                        "value": f"approve_{market.get('id')}"
-                    },
-                    {
-                        "type": "button",
-                        "text": {
-                            "type": "plain_text",
-                            "text": "Reject"
-                        },
-                        "style": "danger",
-                        "value": f"reject_{market.get('id')}"
-                    }
-                ]
-            }
-        ]
-    
-    def _format_summary_slack(self, summary: Dict[str, Any]) -> list:
-        """
-        Format a summary for Slack.
-        
-        Args:
-            summary (Dict[str, Any]): Summary data
+            if not response or "message" not in response:
+                return "error", "Failed to get message reactions"
             
-        Returns:
-            list: Slack blocks
-        """
-        # Simple format for testing
-        return [
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Pipeline Run Summary*\n\nStart Time: {summary.get('start_time', 'Unknown')}\nEnd Time: {summary.get('end_time', 'Unknown')}\nMarkets Processed: {summary.get('markets_processed', 0)}\nMarkets Approved: {summary.get('markets_approved', 0)}\nMarkets Rejected: {summary.get('markets_rejected', 0)}\nMarkets Deployed: {summary.get('markets_deployed', 0)}\nMarkets Failed: {summary.get('markets_failed', 0)}"
-                }
-            }
-        ]
+            # Process reactions
+            reactions = response["message"].get("reactions", [])
+            
+            approve_count = 0
+            reject_count = 0
+            
+            for reaction in reactions:
+                if reaction["name"] == "white_check_mark":
+                    approve_count = reaction.get("count", 0)
+                    # Subtract 1 for the bot's own reaction
+                    if approve_count > 0:
+                        approve_count -= 1
+                elif reaction["name"] == "x":
+                    reject_count = reaction.get("count", 0)
+                    # Subtract 1 for the bot's own reaction
+                    if reject_count > 0:
+                        reject_count -= 1
+            
+            # Check if approved or rejected (need at least one real user reaction)
+            if approve_count > 0 and approve_count > reject_count:
+                return "approved", f"Approved with {approve_count} approvals and {reject_count} rejections"
+            elif reject_count > 0 and reject_count >= approve_count:
+                return "rejected", f"Rejected with {reject_count} rejections and {approve_count} approvals"
+            
+            # Check if timed out
+            message_time = float(message_id.split('.')[0])
+            message_datetime = datetime.fromtimestamp(message_time)
+            current_time = datetime.now()
+            
+            if current_time - message_datetime > timedelta(minutes=timeout_minutes):
+                return "timeout", f"Timed out after {timeout_minutes} minutes"
+            
+            # Still pending
+            return "pending", "Approval still pending"
+            
+        except SlackApiError as e:
+            logger.error(f"SlackApiError checking approval: {e.response['error']}")
+            return "error", f"Slack API error: {e.response['error']}"
+        except Exception as e:
+            logger.error(f"Error checking approval: {str(e)}")
+            return "error", f"Error checking approval: {str(e)}"

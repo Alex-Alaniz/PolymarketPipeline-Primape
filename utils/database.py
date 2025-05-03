@@ -3,7 +3,7 @@ Database utility functions for the Polymarket pipeline.
 """
 import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 # Models will be imported at the call site to prevent circular imports
 # from models import db, Market, ApprovalEvent, PipelineRun
@@ -101,7 +101,7 @@ def update_market_status(db, Market, market_id: str, status: str, **kwargs) -> b
         print(f"Error updating market status in database: {str(e)}")
         return False
 
-def store_approval_event(db, ApprovalEvent, market_id: str, stage: str, status: str, message_id: str, reason: str = None) -> bool:
+def store_approval_event(db, ApprovalEvent, market_id: str, stage: str, status: str, message_id: str, reason: Optional[str] = None) -> bool:
     """
     Store approval event in the database.
     
