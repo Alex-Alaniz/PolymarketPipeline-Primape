@@ -1,205 +1,161 @@
 """
-Task 2: Capture Approvals from Slack
+Task 2: Capture Approvals from Slack/Discord
 
-This module handles:
-1. Monitoring reactions on posted market entries
-2. Identifying which markets were approved or rejected
-3. Updating market status in database
+This module is responsible for checking the reactions on market posts
+and determining which markets have been approved or rejected.
 """
+
 import os
+import sys
 import json
 import logging
 import time
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, Any, List, Tuple, Optional
+from datetime import datetime, timezone, timedelta
 
-# Import utility modules
+# Import utilities
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.messaging import MessagingClient
-from utils.database import update_market_status, store_approval_event
+from config import DATA_DIR, TMP_DIR, APPROVAL_WINDOW_MINUTES
 
-# Setup logging
 logger = logging.getLogger("task2")
 
-class SlackApprovalMonitor:
+def run_task(messaging_client: MessagingClient, task1_results: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Class for monitoring Slack approvals.
-    """
-    
-    def __init__(self, db=None, Market=None, ApprovalEvent=None, approval_timeout_minutes=30):
-        """
-        Initialize with optional database models for persistence.
-        
-        Args:
-            db: SQLAlchemy database instance (optional)
-            Market: Market model class (optional)
-            ApprovalEvent: ApprovalEvent model class (optional)
-            approval_timeout_minutes (int): Timeout in minutes for approval
-        """
-        self.db = db
-        self.Market = Market
-        self.ApprovalEvent = ApprovalEvent
-        self.approval_timeout_minutes = approval_timeout_minutes
-        
-        # Initialize messaging client
-        self.messaging_client = MessagingClient()
-        
-        # Validation
-        if not self.messaging_client:
-            logger.error("Failed to initialize messaging client")
-            raise RuntimeError("Messaging client initialization failed")
-    
-    def run(self, pending_markets: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """
-        Run the task to monitor approvals from Slack.
-        
-        Args:
-            pending_markets (List[Dict[str, Any]]): List of markets pending approval, with slack_message_id
-            
-        Returns:
-            Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]: 
-                (approved_markets, rejected_markets, timed_out_markets)
-        """
-        logger.info("Starting Task 2: Monitoring Slack for approvals")
-        
-        approved_markets = []
-        rejected_markets = []
-        timed_out_markets = []
-        
-        for market in pending_markets:
-            market_id = market.get("id")
-            message_id = market.get("slack_message_id")
-            
-            if not market_id or not message_id:
-                logger.warning(f"Market {market_id} missing required data, skipping")
-                continue
-            
-            # Check approval status in Slack
-            logger.info(f"Checking approval status for market {market_id}")
-            approval_status, reason = self.check_market_approval(message_id)
-            
-            # Update market status based on approval
-            if approval_status == "approved":
-                logger.info(f"Market {market_id} was approved: {reason}")
-                market["status"] = "initial_approved"
-                market["approval_reason"] = reason
-                approved_markets.append(market)
-                
-                # Update database if available
-                if self.db and self.Market:
-                    update_market_status(self.db, self.Market, market_id, "initial_approved")
-                
-                # Store approval event
-                if self.db and self.ApprovalEvent:
-                    store_approval_event(
-                        self.db,
-                        self.ApprovalEvent,
-                        market_id,
-                        "initial",
-                        "approved",
-                        message_id,
-                        reason
-                    )
-                    
-            elif approval_status == "rejected":
-                logger.info(f"Market {market_id} was rejected: {reason}")
-                market["status"] = "initial_rejected"
-                market["rejection_reason"] = reason
-                rejected_markets.append(market)
-                
-                # Update database if available
-                if self.db and self.Market:
-                    update_market_status(self.db, self.Market, market_id, "initial_rejected")
-                
-                # Store approval event
-                if self.db and self.ApprovalEvent:
-                    store_approval_event(
-                        self.db,
-                        self.ApprovalEvent,
-                        market_id,
-                        "initial",
-                        "rejected",
-                        message_id,
-                        reason
-                    )
-                    
-            else:  # timeout or error
-                logger.warning(f"Market {market_id} approval timed out or errored: {reason}")
-                market["status"] = "initial_timeout"
-                market["timeout_reason"] = reason
-                timed_out_markets.append(market)
-                
-                # Update database if available
-                if self.db and self.Market:
-                    update_market_status(self.db, self.Market, market_id, "initial_timeout")
-                
-                # Store approval event
-                if self.db and self.ApprovalEvent:
-                    store_approval_event(
-                        self.db,
-                        self.ApprovalEvent,
-                        market_id,
-                        "initial",
-                        "timeout",
-                        message_id,
-                        reason
-                    )
-        
-        # Log summary
-        logger.info(f"Task 2 completed: {len(approved_markets)} approved, {len(rejected_markets)} rejected, {len(timed_out_markets)} timed out")
-        
-        return approved_markets, rejected_markets, timed_out_markets
-    
-    def check_market_approval(self, message_id: str) -> Tuple[str, Optional[str]]:
-        """
-        Check if a market has been approved or rejected in Slack.
-        
-        Args:
-            message_id (str): Slack message ID to check
-            
-        Returns:
-            Tuple[str, Optional[str]]: Status and reason
-                Status can be: "approved", "rejected", "timeout", "error"
-        """
-        try:
-            # Use the messaging client to check approval
-            status, reason = self.messaging_client.check_approval(
-                message_id, 
-                self.approval_timeout_minutes
-            )
-            return status, reason
-            
-        except Exception as e:
-            logger.error(f"Error checking approval: {str(e)}")
-            return "error", str(e)
-
-# Standalone function for running this task
-def run_task(pending_markets: List[Dict[str, Any]], db=None, Market=None, ApprovalEvent=None, 
-             approval_timeout_minutes=30) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    Run Task 2: Monitor Slack for approvals.
+    Run Task 2: Capture approvals from Slack/Discord
     
     Args:
-        pending_markets (List[Dict[str, Any]]): List of markets pending approval
-        db: SQLAlchemy database instance (optional)
-        Market: Market model class (optional)
-        ApprovalEvent: ApprovalEvent model class (optional)
-        approval_timeout_minutes (int): Timeout in minutes for approval
+        messaging_client: MessagingClient instance for interacting with Slack/Discord
+        task1_results: Results from Task 1 containing posted markets
         
     Returns:
-        Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[Dict[str, Any]]]: 
-            (approved_markets, rejected_markets, timed_out_markets)
+        Tuple[List[Dict[str, Any]], Dict[str, Any]]: Approved markets and task statistics
     """
-    task = SlackApprovalMonitor(db, Market, ApprovalEvent, approval_timeout_minutes)
-    return task.run(pending_markets)
-
-# For standalone testing
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    # Mock data for testing
-    pending_markets = [
-        {
-            "id": "market1",
-            "question": "Will Bitcoin reach $100,000 by the end of 2025?",
-            "slack_message_id": "12345.67890"
-        }
-    ]
-    approved, rejected, timed_out = run_task(pending_markets)
+    logger.info("Starting Task 2: Capturing approvals from Slack/Discord")
+    
+    # Start the clock for this task
+    start_time = time.time()
+    
+    # Dictionary to store statistics
+    stats = {
+        "task": "task2_capture_approvals",
+        "start_time": datetime.now(timezone.utc).isoformat(),
+        "markets_checked": 0,
+        "markets_approved": 0,
+        "markets_rejected": 0,
+        "markets_timeout": 0,
+        "market_list": [],
+        "errors": [],
+        "status": "running"
+    }
+    
+    try:
+        # Extract market list from task1 results
+        if not task1_results or "market_list" not in task1_results:
+            logger.error("Invalid task1 results: missing market_list")
+            stats["errors"].append("Invalid task1 results: missing market_list")
+            stats["status"] = "failed"
+            return [], stats
+        
+        # Get the market list
+        markets = task1_results.get("market_list", [])
+        
+        if not markets:
+            logger.warning("No markets to check for approval")
+            stats["status"] = "success"  # Still a success, just nothing to do
+            return [], stats
+        
+        # Calculate the approval window
+        approval_window = APPROVAL_WINDOW_MINUTES
+        
+        # Check each market for approval
+        approved_markets = []
+        
+        for market in markets:
+            market_id = market.get("market_id", "unknown")
+            message_id = market.get("message_id")
+            question = market.get("question", "Unknown question")
+            
+            # Skip markets that don't have a message ID (weren't posted)
+            if not message_id:
+                logger.warning(f"Skipping market {market_id} - no message ID")
+                continue
+            
+            # Update stats
+            stats["markets_checked"] += 1
+            
+            # Create market entry for statistics
+            market_stats = {
+                "market_id": market_id,
+                "question": question,
+                "message_id": message_id,
+                "status": "pending"
+            }
+            
+            # Get reactions from the message
+            reactions = messaging_client.get_reactions(message_id)
+            
+            # Check for approval/rejection reactions
+            approval_count = reactions.get("white_check_mark", 0)
+            rejection_count = reactions.get("x", 0)
+            
+            # Determine status based on reactions
+            if approval_count > 0 and approval_count > rejection_count:
+                logger.info(f"Market {market_id} approved (✅: {approval_count}, ❌: {rejection_count})")
+                market_stats["status"] = "approved"
+                stats["markets_approved"] += 1
+                
+                # Add to approved markets
+                approved_markets.append({
+                    "id": market_id,
+                    "question": question,
+                    "message_id": message_id,
+                    "status": "approved"
+                })
+                
+            elif rejection_count > 0:
+                logger.info(f"Market {market_id} rejected (✅: {approval_count}, ❌: {rejection_count})")
+                market_stats["status"] = "rejected"
+                stats["markets_rejected"] += 1
+                
+            else:
+                # Check if it's past the approval window
+                post_time = datetime.fromtimestamp(float(message_id), tz=timezone.utc)
+                now = datetime.now(timezone.utc)
+                time_diff = now - post_time
+                
+                if time_diff > timedelta(minutes=approval_window):
+                    logger.info(f"Market {market_id} timed out (no reactions after {approval_window} minutes)")
+                    market_stats["status"] = "timeout"
+                    stats["markets_timeout"] += 1
+                else:
+                    logger.info(f"Market {market_id} still pending approval (within {approval_window} minute window)")
+                    market_stats["status"] = "pending"
+            
+            # Add market stats to the stats list
+            stats["market_list"].append(market_stats)
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(TMP_DIR, exist_ok=True)
+        
+        # Save approved markets to file for persistence
+        approved_file = os.path.join(TMP_DIR, f"task2_approved_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        with open(approved_file, 'w') as f:
+            json.dump({"markets": approved_markets}, f, indent=2)
+        
+        # Calculate task duration
+        stats["duration"] = time.time() - start_time
+        
+        # Final status
+        stats["status"] = "success"
+        
+        logger.info(f"Task 2 completed: {stats['markets_approved']} approved, {stats['markets_rejected']} rejected, {stats['markets_timeout']} timed out")
+        return approved_markets, stats
+        
+    except Exception as e:
+        # Handle any errors
+        logger.error(f"Error in Task 2: {str(e)}")
+        stats["errors"].append(f"Task error: {str(e)}")
+        stats["status"] = "failed"
+        stats["duration"] = time.time() - start_time
+        return [], stats

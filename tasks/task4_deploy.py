@@ -1,216 +1,182 @@
 """
-Task 4: Deployment to ApeChain + Frontend Push
+Task 4: Deploy Markets to ApeChain and Frontend
 
-This module handles:
-1. Pushing approved banner images to the frontend repository
-2. Deploying market data to ApeChain smart contracts
-3. Updating the deployment status in the database
+This module is responsible for deploying approved markets to the ApeChain blockchain
+and pushing banner images to the frontend repository.
 """
+
 import os
+import sys
 import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+import time
+import shutil
+from typing import Dict, Any, List, Tuple, Optional
+from datetime import datetime, timezone
 
-# Import utility modules
-from utils.github import GitHubClient
-from utils.blockchain import BlockchainClient
-from utils.database import update_market_status
-from config import FRONTEND_IMG_PATH
+# Import utilities
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.messaging import MessagingClient
+from config import DATA_DIR, TMP_DIR
 
-# Setup logging
 logger = logging.getLogger("task4")
 
-class DeploymentManager:
+def run_task(messaging_client: MessagingClient, task3_results: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     """
-    Class for deploying markets to ApeChain and frontend.
-    """
-    
-    def __init__(self, db=None, Market=None):
-        """
-        Initialize with optional database models for persistence.
-        
-        Args:
-            db: SQLAlchemy database instance (optional)
-            Market: Market model class (optional)
-        """
-        self.db = db
-        self.Market = Market
-        
-        # Initialize components
-        self.github_client = GitHubClient()
-        self.blockchain_client = BlockchainClient()
-        
-        # Validation
-        if not self.github_client:
-            logger.error("Failed to initialize GitHub client")
-            raise RuntimeError("GitHub client initialization failed")
-            
-        if not self.blockchain_client:
-            logger.error("Failed to initialize blockchain client")
-            raise RuntimeError("Blockchain client initialization failed")
-    
-    def run(self, final_approved_markets: List[Dict[str, Any]]) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-        """
-        Run the task to deploy markets to ApeChain and frontend.
-        
-        Args:
-            final_approved_markets (List[Dict[str, Any]]): List of markets with final approval
-            
-        Returns:
-            Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]: 
-                (deployed_markets, failed_markets)
-        """
-        logger.info("Starting Task 4: Deploying markets to ApeChain and frontend")
-        
-        deployed_markets = []
-        failed_markets = []
-        
-        for market in final_approved_markets:
-            market_id = market.get("id")
-            banner_path = market.get("banner_path")
-            
-            if not market_id or not banner_path:
-                logger.warning(f"Market {market_id} missing required data, skipping")
-                failed_markets.append(market)
-                continue
-            
-            # Step 1: Deploy banner to frontend repository
-            logger.info(f"Deploying banner for market {market_id} to frontend repository")
-            banner_success, banner_result = self.deploy_banner(market_id, banner_path)
-            
-            if not banner_success:
-                logger.error(f"Failed to deploy banner for market {market_id}: {banner_result}")
-                market["status"] = "banner_deployment_failed"
-                market["failure_reason"] = banner_result
-                failed_markets.append(market)
-                
-                # Update database if available
-                if self.db and self.Market:
-                    update_market_status(
-                        self.db, 
-                        self.Market, 
-                        market_id, 
-                        "banner_deployment_failed", 
-                        failure_reason=banner_result
-                    )
-                continue
-            
-            # Store GitHub commit URL
-            market["github_commit_url"] = banner_result
-            
-            # Construct banner URI for the smart contract
-            banner_uri = f"{FRONTEND_IMG_PATH}/{market_id}.png"
-            
-            # Step 2: Deploy market to blockchain
-            logger.info(f"Deploying market {market_id} to blockchain")
-            blockchain_success, blockchain_result = self.deploy_market(market, banner_uri)
-            
-            if not blockchain_success:
-                logger.error(f"Failed to deploy market {market_id} to blockchain: {blockchain_result}")
-                market["status"] = "blockchain_deployment_failed"
-                market["failure_reason"] = blockchain_result
-                failed_markets.append(market)
-                
-                # Update database if available
-                if self.db and self.Market:
-                    update_market_status(
-                        self.db, 
-                        self.Market, 
-                        market_id, 
-                        "blockchain_deployment_failed", 
-                        github_commit=banner_result,
-                        banner_uri=banner_uri,
-                        failure_reason=blockchain_result
-                    )
-                continue
-            
-            # Store transaction hash
-            market["blockchain_tx"] = blockchain_result
-            
-            # Market successfully deployed
-            logger.info(f"Market {market_id} successfully deployed")
-            market["status"] = "deployed"
-            deployed_markets.append(market)
-            
-            # Update database if available
-            if self.db and self.Market:
-                update_market_status(
-                    self.db, 
-                    self.Market, 
-                    market_id, 
-                    "deployed", 
-                    github_commit=banner_result,
-                    banner_uri=banner_uri,
-                    blockchain_tx=blockchain_result
-                )
-        
-        # Log summary
-        logger.info(f"Task 4 completed: {len(deployed_markets)} markets deployed, {len(failed_markets)} failed")
-        
-        return deployed_markets, failed_markets
-    
-    def deploy_banner(self, market_id: str, banner_path: str) -> Tuple[bool, str]:
-        """
-        Deploy a banner to the frontend repository.
-        
-        Args:
-            market_id (str): Market ID
-            banner_path (str): Path to banner image
-            
-        Returns:
-            Tuple[bool, str]: Success status and commit URL or error message
-        """
-        try:
-            return self.github_client.push_banner(market_id, banner_path)
-        except Exception as e:
-            logger.error(f"Error deploying banner: {str(e)}")
-            return False, str(e)
-    
-    def deploy_market(self, market: Dict[str, Any], banner_uri: str) -> Tuple[bool, str]:
-        """
-        Deploy a market to ApeChain.
-        
-        Args:
-            market (Dict[str, Any]): Market data
-            banner_uri (str): URI to banner image
-            
-        Returns:
-            Tuple[bool, str]: Success status and transaction hash or error message
-        """
-        try:
-            return self.blockchain_client.create_market(market, banner_uri)
-        except Exception as e:
-            logger.error(f"Error deploying market to blockchain: {str(e)}")
-            return False, str(e)
-
-# Standalone function for running this task
-def run_task(final_approved_markets: List[Dict[str, Any]], db=None, Market=None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
-    """
-    Run Task 4: Deploy markets to ApeChain and frontend.
+    Run Task 4: Deploy markets to ApeChain and push banners to frontend
     
     Args:
-        final_approved_markets (List[Dict[str, Any]]): List of markets with final approval
-        db: SQLAlchemy database instance (optional)
-        Market: Market model class (optional)
+        messaging_client: MessagingClient instance for posting updates
+        task3_results: Results from Task 3 containing markets with banners
         
     Returns:
-        Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]: 
-            (deployed_markets, failed_markets)
+        Tuple[List[Dict[str, Any]], Dict[str, Any]]: Deployed markets and task statistics
     """
-    task = DeploymentManager(db, Market)
-    return task.run(final_approved_markets)
-
-# For standalone testing
-if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO)
-    # Mock data for testing
-    final_approved_markets = [
-        {
-            "id": "market1",
-            "question": "Will Bitcoin reach $100,000 by the end of 2025?",
-            "banner_path": "/tmp/market1.png",
-            "category": "Crypto",
-            "sub_category": "Bitcoin"
-        }
-    ]
-    deployed, failed = run_task(final_approved_markets)
+    logger.info("Starting Task 4: Deploying markets to ApeChain and frontend")
+    
+    # Start the clock for this task
+    start_time = time.time()
+    
+    # Dictionary to store statistics
+    stats = {
+        "task": "task4_deploy",
+        "start_time": datetime.now(timezone.utc).isoformat(),
+        "markets_processed": 0,
+        "banners_deployed": 0,
+        "markets_deployed": 0,
+        "market_list": [],
+        "errors": [],
+        "status": "running"
+    }
+    
+    try:
+        # Extract market list from task3 results
+        if not task3_results or "market_list" not in task3_results:
+            logger.error("Invalid task3 results: missing market_list")
+            stats["errors"].append("Invalid task3 results: missing market_list")
+            stats["status"] = "failed"
+            return [], stats
+        
+        # Get the market list
+        markets = task3_results.get("market_list", [])
+        
+        # Filter only markets with banners posted
+        approved_markets = [m for m in markets if m.get("status") == "posted"]
+        
+        if not approved_markets:
+            logger.warning("No markets with banners to deploy")
+            stats["status"] = "success"  # Still a success, just nothing to do
+            return [], stats
+        
+        # Import Github and blockchain utilities here to avoid circular imports
+        from utils.github import GitHubClient
+        from utils.blockchain import BlockchainClient
+        
+        # Initialize clients
+        github_client = GitHubClient()
+        blockchain_client = BlockchainClient()
+        
+        # Process each approved market
+        deployed_markets = []
+        
+        for market in approved_markets:
+            market_id = market.get("id", "unknown")
+            question = market.get("question", "Unknown question")
+            banner_path = market.get("banner_path")
+            
+            # Skip markets without a banner path
+            if not banner_path:
+                logger.warning(f"Skipping market {market_id} - no banner path")
+                continue
+            
+            # Update stats
+            stats["markets_processed"] += 1
+            
+            # Create market entry for statistics
+            market_stats = {
+                "market_id": market_id,
+                "question": question,
+                "banner_path": banner_path,
+                "github_commit": None,
+                "blockchain_tx": None,
+                "status": "pending"
+            }
+            
+            try:
+                # Step 1: Deploy banner to frontend repository
+                logger.info(f"Deploying banner for market {market_id} to frontend repository")
+                banner_success, banner_result = github_client.push_banner(market_id, banner_path)
+                
+                if banner_success:
+                    # Update market stats
+                    market_stats["github_commit"] = banner_result
+                    market_stats["status"] = "banner_deployed"
+                    stats["banners_deployed"] += 1
+                    
+                    # Step 2: Deploy market to blockchain
+                    logger.info(f"Deploying market {market_id} to blockchain")
+                    banner_uri = github_client.get_banner_uri(market_id)
+                    market_success, tx_hash = blockchain_client.create_market(market, banner_uri)
+                    
+                    if market_success:
+                        # Update market stats
+                        market_stats["blockchain_tx"] = tx_hash
+                        market_stats["status"] = "deployed"
+                        stats["markets_deployed"] += 1
+                        
+                        # Add to deployed markets
+                        deployed_markets.append({
+                            "id": market_id,
+                            "question": question,
+                            "banner_path": banner_path,
+                            "banner_uri": banner_uri,
+                            "github_commit": banner_result,
+                            "blockchain_tx": tx_hash,
+                            "status": "deployed"
+                        })
+                        
+                        logger.info(f"Market {market_id} successfully deployed")
+                    else:
+                        logger.error(f"Failed to deploy market {market_id} to blockchain: {tx_hash}")
+                        market_stats["status"] = "blockchain_failed"
+                        stats["errors"].append(f"Failed to deploy market {market_id} to blockchain: {tx_hash}")
+                else:
+                    logger.error(f"Failed to deploy banner for market {market_id}: {banner_result}")
+                    market_stats["status"] = "banner_failed"
+                    stats["errors"].append(f"Failed to deploy banner for market {market_id}: {banner_result}")
+            
+            except Exception as e:
+                logger.error(f"Error deploying market {market_id}: {str(e)}")
+                market_stats["status"] = "error"
+                stats["errors"].append(f"Error deploying market {market_id}: {str(e)}")
+            
+            # Add market stats to the stats list
+            stats["market_list"].append(market_stats)
+        
+        # Create output directory if it doesn't exist
+        os.makedirs(TMP_DIR, exist_ok=True)
+        
+        # Save deployed markets to file for persistence
+        deployed_file = os.path.join(TMP_DIR, f"task4_deployed_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+        with open(deployed_file, 'w') as f:
+            json.dump({"markets": deployed_markets}, f, indent=2)
+        
+        # Calculate task duration
+        stats["duration"] = time.time() - start_time
+        
+        # Final status
+        if stats["markets_deployed"] > 0:
+            stats["status"] = "success"
+        else:
+            stats["status"] = "failed"
+        
+        logger.info(f"Task 4 completed: {stats['markets_deployed']} markets deployed, {stats['banners_deployed']} banners deployed")
+        return deployed_markets, stats
+        
+    except Exception as e:
+        # Handle any errors
+        logger.error(f"Error in Task 4: {str(e)}")
+        stats["errors"].append(f"Task error: {str(e)}")
+        stats["status"] = "failed"
+        stats["duration"] = time.time() - start_time
+        return [], stats
