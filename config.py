@@ -13,7 +13,16 @@ except ImportError:
     print("Warning: python-dotenv not installed, using environment variables directly")
 
 # Base configuration
-POLYMARKET_BASE_URL = os.getenv("POLYMARKET_BASE", "https://polymarket.com/api")
+# Try multiple Polymarket API endpoints in order of preference
+POLYMARKET_API_ENDPOINTS = [
+    # Primary Polymarket API URL (from environment variable if set)
+    os.getenv("POLYMARKET_BASE", "https://polymarket.com/api"),
+    # Alternative API base URLs to try if the primary one fails
+    "https://strapi.polymarket.com/api",
+    "https://api.polymarket.com",
+    "https://graph.polymarket.com"
+]
+POLYMARKET_BASE_URL = POLYMARKET_API_ENDPOINTS[0]  # Default to first endpoint
 APPROVAL_WINDOW_MINUTES = int(os.getenv("WINDOWS", "30"))
 
 # Messaging configuration
