@@ -1,3 +1,1 @@
-"""
-Utility modules for the Polymarket pipeline.
-"""
+"""Utility modules for the Polymarket pipeline."""

@@ -18,9 +18,15 @@ POLYMARKET_API_ENDPOINTS = [
     # Primary Polymarket API URL (from environment variable if set)
     os.getenv("POLYMARKET_BASE", "https://polymarket.com/api"),
     # Alternative API base URLs to try if the primary one fails
+    "https://strapi-matic.poly.market/api",
     "https://strapi.polymarket.com/api",
     "https://api.polymarket.com",
-    "https://graph.polymarket.com"
+    "https://api-matic.poly.market",
+    "https://graph.polymarket.com",
+    "https://clob-api.polymarket.com",
+    "https://markets.polymarket.com",
+    "https://info.polymarket.com",
+    "https://pure-markets-yxlb7.ondigitalocean.app/api"
 ]
 POLYMARKET_BASE_URL = POLYMARKET_API_ENDPOINTS[0]  # Default to first endpoint
 APPROVAL_WINDOW_MINUTES = int(os.getenv("WINDOWS", "30"))

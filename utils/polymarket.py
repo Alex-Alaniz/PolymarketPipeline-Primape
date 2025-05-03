@@ -12,6 +12,7 @@ from typing import List, Dict, Any
 # Import from the project
 from transform_polymarket_data_capitalized import PolymarketTransformer
 from config import POLYMARKET_BASE_URL, POLYMARKET_API_ENDPOINTS, DATA_DIR
+from utils.polymarket_blockchain import PolymarketBlockchainExtractor
 
 logger = logging.getLogger("polymarket_extractor")
 
@@ -37,12 +38,12 @@ class PolymarketExtractor:
             List[Dict[str, Any]]: List of market data dictionaries
         """
         try:
-            # First, try to fetch data from the Polymarket API
-            logger.info("Attempting to fetch data from Polymarket API")
+            # Approach 1: Try to fetch data from the HTTP API endpoints
+            logger.info("Attempting to fetch data from Polymarket API endpoints")
             
             api_markets = self.fetch_polymarket_data()
             
-            # If we got data from the API, transform it and return
+            # If API data is available, transform and return it
             if api_markets and len(api_markets) > 0:
                 logger.info(f"Successfully fetched {len(api_markets)} markets from Polymarket API")
                 
@@ -54,38 +55,44 @@ class PolymarketExtractor:
                     logger.info(f"Successfully transformed {len(transformed_markets)} markets from API data")
                     return transformed_markets
                 else:
-                    logger.warning("Failed to transform API data, falling back to backup data")
+                    logger.warning("Failed to transform API data, trying blockchain approach")
             else:
-                logger.warning("Failed to fetch data from Polymarket API, falling back to backup data")
+                logger.warning("Failed to fetch data from Polymarket API endpoints, trying blockchain approach")
             
-            # If API fetch failed or no data was returned, use backup data
-            logger.info("Using backup data source for market data")
-            transformer = PolymarketTransformer()
+            # Approach 2: Try to fetch data directly from the blockchain
+            logger.info("Attempting to fetch data directly from Polymarket contracts on Polygon")
             
-            # Load backup Polymarket data
-            if not transformer.load_polymarket_data():
-                logger.error("Failed to load backup Polymarket data")
-                return []
+            # Initialize the blockchain extractor
+            blockchain_extractor = PolymarketBlockchainExtractor(data_dir=self.data_dir)
+            
+            # Check if we can connect to the blockchain
+            if not blockchain_extractor.is_connected():
+                logger.error("Failed to connect to Polygon blockchain, cannot fetch market data")
+                raise Exception("Cannot connect to any data source for Polymarket data")
+            
+            # Fetch markets from the blockchain
+            blockchain_markets = blockchain_extractor.fetch_markets(limit=50)
+            
+            if blockchain_markets and len(blockchain_markets) > 0:
+                logger.info(f"Successfully fetched {len(blockchain_markets)} markets from blockchain")
                 
-            # Transform the backup data
-            if not transformer.transform_markets():
-                logger.error("Failed to transform backup Polymarket data")
-                return []
-            
-            # Load the transformed backup data
-            transformed_file = os.path.join(self.data_dir, "transformed_markets.json")
-            with open(transformed_file, 'r') as f:
-                transformed_data = json.load(f)
-            
-            # Log success with backup data
-            markets = transformed_data.get("markets", [])
-            logger.info(f"Successfully loaded {len(markets)} markets from backup data source")
-            
-            return markets
+                # Transform the data using the API-specific method (same format)
+                transformer = PolymarketTransformer()
+                transformed_markets = transformer.transform_markets_from_api(blockchain_markets)
+                
+                if transformed_markets and len(transformed_markets) > 0:
+                    logger.info(f"Successfully transformed {len(transformed_markets)} markets from blockchain data")
+                    return transformed_markets
+                else:
+                    logger.error("Failed to transform blockchain data")
+                    raise Exception("Cannot transform blockchain data")
+            else:
+                logger.error("Failed to fetch markets from blockchain")
+                raise Exception("Cannot fetch data from any source")
             
         except Exception as e:
             logger.error(f"Error extracting Polymarket data: {str(e)}")
-            return []
+            raise Exception(f"Failed to fetch Polymarket data from any source: {str(e)}")
     
     def fetch_polymarket_data(self) -> List[Dict[str, Any]]:
         """
