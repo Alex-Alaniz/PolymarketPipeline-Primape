@@ -12,6 +12,7 @@ import logging
 import re
 from datetime import datetime, timedelta
 from collections import defaultdict
+from typing import List, Dict, Any, Optional, Tuple
 
 # Configure logging
 logging.basicConfig(
@@ -220,6 +221,106 @@ class PolymarketTransformer:
         
         return result
     
+    def transform_markets_from_api(self, api_markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+        """
+        Transform markets fetched directly from the Polymarket API.
+        
+        Args:
+            api_markets (List[Dict[str, Any]]): Markets from Polymarket API
+            
+        Returns:
+            List[Dict[str, Any]]: Transformed markets in ApeChain format
+        """
+        if not api_markets:
+            logger.error("No Polymarket API markets provided")
+            return []
+        
+        logger.info(f"Transforming {len(api_markets)} markets from Polymarket API")
+        
+        # The transformed markets list
+        transformed_markets = []
+        transformed_count = 0
+        
+        # Process each market from the API
+        for market in api_markets:
+            try:
+                # Extract required fields
+                market_id = market.get("id")
+                question = market.get("question")
+                end_timestamp = market.get("endTimestamp")
+                
+                # Skip markets that have already been processed
+                if self.is_market_processed(market_id):
+                    logger.info(f"Skipping market {market_id} - already processed")
+                    continue
+                
+                # Skip markets that have already ended
+                if end_timestamp and end_timestamp < datetime.now().timestamp() * 1000:
+                    logger.info(f"Skipping market {market_id} - already ended")
+                    continue
+                
+                # Skip markets with insufficient data
+                if not question or "outcomes" not in market:
+                    logger.info(f"Skipping market {market_id} - insufficient data")
+                    continue
+                
+                # Determine market type (binary or multiple)
+                market_type = "binary"
+                api_outcomes = market.get("outcomes", [])
+                
+                # If exactly 2 outcomes, it's likely a binary market (Yes/No)
+                if len(api_outcomes) == 2 and all(o.get("name") in ["Yes", "No"] for o in api_outcomes):
+                    market_type = "binary"
+                elif len(api_outcomes) > 2:
+                    market_type = "multiple"
+                
+                # Map category and subcategory
+                # In real API data, we'd map these more robustly
+                category = market.get("category", "General")
+                sub_category = market.get("subcategory", "Other")
+                
+                # Extract options and their probabilities
+                options = []
+                for outcome in api_outcomes:
+                    options.append({
+                        "name": outcome.get("name", "Unknown"),
+                        "probability": outcome.get("probability", 0.5),
+                        "volume": market.get("volume", 0)
+                    })
+                
+                # Create the transformed market object
+                transformed_market = {
+                    "id": market_id,
+                    "type": market_type,
+                    "question": question,
+                    "options": options,
+                    "category": category,
+                    "sub_category": sub_category,
+                    "expiry": end_timestamp,
+                    "original_market_id": market_id
+                }
+                
+                # Add to results
+                transformed_markets.append(transformed_market)
+                transformed_count += 1
+                
+                # Add to processed markets (optional, if you want to track already processed markets)
+                self.processed_markets["markets"].append({
+                    "original_market_id": market_id,
+                    "transformed_market_id": market_id,
+                    "processed_date": datetime.now().isoformat()
+                })
+                
+            except Exception as e:
+                logger.error(f"Error transforming API market {market.get('id', 'unknown')}: {str(e)}")
+                continue
+        
+        # Save processed markets list
+        self._save_processed_markets()
+        
+        logger.info(f"Transformed {transformed_count} markets from Polymarket API")
+        return transformed_markets
+        
     def transform_markets(self):
         """Transform the Polymarket markets to the required format"""
         if not self.polymarket_data:

@@ -9,13 +9,12 @@ This module handles:
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional
 
 # Import utility modules
 from utils.polymarket import PolymarketExtractor
 from utils.messaging import MessagingClient
-from utils.database import store_market, store_approval_event
+from utils.database import store_market
 
 # Setup logging
 logger = logging.getLogger("task1")
@@ -43,6 +42,10 @@ class SlackMarketPoster:
         self.messaging_client = MessagingClient()
         
         # Validation
+        if not self.polymarket_extractor:
+            logger.error("Failed to initialize Polymarket extractor")
+            raise RuntimeError("Polymarket extractor initialization failed")
+            
         if not self.messaging_client:
             logger.error("Failed to initialize messaging client")
             raise RuntimeError("Messaging client initialization failed")
@@ -56,49 +59,43 @@ class SlackMarketPoster:
         """
         logger.info("Starting Task 1: Fetching market data and posting to Slack")
         
-        # Step 1: Extract market data from Polymarket
+        # Step 1: Fetch market data from Polymarket
         markets = self.fetch_market_data()
+        
         if not markets:
-            logger.error("No markets found to process")
+            logger.warning("No markets fetched from Polymarket")
             return []
         
+        logger.info(f"Fetched {len(markets)} markets from Polymarket")
+        
         # Step 2: Post each market to Slack for initial approval
-        processed_markets = []
+        posted_markets = []
+        
         for market in markets:
             market_id = market.get("id")
+            
             if not market_id:
                 logger.warning("Market has no ID, skipping")
                 continue
             
-            # Store market in database if available
-            if self.db and self.Market:
-                logger.info(f"Storing market {market_id} in database")
-                store_market(self.db, self.Market, market)
-            
             # Post market to Slack
-            logger.info(f"Posting market {market_id} to Slack for initial approval")
+            logger.info(f"Posting market {market_id} to Slack")
             message_id = self.post_market_to_slack(market)
             
             if message_id:
+                # Add message ID to market data
                 market["slack_message_id"] = message_id
                 market["status"] = "pending_initial_approval"
-                processed_markets.append(market)
+                posted_markets.append(market)
                 
-                # Store approval event in database if available
-                if self.db and self.ApprovalEvent and self.Market:
-                    store_approval_event(
-                        self.db, 
-                        self.ApprovalEvent, 
-                        market_id, 
-                        "initial", 
-                        "pending", 
-                        message_id
-                    )
+                # Store in database if available
+                if self.db and self.Market:
+                    store_market(self.db, self.Market, market)
             else:
                 logger.error(f"Failed to post market {market_id} to Slack")
         
-        logger.info(f"Task 1 completed: {len(processed_markets)} markets posted to Slack")
-        return processed_markets
+        logger.info(f"Posted {len(posted_markets)} markets to Slack")
+        return posted_markets
     
     def fetch_market_data(self) -> List[Dict[str, Any]]:
         """
@@ -107,19 +104,8 @@ class SlackMarketPoster:
         Returns:
             List[Dict[str, Any]]: List of market data dictionaries
         """
-        logger.info("Fetching market data from Polymarket")
-        
         try:
-            # Extract data using the Polymarket extractor
-            markets = self.polymarket_extractor.extract_data()
-            
-            if not markets:
-                logger.warning("No markets returned from Polymarket extractor")
-                return []
-            
-            logger.info(f"Fetched {len(markets)} markets from Polymarket")
-            return markets
-            
+            return self.polymarket_extractor.extract_data()
         except Exception as e:
             logger.error(f"Error fetching market data: {str(e)}")
             return []
@@ -159,4 +145,5 @@ def run_task(db=None, Market=None, ApprovalEvent=None) -> List[Dict[str, Any]]:
 # For standalone testing
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    run_task()
+    markets = run_task()
+    print(f"Posted {len(markets)} markets to Slack")
