@@ -50,6 +50,34 @@ class MessagingClient:
             else:
                 self.channel = SLACK_CHANNEL
                 
+            # Try to get available channels to validate channel ID
+            try:
+                response = self.client.conversations_list()
+                channels = response.get("channels", [])
+                channel_ids = [c["id"] for c in channels]
+                
+                if self.channel not in channel_ids:
+                    logger.warning(f"Specified channel {self.channel} not found in available channels")
+                    if channel_ids:
+                        # Use the first available channel as fallback
+                        channel_name = next((c["name"] for c in channels if c["id"] == channel_ids[0]), "unknown")
+                        logger.info(f"Using first available channel {channel_ids[0]} ({channel_name}) as fallback")
+                        self.channel = channel_ids[0]
+                        
+                # Try to join the channel
+                try:
+                    logger.info(f"Attempting to join channel {self.channel}")
+                    join_response = self.client.conversations_join(channel=self.channel)
+                    logger.info(f"Join response: {join_response}")
+                except Exception as e:
+                    if "not_in_channel" in str(e) or "missing_scope" in str(e):
+                        logger.warning(f"Cannot join channel due to permissions: {str(e)}")
+                        # Continue anyway, as we might still be able to post if we were already in the channel
+                    else:
+                        logger.error(f"Failed to join channel: {str(e)}")
+            except Exception as e:
+                logger.error(f"Error validating channels: {str(e)}")
+                
             logger.info(f"Initialized Slack client with channel {self.channel}")
             
         elif self.platform == "discord":
@@ -126,6 +154,9 @@ class MessagingClient:
         """
         # Debug channel information
         logger.info(f"Posting to Slack channel: {self.channel}")
+        
+        # We've already validated the channel in __init__, so we don't need to check again
+        
         try:
             # Extract market data
             market_id = market.get("id", "unknown")
