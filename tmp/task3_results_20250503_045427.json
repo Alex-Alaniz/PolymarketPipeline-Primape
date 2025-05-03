@@ -1,0 +1,51 @@
+{
+  "timestamp": "2025-05-03 04:54:27",
+  "final_approved_markets": [],
+  "rejected_markets": [
+    {
+      "id": "market_bitcoin_100k",
+      "question": "Will Bitcoin reach $100,000 by the end of 2025?",
+      "type": "binary",
+      "category": "Crypto",
+      "sub_category": "Bitcoin",
+      "expiry": 1767139200,
+      "options": [
+        {
+          "name": "Yes",
+          "probability": 0.65
+        },
+        {
+          "name": "No",
+          "probability": 0.35
+        }
+      ],
+      "status": "final_timeout",
+      "banner_path": "/home/runner/workspace/tmp/market_bitcoin_100k.png",
+      "final_slack_message_id": "1746248065.948829",
+      "final_timeout_reason": "Approval still pending"
+    },
+    {
+      "id": "market_premier_league",
+      "question": "Will Manchester City win the Premier League?",
+      "type": "binary",
+      "category": "Sports",
+      "sub_category": "Soccer",
+      "expiry": 1748649600,
+      "options": [
+        {
+          "name": "Yes",
+          "probability": 0.7
+        },
+        {
+          "name": "No",
+          "probability": 0.3
+        }
+      ],
+      "status": "final_timeout",
+      "banner_path": "/home/runner/workspace/tmp/market_premier_league.png",
+      "final_slack_message_id": "1746248066.687359",
+      "final_timeout_reason": "Approval still pending"
+    }
+  ],
+  "failed_markets": []
+}

@@ -238,12 +238,14 @@ class MessagingClient:
             # Add banner image block if available (for final approval)
             if is_final and banner_path:
                 try:
-                    # Upload the image file
-                    upload_response = self.client.files_upload(
-                        channels=self.channel,
-                        file=banner_path,
-                        title=f"Banner for {market_id}"
-                    )
+                    # Upload the image file using the newer v2 method
+                    with open(banner_path, 'rb') as file_content:
+                        upload_response = self.client.files_upload_v2(
+                            channel=self.channel,
+                            file=file_content,
+                            filename=os.path.basename(banner_path),
+                            title=f"Banner for {market_id}"
+                        )
                     
                     if upload_response and upload_response.get("file"):
                         file_id = upload_response["file"]["id"]
