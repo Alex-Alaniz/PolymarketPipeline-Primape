@@ -88,15 +88,15 @@ class PolymarketExtractor:
             logger.info(f"Fetching market data from {self.base_url}")
             
             # The API endpoint for active markets
-            url = f"{self.base_url}/v0/markets"
+            # Using the CLOB API structure based on the Polymarket documentation
+            url = f"{self.base_url}/markets"
             
-            # API parameters - different for each API endpoint
-            # Updated for the new API format
+            # API parameters for the CLOB API
             params = {
                 "status": "active",              # Only get active markets
                 "limit": 50,                     # Limit to 50 markets
                 "sort": "volume",                # Sort by volume (most popular)
-                "order": "desc"                  # Sort in descending order
+                "sortDirection": "desc"          # Sort in descending order
             }
             
             # Make the request
