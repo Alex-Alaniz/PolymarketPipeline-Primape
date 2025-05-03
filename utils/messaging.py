@@ -72,7 +72,18 @@ class MessagingClient:
                 except Exception as e:
                     if "not_in_channel" in str(e) or "missing_scope" in str(e):
                         logger.warning(f"Cannot join channel due to permissions: {str(e)}")
-                        # Continue anyway, as we might still be able to post if we were already in the channel
+                        logger.info("Attempting to create a direct message channel instead")
+                        
+                        try:
+                            # Try to open a DM with ourselves as a fallback
+                            open_response = self.client.conversations_open(users=self.client.auth_test()["user_id"])
+                            if open_response and open_response.get("ok") and open_response.get("channel", {}).get("id"):
+                                self.channel = open_response["channel"]["id"]
+                                logger.info(f"Created direct message channel: {self.channel}")
+                            else:
+                                logger.warning("Failed to create direct message channel")
+                        except Exception as dm_error:
+                            logger.error(f"Error creating direct message channel: {str(dm_error)}")
                     else:
                         logger.error(f"Failed to join channel: {str(e)}")
             except Exception as e:

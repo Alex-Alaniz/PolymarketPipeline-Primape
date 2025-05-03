@@ -1,0 +1,53 @@
+[
+  {
+    "id": "group_will entity win the premier league?",
+    "type": "multiple",
+    "question": "Premier League Winner",
+    "options": [
+      {
+        "name": "Manchester City",
+        "probability": 0.3333333333333333,
+        "volume": 0
+      },
+      {
+        "name": "Arsenal",
+        "probability": 0.3333333333333333,
+        "volume": 0
+      },
+      {
+        "name": "Liverpool",
+        "probability": 0.3333333333333333,
+        "volume": 0
+      }
+    ],
+    "category": "Sports",
+    "sub_category": "Football",
+    "expiry": 1748831509335,
+    "original_market_ids": [
+      "market1",
+      "market2",
+      "market3"
+    ]
+  },
+  {
+    "id": "market4",
+    "type": "binary",
+    "question": "Will Bitcoin reach $100,000 by the end of 2025?",
+    "options": [
+      {
+        "name": "Yes",
+        "probability": 0.35,
+        "volume": 2000000
+      },
+      {
+        "name": "No",
+        "probability": 0.65,
+        "volume": 3000000
+      }
+    ],
+    "category": "Crypto",
+    "sub_category": "Bitcoin",
+    "expiry": 1777775509335,
+    "original_market_id": "market4"
+  }
+]
