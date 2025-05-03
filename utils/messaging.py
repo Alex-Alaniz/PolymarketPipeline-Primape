@@ -235,42 +235,30 @@ class MessagingClient:
                 }
             ]
             
-            # Add banner image block if available (for final approval)
+            # For final approval with banner image
             if is_final and banner_path:
                 try:
-                    # Upload the image file using the newer v2 method
+                    # First, upload the banner image as a separate message
+                    # This avoids the complexity of embedding it in blocks
                     with open(banner_path, 'rb') as file_content:
+                        # Upload the file first as a separate message
                         upload_response = self.client.files_upload_v2(
                             channel=self.channel,
                             file=file_content,
                             filename=os.path.basename(banner_path),
-                            title=f"Banner for {market_id}"
+                            title=f"Banner for {market_id}",
+                            initial_comment=f"*Banner image for market:* {question}"
                         )
                     
-                    if upload_response and upload_response.get("file"):
-                        file_id = upload_response["file"]["id"]
-                        
-                        # Add a block referencing the uploaded image
-                        blocks.insert(1, {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": "*Generated Banner Image*:"
-                            }
-                        })
-                        # Use the correct image URL format for blocks
-                        # Slack expects image_url to be a direct public URL to the image
-                        # Get the permalink_public if available, or use other available URLs
-                        image_url = upload_response["file"].get("permalink_public", 
-                                   upload_response["file"].get("url_private", 
-                                   upload_response["file"].get("thumb_480", 
-                                   upload_response["file"].get("permalink"))))
-                        
-                        blocks.insert(2, {
-                            "type": "image",
-                            "image_url": image_url,
-                            "alt_text": f"Banner for {question}"
-                        })
+                    # Add a note about the banner in the approval message
+                    blocks.insert(1, {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Banner image was uploaded separately.* Please see the image above and approve/reject this market."
+                        }
+                    })
+                    
                 except Exception as e:
                     logger.error(f"Error uploading banner image: {str(e)}")
                     # Continue without the image if upload fails
