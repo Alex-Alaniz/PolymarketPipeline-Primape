@@ -74,6 +74,12 @@ MAX_MARKETS_PER_RUN = int(os.environ.get("MAX_MARKETS_PER_RUN", "10"))
 # Get the current timestamp
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")
 
+# Log file path
+LOG_FILE = os.path.join(LOGS_DIR, f"pipeline_{TIMESTAMP}.log")
+
+# State file for the pipeline
+STATE_FILE = os.path.join(TMP_DIR, "pipeline_state.json")
+
 # Display configuration summary (excluding secrets)
 logger.info(f"Polymarket base URL: {POLYMARKET_BASE}")
 logger.info(f"Messaging platform: {MESSAGING_PLATFORM}")

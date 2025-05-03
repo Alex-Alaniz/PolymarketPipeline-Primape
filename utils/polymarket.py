@@ -11,8 +11,8 @@ from typing import List, Dict, Any
 
 # Import from the project
 from transform_polymarket_data_capitalized import PolymarketTransformer
-from config import POLYMARKET_BASE_URL, POLYMARKET_API_ENDPOINTS, DATA_DIR
-from utils.polymarket_blockchain import PolymarketBlockchainExtractor
+from config import POLYMARKET_BASE, POLYMARKET_API, DATA_DIR
+from utils.polymarket_blockchain import PolymarketBlockchainClient
 
 logger = logging.getLogger("polymarket_extractor")
 
@@ -22,9 +22,9 @@ class PolymarketExtractor:
     def __init__(self):
         """Initialize the Polymarket extractor"""
         # Store all possible API endpoints to try
-        self.api_endpoints = POLYMARKET_API_ENDPOINTS
+        self.api_endpoints = POLYMARKET_API
         # Set the base URL to the primary one (for backward compatibility)
-        self.base_url = POLYMARKET_BASE_URL or "https://polymarket.com/api"
+        self.base_url = POLYMARKET_BASE or "https://polymarket.com/api"
         self.data_dir = DATA_DIR
         
         # Ensure data directory exists
@@ -62,16 +62,16 @@ class PolymarketExtractor:
             # Approach 2: Try to fetch data directly from the blockchain
             logger.info("Attempting to fetch data directly from Polymarket contracts on Polygon")
             
-            # Initialize the blockchain extractor
-            blockchain_extractor = PolymarketBlockchainExtractor(data_dir=self.data_dir)
+            # Initialize the blockchain client
+            blockchain_client = PolymarketBlockchainClient()
             
             # Check if we can connect to the blockchain
-            if not blockchain_extractor.is_connected():
+            if not blockchain_client.is_connected():
                 logger.error("Failed to connect to Polygon blockchain, cannot fetch market data")
                 raise Exception("Cannot connect to any data source for Polymarket data")
             
             # Fetch markets from the blockchain
-            blockchain_markets = blockchain_extractor.fetch_markets(limit=50)
+            blockchain_markets = blockchain_client.fetch_markets(limit=50)
             
             if blockchain_markets and len(blockchain_markets) > 0:
                 logger.info(f"Successfully fetched {len(blockchain_markets)} markets from blockchain")
