@@ -115,7 +115,13 @@ def main():
         test_approved_markets = approved_markets
         if not test_approved_markets and markets:
             logger.warning("No markets were approved, using one market for testing")
-            test_approved_markets = [markets[0]]
+            # Create a copy of the market to avoid modifying the original
+            test_market = dict(markets[0])
+            # Add required fields for task3
+            test_market["status"] = "approved"
+            test_market["approval_timestamp"] = datetime.now().isoformat()
+            test_market["approval_message_id"] = "test_approval_message"
+            test_approved_markets = [test_market]
             markets_approved = 1
         
         logger.info(f"✅ Task 2 completed: {markets_approved} markets approved, {markets_rejected} rejected, {markets_timeout} timed out")
@@ -137,7 +143,10 @@ def main():
             "stats": task2_stats
         }
         
-        # Run Task 3 with the messaging client
+        # Set environment variable for auto-approval in Task 3 (for testing only)
+        os.environ["AUTO_APPROVE_FOR_TESTING"] = "true"
+        
+        # Run Task 3 with the messaging client - this will generate banners and auto-approve
         final_approved_markets, task3_stats = run_task3(messaging_client, task2_results)
         
         # Extract counts from task3's stats
