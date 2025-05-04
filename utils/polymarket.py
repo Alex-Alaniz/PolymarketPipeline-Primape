@@ -96,119 +96,92 @@ class PolymarketExtractor:
     
     def fetch_polymarket_data(self) -> List[Dict[str, Any]]:
         """
-        Fetch real market data from Polymarket API.
+        Fetch real market data from Polymarket CLOB API.
         
         Returns:
             List[Dict[str, Any]]: List of market data dictionaries
         """
         try:
-            logger.info("Starting Polymarket API fetch process with multiple endpoints")
+            logger.info("Starting Polymarket CLOB API fetch process")
             
-            # Common API patterns to try for each base URL
-            api_patterns = [
-                # Primary endpoint (current version)
-                {
-                    "path": "/markets",
-                    "params": {
-                        "limit": 50,
-                        "sortBy": "volume",
-                        "sortDirection": "desc",
-                        "status": "open"
-                    }
-                },
-                # Alternative v2 endpoint
-                {
-                    "path": "/v2/markets",
-                    "params": {
-                        "limit": 50,
-                        "sortBy": "volume",
-                        "status": "active"
-                    }
-                },
-                # Try GraphQL endpoint
-                {
-                    "path": "/graphql",
-                    "method": "post",
-                    "json": {
-                        "query": """
-                        query GetMarkets {
-                            markets(first: 50, orderBy: volume, orderDirection: desc, where: { status: open }) {
-                                id
-                                question
-                                outcomes
-                                volume
-                                expiresAt
-                                categories
-                            }
-                        }
-                        """
-                    }
-                }
-            ]
-            
-            # Try all base URLs and patterns until we get data
-            markets = []
-            
-            # First try all combinations of base URLs and API patterns
-            for base_url in self.api_endpoints:
-                if not base_url:
-                    continue
-                    
-                logger.info(f"Trying Polymarket API base URL: {base_url}")
+            # Use the dedicated CLOB API endpoint
+            base_url = self.api_endpoints
+            if isinstance(base_url, list):
+                base_url = base_url[0] if len(base_url) > 0 else "https://clob.polymarket.com"
+            elif not base_url:
+                base_url = "https://clob.polymarket.com"
                 
-                for pattern in api_patterns:
-                    try:
-                        # Construct the full URL
-                        path = pattern["path"]
-                        url = f"{base_url.rstrip('/')}{path}"
-                        method = pattern.get("method", "get")
+            logger.info(f"Using Polymarket CLOB API base URL: {base_url}")
+            
+            # Construct the full URL
+            url = f"{base_url.rstrip('/')}/markets"
+            
+            # Set headers for the request
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36",
+                "Accept": "application/json"
+            }
+            
+            # Initialize markets list and pagination
+            all_markets = []
+            next_cursor = ""
+            page = 1
+            max_pages = 2  # Limit to 2 pages (1000 markets) to avoid too much data
+            
+            # Fetch data with pagination
+            while page <= max_pages:
+                try:
+                    # Build URL with pagination
+                    paginated_url = url
+                    if next_cursor:
+                        paginated_url += f"?next_cursor={next_cursor}"
+                    
+                    logger.info(f"Fetching page {page} from: {paginated_url}")
+                    
+                    # Make the request
+                    response = requests.get(paginated_url, headers=headers, timeout=10)
+                    
+                    # Check response
+                    if response.status_code == 200:
+                        data = response.json()
                         
-                        logger.info(f"Trying API endpoint: {url} (method: {method})")
-                        
-                        # Make the request based on method
-                        if method.lower() == "post":
-                            response = requests.post(
-                                url, 
-                                **{k: v for k, v in pattern.items() if k not in ["path", "method"]}
-                            )
-                        else:
-                            response = requests.get(url, params=pattern.get("params", {}))
-                        
-                        # Check response
-                        if response.status_code == 200:
-                            data = response.json()
+                        # Extract markets from the 'data' field
+                        if "data" in data and isinstance(data["data"], list):
+                            markets = data["data"]
+                            all_markets.extend(markets)
+                            logger.info(f"Fetched {len(markets)} markets from page {page}")
                             
-                            # Try to extract markets based on different response formats
-                            if "markets" in data:
-                                markets = data["markets"]
-                            elif "data" in data and "markets" in data["data"]:
-                                markets = data["data"]["markets"]
-                            elif "data" in data:
-                                markets = data["data"]
-                            
-                            # If we found markets, break out of the loop
-                            if markets and len(markets) > 0:
-                                logger.info(f"Fetched {len(markets)} active markets from Polymarket API endpoint: {url}")
-                                
-                                # Save the raw data for reference
+                            # Save the raw data for reference (first page only)
+                            if page == 1:
                                 raw_data_path = os.path.join(self.data_dir, "polymarket_raw_data.json")
                                 with open(raw_data_path, 'w') as f:
                                     json.dump(data, f, indent=2)
-                                
-                                # We found markets, so return immediately
-                                return markets
+                            
+                            # Check for next page
+                            if "next_cursor" in data and data["next_cursor"] and data["next_cursor"] != "LTE=":
+                                next_cursor = data["next_cursor"]
+                                page += 1
                             else:
-                                logger.warning(f"No markets found in response from endpoint: {url}")
+                                # No more pages
+                                break
                         else:
-                            logger.warning(f"Failed to fetch from endpoint {url}: HTTP {response.status_code}")
-                    
-                    except Exception as endpoint_error:
-                        logger.warning(f"Error with endpoint {base_url}{pattern['path']}: {str(endpoint_error)}")
-                        continue
+                            logger.warning(f"No 'data' field found in response from {paginated_url}")
+                            break
+                    else:
+                        logger.warning(f"Failed to fetch from {paginated_url}: HTTP {response.status_code}")
+                        break
+                
+                except Exception as page_error:
+                    logger.error(f"Error fetching page {page} from {paginated_url}: {str(page_error)}")
+                    break
             
-            # If we reach here, we didn't find any markets with any combination
-            logger.warning("Failed to fetch markets from any Polymarket API endpoint")
-            return []
+            # Return all markets collected
+            if all_markets:
+                logger.info(f"Successfully fetched a total of {len(all_markets)} markets from Polymarket CLOB API")
+                return all_markets
+            else:
+                logger.warning("No markets fetched from Polymarket CLOB API")
+                return []
                 
         except Exception as e:
             logger.error(f"Error fetching Polymarket data: {str(e)}")

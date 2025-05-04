@@ -41,7 +41,7 @@ for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
 
 # Polymarket configuration
 POLYMARKET_BASE = os.environ.get("POLYMARKET_BASE", "https://polymarket.com")
-POLYMARKET_API = os.environ.get("POLYMARKET_API", "https://strapi-matic.poly.market/api")
+POLYMARKET_API = os.environ.get("POLYMARKET_API", "https://clob.polymarket.com")
 POLYMARKET_GQL = os.environ.get("POLYMARKET_GQL", "https://gamma-api.poly.market/graphql")
 
 # Slack configuration

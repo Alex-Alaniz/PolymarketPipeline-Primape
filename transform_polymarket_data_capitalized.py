@@ -223,19 +223,19 @@ class PolymarketTransformer:
     
     def transform_markets_from_api(self, api_markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Transform markets fetched directly from the Polymarket API.
+        Transform markets fetched directly from the Polymarket CLOB API.
         
         Args:
-            api_markets (List[Dict[str, Any]]): Markets from Polymarket API
+            api_markets (List[Dict[str, Any]]): Markets from Polymarket CLOB API
             
         Returns:
             List[Dict[str, Any]]: Transformed markets in ApeChain format
         """
         if not api_markets:
-            logger.error("No Polymarket API markets provided")
+            logger.error("No Polymarket CLOB API markets provided")
             return []
         
-        logger.info(f"Transforming {len(api_markets)} markets from Polymarket API")
+        logger.info(f"Transforming {len(api_markets)} markets from Polymarket CLOB API")
         
         # The transformed markets list
         transformed_markets = []
@@ -244,14 +244,28 @@ class PolymarketTransformer:
         # Process each market from the API
         for market in api_markets:
             try:
-                # Extract required fields
-                market_id = market.get("id")
+                # Extract required fields from CLOB API format
+                market_id = market.get("condition_id")
                 question = market.get("question")
-                end_timestamp = market.get("endTimestamp")
+                
+                # Convert end_date_iso to timestamp if available
+                end_timestamp = None
+                end_date_iso = market.get("end_date_iso")
+                if end_date_iso:
+                    try:
+                        end_datetime = datetime.fromisoformat(end_date_iso.replace("Z", "+00:00"))
+                        end_timestamp = int(end_datetime.timestamp() * 1000)  # Convert to milliseconds
+                    except Exception as date_error:
+                        logger.warning(f"Error parsing end date {end_date_iso}: {str(date_error)}")
                 
                 # Skip markets that have already been processed
                 if self.is_market_processed(market_id):
                     logger.info(f"Skipping market {market_id} - already processed")
+                    continue
+                
+                # Skip markets that are closed or archived
+                if market.get("closed", False) or market.get("archived", False):
+                    logger.info(f"Skipping market {market_id} - closed or archived")
                     continue
                 
                 # Skip markets that have already ended
@@ -260,32 +274,34 @@ class PolymarketTransformer:
                     continue
                 
                 # Skip markets with insufficient data
-                if not question or "outcomes" not in market:
+                if not question or "tokens" not in market:
                     logger.info(f"Skipping market {market_id} - insufficient data")
                     continue
                 
                 # Determine market type (binary or multiple)
                 market_type = "binary"
-                api_outcomes = market.get("outcomes", [])
+                api_tokens = market.get("tokens", [])
                 
-                # If exactly 2 outcomes, it's likely a binary market (Yes/No)
-                if len(api_outcomes) == 2 and all(o.get("name") in ["Yes", "No"] for o in api_outcomes):
+                # For CLOB API, we have tokens instead of outcomes
+                # If exactly 2 tokens, it's likely a binary market
+                if len(api_tokens) == 2:
                     market_type = "binary"
-                elif len(api_outcomes) > 2:
+                elif len(api_tokens) > 2:
                     market_type = "multiple"
                 
-                # Map category and subcategory
-                # In real API data, we'd map these more robustly
-                category = market.get("category", "General")
-                sub_category = market.get("subcategory", "Other")
+                # Map category from tags or default to General
+                tags = market.get("tags", ["General"])
+                category = tags[0] if tags else "General"
+                sub_category = tags[1] if len(tags) > 1 else "Other"
                 
-                # Extract options and their probabilities
+                # Extract tokens as options with their prices
                 options = []
-                for outcome in api_outcomes:
+                for token in api_tokens:
                     options.append({
-                        "name": outcome.get("name", "Unknown"),
-                        "probability": outcome.get("probability", 0.5),
-                        "volume": market.get("volume", 0)
+                        "name": token.get("outcome", "Unknown"),
+                        "probability": token.get("price", 0.5),
+                        # No direct volume in CLOB API, use minimum_order_size as proxy
+                        "volume": market.get("minimum_order_size", 0)
                     })
                 
                 # Create the transformed market object
@@ -297,14 +313,18 @@ class PolymarketTransformer:
                     "category": category,
                     "sub_category": sub_category,
                     "expiry": end_timestamp,
-                    "original_market_id": market_id
+                    "original_market_id": market_id,
+                    # Additional CLOB-specific fields
+                    "description": market.get("description", ""),
+                    "market_slug": market.get("market_slug", ""),
+                    "image": market.get("image", "")
                 }
                 
                 # Add to results
                 transformed_markets.append(transformed_market)
                 transformed_count += 1
                 
-                # Add to processed markets (optional, if you want to track already processed markets)
+                # Add to processed markets
                 self.processed_markets["markets"].append({
                     "original_market_id": market_id,
                     "transformed_market_id": market_id,
@@ -312,13 +332,13 @@ class PolymarketTransformer:
                 })
                 
             except Exception as e:
-                logger.error(f"Error transforming API market {market.get('id', 'unknown')}: {str(e)}")
+                logger.error(f"Error transforming CLOB API market {market.get('condition_id', 'unknown')}: {str(e)}")
                 continue
         
         # Save processed markets list
         self._save_processed_markets()
         
-        logger.info(f"Transformed {transformed_count} markets from Polymarket API")
+        logger.info(f"Transformed {transformed_count} markets from Polymarket CLOB API")
         return transformed_markets
         
     def transform_markets(self):
