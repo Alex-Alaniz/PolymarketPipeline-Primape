@@ -436,7 +436,7 @@ def pipeline_flow():
                 color: var(--bs-light);
                 text-align: center;
             }
-            h1 {
+            h1, h2 {
                 color: var(--bs-light);
                 margin-bottom: 30px;
             }
@@ -453,6 +453,7 @@ def pipeline_flow():
                 max-width: 1000px;
                 height: auto;
                 margin: 0 auto;
+                display: block;
             }
             .btn {
                 display: inline-block;
@@ -468,16 +469,89 @@ def pipeline_flow():
                 background-color: var(--bs-primary-hover);
                 opacity: 0.9;
             }
+            .pipeline-description {
+                text-align: left;
+                max-width: 900px;
+                margin: 0 auto 30px auto;
+                padding: 15px;
+                background-color: var(--bs-dark);
+                border-radius: 8px;
+                border-left: 4px solid var(--bs-primary);
+            }
+            .pipeline-steps {
+                list-style-type: none;
+                counter-reset: step-counter;
+                padding-left: 0;
+                margin: 0 auto;
+                text-align: left;
+                max-width: 800px;
+            }
+            .pipeline-steps li {
+                counter-increment: step-counter;
+                margin-bottom: 10px;
+                padding: 10px;
+                position: relative;
+                padding-left: 50px;
+            }
+            .pipeline-steps li::before {
+                content: counter(step-counter);
+                position: absolute;
+                left: 0;
+                top: 5px;
+                width: 35px;
+                height: 35px;
+                background-color: var(--bs-primary);
+                color: white;
+                border-radius: 50%;
+                text-align: center;
+                line-height: 35px;
+                font-weight: bold;
+            }
+            .text-info { color: var(--bs-info); }
+            .text-warning { color: var(--bs-warning); }
+            .text-success { color: var(--bs-success); }
         </style>
     </head>
     <body>
         <div class="container">
             <h1>Polymarket Pipeline Flow Diagram</h1>
-            <div>
-                <object class="flow-diagram" type="image/svg+xml" data="/static/pipeline_flow.svg">
-                    Your browser does not support SVG
-                </object>
+            
+            <div class="pipeline-description">
+                <p>This diagram illustrates the complete workflow of our Polymarket Pipeline system, from data extraction through approval and image generation to final deployment on ApeChain.</p>
             </div>
+            
+            <div>
+                <h2>Pipeline Visual Flow</h2>
+                <div id="text-flow-diagram">
+                    <h3>Pipeline Process Flow:</h3>
+                    <ol class="pipeline-steps">
+                        <li><span class="text-info">Fetch Active Markets</span> from Polymarket API</li>
+                        <li><span class="text-info">Filter & Track Markets</span> in PostgreSQL database</li>
+                        <li><span class="text-warning">Post Markets to Slack</span> for initial approval</li>
+                        <li><span class="text-warning">Check Market Approvals</span> from Slack reactions</li>
+                        <li><span class="text-info">Update Database</span> with approval status</li>
+                        <li><span class="text-success">Generate Banner Images</span> using OpenAI DALL-E for approved markets</li>
+                        <li><span class="text-warning">Post Banners to Slack</span> for final approval</li>
+                        <li><span class="text-warning">Check Banner Approvals</span> from Slack reactions</li>
+                        <li><span class="text-info">Update Database</span> with banner approval status</li>
+                        <li><span class="text-success">Deploy to ApeChain</span> smart contract with approved markets and banners</li>
+                    </ol>
+                </div>
+                
+                <div>
+                    <h3>Database Structure</h3>
+                    <p>The <b>ProcessedMarket</b> table in our PostgreSQL database has these key fields:</p>
+                    <ul style="text-align: left; width: fit-content; margin: 0 auto;">
+                        <li><b>condition_id</b> - Unique identifier from Polymarket (PK)</li>
+                        <li><b>question</b> - Market question text</li>
+                        <li><b>approved</b> - Market approval status (boolean)</li>
+                        <li><b>image_generated</b> - Whether a banner was generated (boolean)</li>
+                        <li><b>image_approved</b> - Banner approval status (boolean)</li>
+                        <li><b>image_uri</b> - Final URI of the approved banner</li>
+                    </ul>
+                </div>
+            </div>
+            
             <a href="/" class="btn">Back to Pipeline Control Panel</a>
         </div>
     </body>
