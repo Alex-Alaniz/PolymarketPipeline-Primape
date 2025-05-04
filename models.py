@@ -126,6 +126,16 @@ class ProcessedMarket(db.Model):
     approval_date = db.Column(db.DateTime)  # When approval/rejection happened
     approver = db.Column(db.String(255))  # User ID of approver/rejecter
     
+    # Image generation tracking
+    image_generated = db.Column(db.Boolean, default=False)  # Whether an image has been generated
+    image_path = db.Column(db.String(255))  # Path to the generated image
+    image_generation_attempts = db.Column(db.Integer, default=0)  # Number of image generation attempts
+    image_approved = db.Column(db.Boolean, nullable=True)  # True=approved, False=rejected, None=pending
+    image_approval_date = db.Column(db.DateTime)  # When image approval/rejection happened
+    image_approver = db.Column(db.String(255))  # User ID of image approver/rejecter
+    image_message_id = db.Column(db.String(255))  # Slack/Discord message ID for image approval
+    image_uri = db.Column(db.String(255))  # Final URI for the image (e.g., IPFS, S3, etc.)
+    
     # Original raw data
     raw_data = db.Column(JSON)  # Store the original API response JSON
     
@@ -141,5 +151,13 @@ class ProcessedMarket(db.Model):
             'message_id': self.message_id,
             'approved': self.approved,
             'approval_date': self.approval_date.isoformat() if self.approval_date else None,
-            'approver': self.approver
+            'approver': self.approver,
+            'image_generated': self.image_generated,
+            'image_path': self.image_path,
+            'image_generation_attempts': self.image_generation_attempts,
+            'image_approved': self.image_approved,
+            'image_approval_date': self.image_approval_date.isoformat() if self.image_approval_date else None,
+            'image_approver': self.image_approver,
+            'image_message_id': self.image_message_id,
+            'image_uri': self.image_uri
         }
