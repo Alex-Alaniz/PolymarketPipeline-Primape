@@ -151,12 +151,17 @@ class PolymarketPipeline:
                         if DB_AVAILABLE and self.db_run_id:
                             try:
                                 from models import db, PipelineRun
-                                with current_app.app_context():
-                                    run = PipelineRun.query.get(self.db_run_id)
-                                    if run:
-                                        run.status = "failed"
-                                        run.error = "No active markets found. All markets may be closed or expired."
-                                        db.session.commit()
+                                # Import Flask app for context
+                                try:
+                                    from main import app
+                                    with app.app_context():
+                                        run = PipelineRun.query.get(self.db_run_id)
+                                        if run:
+                                            run.status = "failed"
+                                            run.error = "No active markets found. All markets may be closed or expired."
+                                            db.session.commit()
+                                except ImportError:
+                                    logger.error("Could not import Flask app for database context")
                             except Exception as db_error:
                                 logger.error(f"Error updating database: {str(db_error)}")
                         
@@ -169,12 +174,17 @@ class PolymarketPipeline:
                     if DB_AVAILABLE and self.db_run_id:
                         try:
                             from models import db, PipelineRun
-                            with current_app.app_context():
-                                run = PipelineRun.query.get(self.db_run_id)
-                                if run:
-                                    run.status = "failed"
-                                    run.error = f"Failed to extract market data: {str(e)}"
-                                    db.session.commit()
+                            # Import Flask app for context
+                            try:
+                                from main import app
+                                with app.app_context():
+                                    run = PipelineRun.query.get(self.db_run_id)
+                                    if run:
+                                        run.status = "failed"
+                                        run.error = f"Failed to extract market data: {str(e)}"
+                                        db.session.commit()
+                            except ImportError:
+                                logger.error("Could not import Flask app for database context")
                         except Exception as db_error:
                             logger.error(f"Error updating database: {str(db_error)}")
                     
@@ -493,7 +503,42 @@ class PolymarketPipeline:
             # Don't raise the exception - this is a non-critical step
 
 
-# For testing purposes
+# For testing purposes or running directly
 if __name__ == "__main__":
-    pipeline = PolymarketPipeline()
-    sys.exit(pipeline.run())
+    # If running directly, try to set up database integration
+    try:
+        # First try to import Flask app
+        from main import app
+        
+        with app.app_context():
+            # Make sure models are loaded
+            from models import db, Market, ApprovalEvent, PipelineRun
+            
+            # Create database entry for this run
+            pipeline_run = PipelineRun(
+                start_time=datetime.now(),
+                status="running"
+            )
+            db.session.add(pipeline_run)
+            db.session.commit()
+            run_id = pipeline_run.id
+            print(f"Created pipeline run record with ID: {run_id}")
+            
+            # Run the pipeline with database tracking
+            pipeline = PolymarketPipeline(db_run_id=run_id)
+            exit_code = pipeline.run()
+            
+            # Update database entry
+            pipeline_run = PipelineRun.query.get(run_id)
+            if pipeline_run:
+                pipeline_run.end_time = datetime.now()
+                pipeline_run.status = "completed" if exit_code == 0 else "failed"
+                db.session.commit()
+    except ImportError as e:
+        print(f"Warning: Failed to import Flask app or models: {e}")
+        print("Running without database integration...")
+        # Run without database integration
+        pipeline = PolymarketPipeline()
+        exit_code = pipeline.run()
+        
+    sys.exit(exit_code)
