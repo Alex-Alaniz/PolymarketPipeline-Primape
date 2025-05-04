@@ -11,7 +11,7 @@ Steps in the pipeline:
 5. Deploy approved markets (push banner to frontend repo & create market on ApeChain)
 6. Generate summary reports and logs
 """
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, send_from_directory
 import os
 import sys
 import threading
@@ -195,6 +195,7 @@ HTML_TEMPLATE = """
         
         <div>
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
+            <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
         </div>
         
         <div class="info">
@@ -408,6 +409,81 @@ def get_runs():
             return jsonify({
                 "error": str(e)
             }), 500
+
+@app.route('/static/<path:path>')
+def serve_static(path):
+    """Serve static files"""
+    return send_from_directory('static', path)
+
+@app.route('/pipeline-flow')
+def pipeline_flow():
+    """Show the pipeline flow diagram"""
+    html = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Polymarket Pipeline Flow</title>
+        <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: var(--bs-dark);
+                color: var(--bs-light);
+                text-align: center;
+            }
+            h1 {
+                color: var(--bs-light);
+                margin-bottom: 30px;
+            }
+            .container {
+                max-width: 1100px;
+                margin: 0 auto;
+                background-color: var(--bs-dark-bg-subtle);
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            }
+            .flow-diagram {
+                width: 100%;
+                max-width: 1000px;
+                height: auto;
+                margin: 0 auto;
+            }
+            .btn {
+                display: inline-block;
+                margin: 20px 0;
+                padding: 10px 20px;
+                background-color: var(--bs-primary);
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-size: 16px;
+            }
+            .btn:hover {
+                background-color: var(--bs-primary-hover);
+                opacity: 0.9;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Polymarket Pipeline Flow Diagram</h1>
+            <div>
+                <object class="flow-diagram" type="image/svg+xml" data="/static/pipeline_flow.svg">
+                    Your browser does not support SVG
+                </object>
+            </div>
+            <a href="/" class="btn">Back to Pipeline Control Panel</a>
+        </div>
+    </body>
+    </html>
+    """
+    return html
 
 # This allows running the script directly
 if __name__ == "__main__":
