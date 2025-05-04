@@ -53,9 +53,20 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         
         # Fetch data from Polymarket API
         logger.info("Fetching data from Polymarket API")
-        polymarket_data = transformer.load_polymarket_data()
         
-        if not polymarket_data:
+        # Load data from file and then transform it
+        load_success = transformer.load_polymarket_data()
+        
+        if load_success:
+            # Get transformed markets from the API file
+            # The load_polymarket_data method loads the data into transformer.polymarket_data
+            market_data = transformer.polymarket_data.get('markets', [])
+            logger.info(f"Loaded {len(market_data)} markets from file")
+            
+            # Transform the data
+            polymarket_data = transformer.transform_markets_from_api(market_data)
+            logger.info(f"Transformed {len(polymarket_data)} markets")
+        else:
             # Attempt to fetch from blockchain as a backup
             logger.warning("No data from Polymarket API, attempting to fetch from blockchain")
             try:
@@ -74,8 +85,10 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
                     # Transform the blockchain markets to the required format
                     polymarket_data = transformer.transform_markets_from_api(blockchain_markets)
                 else:
+                    polymarket_data = []
                     raise Exception("Failed to fetch markets from both API and blockchain")
             except Exception as e:
+                polymarket_data = []
                 logger.error(f"Error fetching from blockchain: {str(e)}")
                 stats["errors"].append(f"Failed to fetch market data: {str(e)}")
                 stats["status"] = "failed"

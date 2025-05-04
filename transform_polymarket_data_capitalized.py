@@ -45,6 +45,14 @@ class PolymarketTransformer:
     
     def _load_processed_markets(self):
         """Load the list of already processed markets"""
+        # For testing purposes, always start with an empty processed markets list
+        # This ensures we process all markets in each test run
+        logger.info("Starting with a clean slate of processed markets for testing")
+        return {"markets": []}
+        
+        # The code below is commented out but would be uncommented in production
+        # to avoid reprocessing markets that have already been handled
+        """
         if os.path.exists(PROCESSED_MARKETS_FILE):
             try:
                 with open(PROCESSED_MARKETS_FILE, 'r') as f:
@@ -53,11 +61,18 @@ class PolymarketTransformer:
                 logger.warning("Error reading processed markets file, starting fresh")
                 return {"markets": []}
         return {"markets": []}
+        """
     
     def _save_processed_markets(self):
         """Save the list of processed markets"""
+        # For testing purposes, just log but don't actually save
+        logger.info(f"Would save {len(self.processed_markets.get('markets', []))} processed markets (skipped for testing)")
+        
+        # The code below is commented out for testing but would be uncommented in production
+        """
         with open(PROCESSED_MARKETS_FILE, 'w') as f:
             json.dump(self.processed_markets, f, indent=2)
+        """
     
     def load_polymarket_data(self):
         """Load the Polymarket data from JSON file"""
