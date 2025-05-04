@@ -1,0 +1,30 @@
+{
+  "timestamp": "2025-05-04T13:02:13.515054",
+  "markets_posted": 4,
+  "markets": [
+    {
+      "market_id": "0x9deb0baac40648821f96f01339229a422e2f5c877de55dc4dbf981f95a1e709c",
+      "question": "NFL Saturday: Chiefs vs. Raiders",
+      "message_id": "1746363727.693839",
+      "status": "posted"
+    },
+    {
+      "market_id": "0x5317986240be3ab100ccbebeb8213ab45d1f5c502e6da17e1c9b30f9c6dcb52c",
+      "question": "Will the Nuggets be the 2022-23 NBA Champion?",
+      "message_id": "1746363729.211349",
+      "status": "posted"
+    },
+    {
+      "market_id": "0x3d23087a0ed34ca1577afb1ae860714e9deddc8ff3cbfc5c15929c1472c59203",
+      "question": "Will 'Ant-Man and the Wasp: Quantumania' gross more than $125 million domestically on its 4-day opening weekend?",
+      "message_id": "1746363730.700999",
+      "status": "posted"
+    },
+    {
+      "market_id": "0x9831cf4e59285e5487e788d8a1435cb4753b9076a38512848ac1488348192f27",
+      "question": "Will Bryce Young be first QB selected in the 2023 NFL draft?",
+      "message_id": "1746363732.175739",
+      "status": "posted"
+    }
+  ]
+}
