@@ -15,7 +15,7 @@ import sys
 import json
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, List, Any
 
 # Set up logging
@@ -73,6 +73,9 @@ def main():
             logger.warning("⚠️ Task 1 returned no markets - using a test market instead")
             
             # Create a test market for pipeline testing purposes only
+            import uuid
+            from datetime import datetime, timedelta
+            
             test_market_id = str(uuid.uuid4())
             future_date = datetime.now() + timedelta(days=30)
             
