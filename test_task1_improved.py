@@ -11,24 +11,64 @@ Usage:
 import os
 import sys
 import json
+import traceback
 import logging
 from datetime import datetime
 
 # Set up logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler('test_task1.log')
+    ]
 )
 logger = logging.getLogger("test_task1")
 
-# Add parent directory to path
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# Configure paths
+DATA_DIR = os.path.join(os.getcwd(), 'data')
+TMP_DIR = os.path.join(os.getcwd(), 'tmp')
+LOGS_DIR = os.path.join(os.getcwd(), 'logs')
 
-# Import necessary modules
-from utils.messaging import MessagingClient
-from transform_polymarket_data_capitalized import PolymarketTransformer
-from tasks.task1_fetch_and_post import run_task, format_market_message
-from config import DATA_DIR, TMP_DIR
+# Ensure directories exist
+for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
+    os.makedirs(directory, exist_ok=True)
+    logger.info(f"Ensured directory exists: {directory}")
+
+# Log environment information
+logger.info(f"Current working directory: {os.getcwd()}")
+logger.info(f"Python version: {sys.version}")
+logger.info(f"Python path: {sys.path}")
+
+# Add parent directory to path
+current_dir = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(current_dir)
+logger.info(f"Added to path: {current_dir}")
+
+try:
+    # Import necessary modules
+    logger.info("Importing modules...")
+    from utils.messaging import MessagingClient
+    logger.info("MessagingClient imported successfully")
+    from transform_polymarket_data_capitalized import PolymarketTransformer
+    logger.info("PolymarketTransformer imported successfully")
+    from tasks.task1_fetch_and_post import run_task, format_market_message
+    logger.info("task1_fetch_and_post functions imported successfully")
+    from config import DATA_DIR as CONFIG_DATA_DIR, TMP_DIR as CONFIG_TMP_DIR
+    logger.info("Config variables imported successfully")
+    
+    # Use config dirs if defined
+    if CONFIG_DATA_DIR:
+        DATA_DIR = CONFIG_DATA_DIR
+        logger.info(f"Using DATA_DIR from config: {DATA_DIR}")
+    if CONFIG_TMP_DIR:
+        TMP_DIR = CONFIG_TMP_DIR
+        logger.info(f"Using TMP_DIR from config: {TMP_DIR}")
+except Exception as e:
+    logger.error(f"Error during imports: {str(e)}")
+    logger.error(traceback.format_exc())
+    sys.exit(1)
 
 def main():
     """Run Task 1 test with improved Polymarket API integration"""
@@ -45,7 +85,33 @@ def main():
         
         # First, manually fetch markets using PolymarketTransformer
         transformer = PolymarketTransformer()
-        markets = transformer.transform_markets_from_api([])  # This will fetch from CLOB API
+        
+        # Need to fetch the API data first
+        logger.info("Fetching data from Polymarket API...")
+        from utils.polymarket import PolymarketExtractor
+        
+        try:
+            # Initialize the extractor
+            extractor = PolymarketExtractor()
+            logger.info("PolymarketExtractor initialized")
+            
+            # Fetch raw markets from the CLOB API
+            api_markets = extractor.fetch_polymarket_data()
+            logger.info(f"Fetched {len(api_markets)} raw markets from Polymarket CLOB API")
+            
+            # Save the raw data for inspection
+            raw_markets_file = os.path.join(TMP_DIR, "test_task1_raw_markets.json")
+            with open(raw_markets_file, 'w') as f:
+                json.dump(api_markets, f, indent=2)
+            logger.info(f"Saved raw markets to {raw_markets_file}")
+            
+            # Transform the fetched markets
+            markets = transformer.transform_markets_from_api(api_markets)
+            logger.info(f"Transformed {len(markets)} markets from API data")
+        except Exception as e:
+            logger.error(f"Error fetching from CLOB API: {str(e)}")
+            logger.error(traceback.format_exc())
+            markets = []
         
         if markets:
             logger.info(f"Successfully fetched {len(markets)} markets using improved integration")
