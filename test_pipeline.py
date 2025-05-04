@@ -102,48 +102,61 @@ def main():
             "stats": stats
         }
         
+        # Run Task 2 with the messaging client
         approved_markets, task2_stats = run_task2(messaging_client, task1_results)
+        
+        # Extract the counts from task2's stats
+        markets_approved = task2_stats.get("markets_approved", 0)
+        markets_rejected = task2_stats.get("markets_rejected", 0) 
+        markets_timeout = task2_stats.get("markets_timeout", 0)
         
         # For testing, consider timed out markets as approved
         # In a real scenario, we'd wait longer for actual approvals
-        test_approved_markets = approved_markets + timed_out_markets
+        test_approved_markets = approved_markets
         
         if not test_approved_markets:
             logger.error("❌ Task 2 failed: No markets approved")
             results["tasks"]["task2"] = {
                 "status": "failed",
                 "error": "No markets approved",
-                "approved_count": 0,
-                "rejected_count": len(rejected_markets),
-                "timed_out_count": len(timed_out_markets)
+                "approved_count": markets_approved,
+                "rejected_count": markets_rejected,
+                "timed_out_count": markets_timeout
             }
             results["overall_status"] = "failed"
             save_results(results, results_file)
             return
         
-        logger.info(f"✅ Task 2 completed: {len(test_approved_markets)} markets approved (including timed out for testing)")
+        logger.info(f"✅ Task 2 completed: {markets_approved} markets approved, {markets_rejected} rejected, {markets_timeout} timed out")
         results["tasks"]["task2"] = {
             "status": "success",
-            "approved_count": len(approved_markets),
-            "rejected_count": len(rejected_markets),
-            "timed_out_count": len(timed_out_markets),
+            "approved_count": markets_approved,
+            "rejected_count": markets_rejected,
+            "timed_out_count": markets_timeout,
             "test_approved_count": len(test_approved_markets)
         }
         save_results(results, results_file)
         
         # ===== TASK 3: Generate Banners and Final Approval =====
         logger.info("\n===== TASK 3: Generate Banners and Final Approval =====")
-        final_approved_markets, final_rejected_markets, failed_markets = run_task3(
-            test_approved_markets,
-            approval_timeout_minutes=1  # Short timeout for testing
-        )
         
-        # For testing, consider all markets with banners as final approved
-        # In a real scenario, we'd wait longer for actual approvals
-        all_markets_with_banners = final_approved_markets + final_rejected_markets
+        # Prepare task2 results in the format expected by task3
+        task2_results = {
+            "markets": test_approved_markets,
+            "stats": task2_stats
+        }
+        
+        # Run Task 3 with the messaging client
+        final_approved_markets, task3_stats = run_task3(messaging_client, task2_results)
+        
+        # Extract counts from task3's stats
+        markets_final_approved = task3_stats.get("markets_approved", 0)
+        markets_final_rejected = task3_stats.get("markets_rejected", 0)
+        markets_failed = task3_stats.get("markets_failed", 0)
+        
+        # Filter markets that have banner paths
         test_final_approved_markets = []
-        
-        for market in all_markets_with_banners:
+        for market in final_approved_markets:
             if "banner_path" in market and market["banner_path"]:
                 test_final_approved_markets.append(market)
         
@@ -152,28 +165,40 @@ def main():
             results["tasks"]["task3"] = {
                 "status": "failed",
                 "error": "No markets with banners",
-                "final_approved_count": len(final_approved_markets),
-                "final_rejected_count": len(final_rejected_markets),
-                "failed_count": len(failed_markets),
+                "final_approved_count": markets_final_approved,
+                "final_rejected_count": markets_final_rejected,
+                "failed_count": markets_failed,
                 "test_final_approved_count": 0
             }
             results["overall_status"] = "failed"
             save_results(results, results_file)
             return
         
-        logger.info(f"✅ Task 3 completed: {len(test_final_approved_markets)} markets with banners (for testing)")
+        logger.info(f"✅ Task 3 completed: {markets_final_approved} markets approved with banners, {markets_final_rejected} rejected, {markets_failed} failed")
         results["tasks"]["task3"] = {
             "status": "success",
-            "final_approved_count": len(final_approved_markets),
-            "final_rejected_count": len(final_rejected_markets),
-            "failed_count": len(failed_markets),
+            "final_approved_count": markets_final_approved,
+            "final_rejected_count": markets_final_rejected, 
+            "failed_count": markets_failed,
             "test_final_approved_count": len(test_final_approved_markets)
         }
         save_results(results, results_file)
         
         # ===== TASK 4: Deployment =====
         logger.info("\n===== TASK 4: Deployment =====")
-        deployed_markets, deployment_failed_markets = run_task4(test_final_approved_markets)
+        
+        # Prepare task3 results in the format expected by task4
+        task3_results = {
+            "markets": test_final_approved_markets,
+            "stats": task3_stats
+        }
+        
+        # Run Task 4 with the messaging client
+        deployed_markets, task4_stats = run_task4(messaging_client, task3_results)
+        
+        # Extract counts from task4's stats
+        markets_deployed = task4_stats.get("markets_deployed", 0)
+        markets_deployment_failed = task4_stats.get("markets_failed", 0)
         
         if not deployed_markets:
             logger.error("❌ Task 4 failed: No markets deployed")
@@ -181,17 +206,17 @@ def main():
                 "status": "failed",
                 "error": "No markets deployed",
                 "deployed_count": 0,
-                "failed_count": len(deployment_failed_markets)
+                "failed_count": markets_deployment_failed
             }
             results["overall_status"] = "failed"
             save_results(results, results_file)
             return
         
-        logger.info(f"✅ Task 4 completed: {len(deployed_markets)} markets deployed")
+        logger.info(f"✅ Task 4 completed: {markets_deployed} markets deployed, {markets_deployment_failed} failed")
         results["tasks"]["task4"] = {
             "status": "success",
-            "deployed_count": len(deployed_markets),
-            "failed_count": len(deployment_failed_markets)
+            "deployed_count": markets_deployed,
+            "failed_count": markets_deployment_failed
         }
         
         # Pipeline completed successfully
