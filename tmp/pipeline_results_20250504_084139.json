@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-05-04 08:41:39",
+  "tasks": {
+    "task1": {
+      "status": "failed",
+      "error": "No active markets found from Polymarket",
+      "markets_count": 0
+    },
+    "task2": {
+      "status": "pending"
+    },
+    "task3": {
+      "status": "pending"
+    }
+  },
+  "overall_status": "failed"
+}

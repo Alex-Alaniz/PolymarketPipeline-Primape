@@ -15,6 +15,7 @@ import sys
 import json
 import logging
 import time
+import uuid
 from datetime import datetime, timedelta
 from typing import Dict, List, Any
 
@@ -70,35 +71,15 @@ def main():
         markets, stats = run_task1(messaging_client)
         
         if not markets:
-            logger.warning("⚠️ Task 1 returned no markets - using a test market instead")
-            
-            # Create a test market for pipeline testing purposes only
-            test_market_id = str(uuid.uuid4())
-            future_date = datetime.now() + timedelta(days=30)
-            
-            test_market = {
-                "id": test_market_id,
-                "type": "binary",
-                "question": "Will AI continue to advance in capabilities through 2025?",
-                "options": [
-                    {"name": "Yes", "probability": 0.85, "volume": 10000},
-                    {"name": "No", "probability": 0.15, "volume": 5000}
-                ],
-                "category": "Technology",
-                "sub_category": "Artificial Intelligence",
-                "expiry": int(future_date.timestamp() * 1000),
-                "original_market_id": test_market_id,
-                "source": "test_market" 
+            logger.error("❌ Task 1 failed: No active markets found from Polymarket")
+            results["tasks"]["task1"] = {
+                "status": "failed",
+                "error": "No active markets found from Polymarket",
+                "markets_count": 0
             }
-            
-            # Use this test market for the pipeline testing ONLY
-            # Note: In production we would NEVER use synthetic data
-            markets = [test_market]
-            
-            # Post the test market to Slack for approval
-            message_text = f"MARKET APPROVAL NEEDED (TEST MARKET)\nQuestion: {test_market['question']}"
-            test_message_id = messaging_client.post_message(message_text)
-            test_market["message_id"] = test_message_id
+            results["overall_status"] = "failed"
+            save_results(results, results_file)
+            return
         
         logger.info(f"✅ Task 1 completed: {len(markets)} markets fetched")
         results["tasks"]["task1"] = {
@@ -131,18 +112,22 @@ def main():
         markets_rejected = task2_stats.get("markets_rejected", 0) 
         markets_timeout = task2_stats.get("markets_timeout", 0)
         
-        # For testing, if no markets were approved, force one market to be "approved"
+        # Only use markets that have actually been approved
         test_approved_markets = approved_markets
-        if not test_approved_markets and markets:
-            logger.warning("No markets were approved, using one market for testing")
-            # Create a copy of the market to avoid modifying the original
-            test_market = dict(markets[0])
-            # Add required fields for task3
-            test_market["status"] = "approved"
-            test_market["approval_timestamp"] = datetime.now().isoformat()
-            test_market["approval_message_id"] = "test_approval_message"
-            test_approved_markets = [test_market]
-            markets_approved = 1
+        
+        # If no markets were approved, fail the pipeline
+        if not test_approved_markets:
+            logger.error("❌ Task 2 failed: No markets were approved")
+            results["tasks"]["task2"] = {
+                "status": "failed",
+                "error": "No markets were approved",
+                "approved_count": 0,
+                "rejected_count": markets_rejected,
+                "timed_out_count": markets_timeout
+            }
+            results["overall_status"] = "failed"
+            save_results(results, results_file)
+            return
         
         logger.info(f"✅ Task 2 completed: {markets_approved} markets approved, {markets_rejected} rejected, {markets_timeout} timed out")
         results["tasks"]["task2"] = {
@@ -163,10 +148,10 @@ def main():
             "stats": task2_stats
         }
         
-        # Set environment variable for auto-approval in Task 3 (for testing only)
-        os.environ["AUTO_APPROVE_FOR_TESTING"] = "true"
+        # Require real approvals (no auto-approval)
+        os.environ["AUTO_APPROVE_FOR_TESTING"] = "false"
         
-        # Run Task 3 with the messaging client - this will generate banners and auto-approve
+        # Run Task 3 with the messaging client - this will generate banners and require real approval
         final_approved_markets, task3_stats = run_task3(messaging_client, task2_results)
         
         # Extract counts from task3's stats
@@ -179,6 +164,20 @@ def main():
         for market in final_approved_markets:
             if "banner_path" in market and market["banner_path"]:
                 test_final_approved_markets.append(market)
+        
+        # If no markets were approved in the final stage, fail the pipeline
+        if not test_final_approved_markets:
+            logger.error("❌ Task 3 failed: No markets were approved in the final stage")
+            results["tasks"]["task3"] = {
+                "status": "failed",
+                "error": "No markets were approved in the final stage",
+                "final_approved_count": 0,
+                "final_rejected_count": markets_final_rejected,
+                "failed_count": markets_failed
+            }
+            results["overall_status"] = "failed"
+            save_results(results, results_file)
+            return
         
         logger.info(f"✅ Task 3 completed: {markets_final_approved} markets approved with banners, {markets_final_rejected} rejected, {markets_failed} failed")
         results["tasks"]["task3"] = {

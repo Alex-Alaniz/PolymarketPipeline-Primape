@@ -1,0 +1,20 @@
+{
+  "timestamp": "2025-05-04 08:40:27",
+  "tasks": {
+    "task1": {
+      "status": "success",
+      "markets_count": 1
+    },
+    "task2": {
+      "status": "success",
+      "approved_count": 1,
+      "rejected_count": 0,
+      "timed_out_count": 0,
+      "test_approved_count": 1
+    },
+    "task3": {
+      "status": "pending"
+    }
+  },
+  "overall_status": "running"
+}
