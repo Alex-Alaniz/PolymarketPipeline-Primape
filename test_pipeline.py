@@ -34,6 +34,9 @@ from tasks.task2_capture_approvals import run_task as run_task2
 from tasks.task3_generate_banners import run_task as run_task3
 from tasks.task4_deploy import run_task as run_task4
 
+# Import utilities
+from utils.messaging import MessagingClient
+
 def main():
     """Run the full pipeline test"""
     logger.info("Starting full pipeline test")
@@ -59,7 +62,18 @@ def main():
     try:
         # ===== TASK 1: Fetch and post to Slack =====
         logger.info("\n===== TASK 1: Fetch and post to Slack =====")
-        markets = run_task1()
+        
+        # Initialize messaging client
+        messaging_client = MessagingClient()
+        logger.info(f"Initialized messaging client for platform: {messaging_client.platform}")
+        
+        # Set configuration to limit markets posted during test
+        import config
+        config.MAX_MARKETS_TO_POST = 2  # Only post 2 markets during test
+        
+        # Run Task 1 with the messaging client
+        posted_markets, stats = run_task1(messaging_client)
+        markets = posted_markets
         
         if not markets:
             logger.error("❌ Task 1 failed: No markets returned")
@@ -81,10 +95,14 @@ def main():
         
         # ===== TASK 2: Capture Approvals =====
         logger.info("\n===== TASK 2: Capture Approvals =====")
-        approved_markets, rejected_markets, timed_out_markets = run_task2(
-            markets,
-            approval_timeout_minutes=1  # Short timeout for testing
-        )
+        
+        # Prepare task1 results in the format expected by task2
+        task1_results = {
+            "markets": markets,
+            "stats": stats
+        }
+        
+        approved_markets, task2_stats = run_task2(messaging_client, task1_results)
         
         # For testing, consider timed out markets as approved
         # In a real scenario, we'd wait longer for actual approvals
