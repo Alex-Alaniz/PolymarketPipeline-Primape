@@ -278,21 +278,25 @@ class PolymarketTransformer:
                     logger.info(f"Skipping market {market_id} - already processed")
                     continue
                 
-                # MUCH more lenient filtering: include any market that isn't archived
-                # This allows us to process closed markets as well for testing purposes
+                # Strict filtering for market status
                 is_archived = market.get("archived", False)
+                is_closed = market.get("closed", False)
                 
+                # Skip archived markets
                 if is_archived:
                     logger.info(f"Skipping market {market_id} - archived")
                     continue
                 
-                # Skip markets that have ended more than 60 days ago
-                # Extended window significantly to include more markets for testing
+                # Skip closed markets
+                if is_closed:
+                    logger.info(f"Skipping market {market_id} - closed")
+                    continue
+                
+                # Skip markets that have already ended
                 if end_timestamp:
                     current_time = datetime.now().timestamp() * 1000
-                    sixty_days_ms = 60 * 24 * 60 * 60 * 1000  # 60 days in milliseconds
-                    if end_timestamp < (current_time - sixty_days_ms):
-                        logger.info(f"Skipping market {market_id} - ended more than 60 days ago")
+                    if end_timestamp < current_time:
+                        logger.info(f"Skipping market {market_id} - already ended (expiry: {datetime.fromtimestamp(end_timestamp/1000)})")
                         continue
                 
                 # Skip markets with insufficient data
@@ -379,6 +383,13 @@ class PolymarketTransformer:
             # Debug information for filtering process
             logger.info(f"Processing market: {market_id} - {market.get('question')}")
             
+            # Check market status
+            is_closed = market.get("closed", False)
+            
+            if is_closed:
+                logger.info(f"Skipping market {market_id} - closed")
+                continue
+                
             # Check end timestamp
             end_timestamp = market.get("end_timestamp")
             if end_timestamp:
@@ -403,12 +414,10 @@ class PolymarketTransformer:
             logger.info(f"Adding market {market_id} to active markets")
             active_markets.append(market)
             
-        # For testing: if no active markets found, use all markets
+        # If no active markets found, return
         if not active_markets:
-            logger.warning("No active markets found after filtering, using all markets for testing")
-            # Clear processed markets list to ensure all markets are processed
-            self.processed_markets = {"markets": []}
-            active_markets = markets
+            logger.warning("No active markets found after filtering. Continuing with empty market list.")
+            # This will ensure we only use active markets and don't fall back to including expired ones
         
         logger.info(f"Found {len(active_markets)} active markets to transform")
         
