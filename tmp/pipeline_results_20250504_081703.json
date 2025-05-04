@@ -1,0 +1,17 @@
+{
+  "timestamp": "2025-05-04 08:17:03",
+  "tasks": {
+    "task1": {
+      "status": "failed",
+      "error": "No markets fetched",
+      "markets_count": 0
+    },
+    "task2": {
+      "status": "pending"
+    },
+    "task3": {
+      "status": "pending"
+    }
+  },
+  "overall_status": "failed"
+}

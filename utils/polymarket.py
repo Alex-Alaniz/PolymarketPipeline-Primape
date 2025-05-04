@@ -5,6 +5,7 @@ This module extracts market data from Polymarket for processing.
 import os
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 import requests
 from typing import List, Dict, Any
@@ -172,17 +173,83 @@ class PolymarketExtractor:
                         break
                 
                 except Exception as page_error:
-                    # Initialize the error URL in case it's not defined yet
+                    # Initialize the error URL variable
                     error_url = url
-                    if 'current_url' in locals():
+                    # Check if current_url has been assigned already in this scope
+                    try:
                         error_url = current_url
+                    except NameError:
+                        # current_url is not defined, fallback to url
+                        pass
                     logger.error(f"Error fetching page {page} from {error_url}: {str(page_error)}")
                     break
             
-            # Return all markets collected
+            # Return all markets collected, but filter out any that are expired or closed
             if all_markets:
+                # Apply additional filtering to ensure only current/open markets
+                filtered_markets = []
+                current_time = datetime.now()
+                
+                for market in all_markets:
+                    try:
+                        # Skip closed or archived markets
+                        if market.get("closed", False) or market.get("archived", False):
+                            logger.info(f"Filtering out market {market.get('condition_id')} - closed or archived")
+                            continue
+                            
+                        # Check expiry dates from various fields
+                        is_expired = False
+                        
+                        # Check end_date_iso if available
+                        if "end_date_iso" in market and market["end_date_iso"]:
+                            try:
+                                end_date = datetime.fromisoformat(market["end_date_iso"].replace("Z", "+00:00"))
+                                if end_date < current_time:
+                                    logger.info(f"Filtering out market {market.get('condition_id')} - already ended (ISO date: {end_date})")
+                                    is_expired = True
+                            except Exception as e:
+                                logger.warning(f"Could not parse end_date_iso for market {market.get('condition_id')}: {e}")
+                        
+                        # Also check question text for past dates
+                        if not is_expired and "question" in market:
+                            question = market["question"]
+                            # Check for date references like "by March 31" or "by end of 2023"
+                            past_date_patterns = [
+                                r"by\s+([a-zA-Z]+\s+\d{1,2})",  # by March 31
+                                r"before\s+([a-zA-Z]+\s+\d{1,2})",  # before March 31
+                                r"prior\s+to\s+([a-zA-Z]+\s+\d{1,2})"  # prior to March 31
+                            ]
+                            
+                            for pattern in past_date_patterns:
+                                match = re.search(pattern, question, re.IGNORECASE)
+                                if match:
+                                    date_text = match.group(1)
+                                    try:
+                                        # For month day format, add current year
+                                        current_year = current_time.year
+                                        date_text = f"{date_text}, {current_year}"
+                                        
+                                        # Check if it's a valid date
+                                        import dateutil.parser
+                                        parsed_date = dateutil.parser.parse(date_text)
+                                        
+                                        # If the date is in the past, filter out the market
+                                        if parsed_date < current_time:
+                                            logger.info(f"Filtering out market {market.get('condition_id')} - contains past date in question: {date_text}")
+                                            is_expired = True
+                                            break
+                                    except Exception as e:
+                                        logger.warning(f"Could not parse date from question for market {market.get('condition_id')}: {e}")
+                        
+                        # Add to filtered markets if not expired
+                        if not is_expired:
+                            filtered_markets.append(market)
+                    except Exception as e:
+                        logger.error(f"Error filtering market {market.get('condition_id')}: {e}")
+                
                 logger.info(f"Successfully fetched a total of {len(all_markets)} markets from Polymarket CLOB API")
-                return all_markets
+                logger.info(f"After filtering expired/closed markets: {len(filtered_markets)} markets remain")
+                return filtered_markets
             else:
                 logger.warning("No markets fetched from Polymarket CLOB API")
                 return []

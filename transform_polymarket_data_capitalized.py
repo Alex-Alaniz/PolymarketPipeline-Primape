@@ -298,6 +298,52 @@ class PolymarketTransformer:
                     if end_timestamp < current_time:
                         logger.info(f"Skipping market {market_id} - already ended (expiry: {datetime.fromtimestamp(end_timestamp/1000)})")
                         continue
+                else:
+                    # If no end_timestamp is provided, try to extract it from other fields
+                    end_date_str = market.get("end_date") or market.get("end_time")
+                    if end_date_str:
+                        try:
+                            # Try to parse various date formats
+                            for date_format in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]:
+                                try:
+                                    end_date = datetime.strptime(end_date_str, date_format)
+                                    if end_date < datetime.now():
+                                        logger.info(f"Skipping market {market_id} - already ended (parsed date: {end_date})")
+                                        continue
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Could not parse end date '{end_date_str}' for market {market_id}: {e}")
+                    
+                    # If we can't determine expiry and the question has a date in it, check if it's in the past
+                    if question:
+                        # Look for date patterns in the question (like "by March 31" or "by end of 2023")
+                        date_patterns = [
+                            r"by\s+([a-zA-Z]+\s+\d{1,2})",  # by March 31
+                            r"by\s+the\s+end\s+of\s+(\d{4})",  # by the end of 2023
+                            r"by\s+(\d{4})",  # by 2023
+                            r"by\s+Q\d+\s+(\d{4})",  # by Q1 2023
+                            r"before\s+([a-zA-Z]+\s+\d{1,2})"  # before March 31
+                        ]
+                        
+                        for pattern in date_patterns:
+                            match = re.search(pattern, question, re.IGNORECASE)
+                            if match:
+                                date_text = match.group(1)
+                                try:
+                                    # For "March 31" type dates, add the current year if not specified
+                                    if re.match(r"[a-zA-Z]+\s+\d{1,2}", date_text):
+                                        current_year = datetime.now().year
+                                        date_text = f"{date_text}, {current_year}"
+                                        # Try to parse the date
+                                        import dateutil.parser
+                                        parsed_date = dateutil.parser.parse(date_text)
+                                        if parsed_date < datetime.now():
+                                            logger.info(f"Skipping market {market_id} - contains past date in question: {date_text}")
+                                            continue
+                                except Exception as e:
+                                    logger.warning(f"Could not parse date from question for market {market_id}: {e}")
                 
                 # Skip markets with insufficient data
                 if not question or "tokens" not in market:
@@ -400,6 +446,36 @@ class PolymarketTransformer:
                 if end_date < datetime.now():
                     logger.info(f"Skipping market {market_id} - already ended")
                     continue
+                
+            # Even if no end_timestamp or if it's in the future, check question text for past dates
+            question_text = market.get("question", "")
+            if question_text:
+                # Check for date patterns in the question (like "by March 31" or "by end of 2023")
+                date_patterns = [
+                    r"by\s+([a-zA-Z]+\s+\d{1,2})",  # by March 31
+                    r"by\s+the\s+end\s+of\s+(\d{4})",  # by the end of 2023
+                    r"by\s+(\d{4})",  # by 2023
+                    r"by\s+Q\d+\s+(\d{4})",  # by Q1 2023
+                    r"before\s+([a-zA-Z]+\s+\d{1,2})"  # before March 31
+                ]
+                
+                for pattern in date_patterns:
+                    match = re.search(pattern, question_text, re.IGNORECASE)
+                    if match:
+                        date_text = match.group(1)
+                        try:
+                            # For "March 31" type dates, add the current year if not specified
+                            if re.match(r"[a-zA-Z]+\s+\d{1,2}", date_text):
+                                current_year = datetime.now().year
+                                date_text = f"{date_text}, {current_year}"
+                                # Try to parse the date
+                                import dateutil.parser
+                                parsed_date = dateutil.parser.parse(date_text)
+                                if parsed_date < datetime.now():
+                                    logger.info(f"Skipping market {market_id} - contains past date in question: {date_text}")
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Could not parse date from question for market {market_id}: {e}")
             
             # Check if already processed
             if self.is_market_processed(market_id):
