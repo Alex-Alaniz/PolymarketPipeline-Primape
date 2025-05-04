@@ -263,22 +263,21 @@ class PolymarketTransformer:
                     logger.info(f"Skipping market {market_id} - already processed")
                     continue
                 
-                # Include markets that are either active OR accepting orders, skip archived ones
-                is_active = market.get("active", False)
-                is_accepting_orders = market.get("accepting_orders", False)
+                # MUCH more lenient filtering: include any market that isn't archived
+                # This allows us to process closed markets as well for testing purposes
                 is_archived = market.get("archived", False)
                 
-                if (not is_active and not is_accepting_orders) or is_archived:
-                    logger.info(f"Skipping market {market_id} - not active/accepting orders or is archived")
+                if is_archived:
+                    logger.info(f"Skipping market {market_id} - archived")
                     continue
                 
-                # Skip markets that have ended more than 3 days ago
-                # This allows for some flexibility with markets that might have just ended
+                # Skip markets that have ended more than 60 days ago
+                # Extended window significantly to include more markets for testing
                 if end_timestamp:
                     current_time = datetime.now().timestamp() * 1000
-                    three_days_ms = 3 * 24 * 60 * 60 * 1000  # 3 days in milliseconds
-                    if end_timestamp < (current_time - three_days_ms):
-                        logger.info(f"Skipping market {market_id} - ended more than 3 days ago")
+                    sixty_days_ms = 60 * 24 * 60 * 60 * 1000  # 60 days in milliseconds
+                    if end_timestamp < (current_time - sixty_days_ms):
+                        logger.info(f"Skipping market {market_id} - ended more than 60 days ago")
                         continue
                 
                 # Skip markets with insufficient data

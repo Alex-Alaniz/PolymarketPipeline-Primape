@@ -82,8 +82,12 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
                 return [], stats
         
         # Update stats with number of markets fetched
-        stats["markets_fetched"] = len(polymarket_data)
-        logger.info(f"Fetched {stats['markets_fetched']} markets from Polymarket")
+        if isinstance(polymarket_data, list):
+            stats["markets_fetched"] = len(polymarket_data)
+            logger.info(f"Fetched {stats['markets_fetched']} markets from Polymarket")
+        else:
+            stats["markets_fetched"] = 0
+            logger.error(f"Failed to fetch markets, polymarket_data is not a list: {type(polymarket_data)}")
         
         # Create output directory if it doesn't exist
         os.makedirs(TMP_DIR, exist_ok=True)
@@ -91,13 +95,18 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         # Save the raw data for reference
         raw_data_path = os.path.join(TMP_DIR, "polymarket_raw_data.json")
         with open(raw_data_path, 'w') as f:
-            json.dump({"markets": polymarket_data}, f, indent=2)
+            if isinstance(polymarket_data, list):
+                json.dump({"markets": polymarket_data}, f, indent=2)
+            else:
+                json.dump({"markets": []}, f, indent=2)
         
         # Markets to post to Slack/Discord
         posted_markets = []
         
         # Limit to 10 markets for initial post (avoid spam)
-        markets_to_post = polymarket_data[:10]
+        markets_to_post = []
+        if isinstance(polymarket_data, list):
+            markets_to_post = polymarket_data[:10]
         
         # Post each market to Slack/Discord for initial approval
         for idx, market in enumerate(markets_to_post):

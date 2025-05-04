@@ -1,0 +1,15 @@
+{
+  "posted_markets": [],
+  "stats": {
+    "task": "task1_fetch_and_post",
+    "start_time": "2025-05-04T07:12:41.324631+00:00",
+    "markets_fetched": 0,
+    "markets_posted": 0,
+    "market_list": [],
+    "errors": [
+      "Task error: object of type 'bool' has no len()"
+    ],
+    "status": "failed",
+    "duration": 0.0027120113372802734
+  }
+}

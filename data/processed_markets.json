@@ -3,37 +3,42 @@
     {
       "original_market_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
       "transformed_market_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
-      "processed_date": "2025-05-04T07:09:03.656331"
+      "processed_date": "2025-05-04T07:12:40.962668"
+    },
+    {
+      "original_market_id": "",
+      "transformed_market_id": "",
+      "processed_date": "2025-05-04T07:12:40.979575"
     },
     {
       "original_market_id": "0x10f348d6ad73199a1efe44575c968d8b5607efdafed160063f55c44323a6447f",
       "transformed_market_id": "0x10f348d6ad73199a1efe44575c968d8b5607efdafed160063f55c44323a6447f",
-      "processed_date": "2025-05-04T07:09:03.744728"
+      "processed_date": "2025-05-04T07:12:41.066405"
     },
     {
       "original_market_id": "0x8d03ffacb39e355413dfbed8c8888a28a26f2305f04edfde521d95fa9bd3cc2d",
       "transformed_market_id": "0x8d03ffacb39e355413dfbed8c8888a28a26f2305f04edfde521d95fa9bd3cc2d",
-      "processed_date": "2025-05-04T07:09:03.750266"
+      "processed_date": "2025-05-04T07:12:41.070342"
     },
     {
       "original_market_id": "0xb05e7b55ac377e52a1e747e2da419c56654de8531b28111f9d81ace4cb9df391",
       "transformed_market_id": "0xb05e7b55ac377e52a1e747e2da419c56654de8531b28111f9d81ace4cb9df391",
-      "processed_date": "2025-05-04T07:09:03.770044"
+      "processed_date": "2025-05-04T07:12:41.079293"
     },
     {
       "original_market_id": "0xb62bd4dfc19d30b1f4b6610001232a4f2bf3242de3bcdc37ac982b625dcad7de",
       "transformed_market_id": "0xb62bd4dfc19d30b1f4b6610001232a4f2bf3242de3bcdc37ac982b625dcad7de",
-      "processed_date": "2025-05-04T07:09:03.788037"
+      "processed_date": "2025-05-04T07:12:41.117667"
     },
     {
       "original_market_id": "0xf22ab1d1058164acf061e4fd7f36afa1dfa7bd652c5006cbd6d70b042d803e10",
       "transformed_market_id": "0xf22ab1d1058164acf061e4fd7f36afa1dfa7bd652c5006cbd6d70b042d803e10",
-      "processed_date": "2025-05-04T07:09:03.796587"
+      "processed_date": "2025-05-04T07:12:41.143874"
     },
     {
       "original_market_id": "0xbe7fc97e23aa2ab8d3437f7ae80a137858e63a4510670d23cf73de6c05b2a699",
       "transformed_market_id": "0xbe7fc97e23aa2ab8d3437f7ae80a137858e63a4510670d23cf73de6c05b2a699",
-      "processed_date": "2025-05-04T07:09:03.870771"
+      "processed_date": "2025-05-04T07:12:41.295055"
     }
   ]
 }
