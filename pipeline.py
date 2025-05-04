@@ -142,11 +142,43 @@ class PolymarketPipeline:
             # Step 1: Extract Polymarket data
             logger.info("Extracting Polymarket data")
             if self.polymarket_extractor:
-                self.markets = self.polymarket_extractor.extract_data()
-                if not self.markets:
-                    logger.error("No markets extracted from Polymarket")
+                try:
+                    self.markets = self.polymarket_extractor.extract_data()
+                    if not self.markets:
+                        logger.error("No active markets extracted from Polymarket. All markets may be closed or expired.")
+                        
+                        # Update the database with the failure information
+                        if DB_AVAILABLE and self.db_run_id:
+                            try:
+                                from models import db, PipelineRun
+                                with current_app.app_context():
+                                    run = PipelineRun.query.get(self.db_run_id)
+                                    if run:
+                                        run.status = "failed"
+                                        run.error = "No active markets found. All markets may be closed or expired."
+                                        db.session.commit()
+                            except Exception as db_error:
+                                logger.error(f"Error updating database: {str(db_error)}")
+                        
+                        return 1
+                    logger.info(f"Extracted {len(self.markets)} active markets from Polymarket")
+                except Exception as e:
+                    logger.error(f"Failed to extract Polymarket data: {str(e)}")
+                    
+                    # Update the database with the failure information
+                    if DB_AVAILABLE and self.db_run_id:
+                        try:
+                            from models import db, PipelineRun
+                            with current_app.app_context():
+                                run = PipelineRun.query.get(self.db_run_id)
+                                if run:
+                                    run.status = "failed"
+                                    run.error = f"Failed to extract market data: {str(e)}"
+                                    db.session.commit()
+                        except Exception as db_error:
+                            logger.error(f"Error updating database: {str(db_error)}")
+                    
                     return 1
-                logger.info(f"Extracted {len(self.markets)} markets from Polymarket")
             else:
                 logger.error("Polymarket extractor not available")
                 return 1
@@ -420,15 +452,46 @@ class PolymarketPipeline:
     
     def post_summary(self):
         """Post summary to messaging platform."""
-        if not self.messaging_client:
-            logger.error("Messaging client not available for posting summary")
-            return
-        
         try:
-            self.messaging_client.post_summary(self.summary)
-            logger.info("Posted pipeline summary to messaging platform")
+            if not self.messaging_client:
+                logger.warning("Messaging client not available for posting summary")
+                return
+            
+            # Calculate summary stats
+            total_processed = self.summary["markets_processed"]
+            total_approved = self.summary["markets_approved"]
+            total_rejected = self.summary["markets_rejected"]
+            total_deployed = self.summary["markets_deployed"]
+            total_failed = self.summary["markets_failed"]
+            
+            # Format summary message
+            message = f"*Pipeline Summary*\n\n"
+            message += f"• Total markets processed: {total_processed}\n"
+            message += f"• Markets approved: {total_approved}\n"
+            message += f"• Markets rejected: {total_rejected}\n"
+            message += f"• Markets deployed: {total_deployed}\n"
+            message += f"• Markets failed: {total_failed}\n\n"
+            
+            # Add overall status
+            if total_deployed > 0:
+                message += "✅ Pipeline completed successfully with deployed markets"
+            elif total_approved > 0:
+                message += "⚠️ Pipeline completed with approved markets, but no deployments"
+            elif total_processed > 0:
+                message += "⚠️ Pipeline processed markets, but none were approved"
+            else:
+                message += "❌ Pipeline failed to process any markets"
+            
+            # Post via messaging client's general message method
+            if hasattr(self.messaging_client, 'post_message'):
+                self.messaging_client.post_message(message)
+            else:
+                logger.warning("Messaging client does not have post_message method")
+                
         except Exception as e:
             logger.error(f"Error posting summary: {str(e)}")
+            # Don't raise the exception - this is a non-critical step
+
 
 # For testing purposes
 if __name__ == "__main__":
