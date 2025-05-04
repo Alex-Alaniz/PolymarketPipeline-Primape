@@ -131,13 +131,14 @@ class PolymarketExtractor:
             
             # Fetch data with pagination
             while page <= max_pages:
+                # Build URL with pagination - define outside try block to ensure it's always available
+                current_url = url
+                if next_cursor:
+                    current_url += f"?next_cursor={next_cursor}"
+                
+                logger.info(f"Fetching page {page} from: {current_url}")
+                
                 try:
-                    # Build URL with pagination
-                    current_url = url
-                    if next_cursor:
-                        current_url += f"?next_cursor={next_cursor}"
-                    
-                    logger.info(f"Fetching page {page} from: {current_url}")
                     
                     # Make the request
                     response = requests.get(current_url, headers=headers, timeout=10)
@@ -173,15 +174,8 @@ class PolymarketExtractor:
                         break
                 
                 except Exception as page_error:
-                    # Initialize the error URL variable
-                    error_url = url
-                    # Check if current_url has been assigned already in this scope
-                    try:
-                        error_url = current_url
-                    except NameError:
-                        # current_url is not defined, fallback to url
-                        pass
-                    logger.error(f"Error fetching page {page} from {error_url}: {str(page_error)}")
+                    # Use a simple error message without relying on current_url
+                    logger.error(f"Error fetching page {page} from Polymarket API: {str(page_error)}")
                     break
             
             # Return all markets collected, but filter out any that are expired or closed
@@ -192,9 +186,24 @@ class PolymarketExtractor:
                 
                 for market in all_markets:
                     try:
-                        # Skip closed or archived markets
+                        # First, explicitly check for 'active' flag - this is the correct field to determine live markets
+                        if "active" in market and market["active"] is False:
+                            logger.info(f"Filtering out market {market.get('condition_id')} - not active (active: False)")
+                            continue
+                        
+                        # Also check closed or archived flags as a fallback
                         if market.get("closed", False) or market.get("archived", False):
                             logger.info(f"Filtering out market {market.get('condition_id')} - closed or archived")
+                            continue
+                            
+                        # If the market has a 'state' field, check if it's not "open" or "active"
+                        if "state" in market and market["state"] not in ["open", "active", "live"]:
+                            logger.info(f"Filtering out market {market.get('condition_id')} - state is {market['state']}")
+                            continue
+                            
+                        # If the market has a 'status' field, check if it's not "open" or "active"
+                        if "status" in market and market["status"] not in ["open", "active", "live"]:
+                            logger.info(f"Filtering out market {market.get('condition_id')} - status is {market['status']}")
                             continue
                             
                         # Check expiry dates from various fields

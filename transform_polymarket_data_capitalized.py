@@ -279,6 +279,12 @@ class PolymarketTransformer:
                     continue
                 
                 # Strict filtering for market status
+                # First, check the 'active' boolean flag - this is the primary field to determine active markets
+                if "active" in market and market["active"] is False:
+                    logger.info(f"Skipping market {market_id} - not active (active=False)")
+                    continue
+                
+                # Also check other status fields
                 is_archived = market.get("archived", False)
                 is_closed = market.get("closed", False)
                 
@@ -290,6 +296,16 @@ class PolymarketTransformer:
                 # Skip closed markets
                 if is_closed:
                     logger.info(f"Skipping market {market_id} - closed")
+                    continue
+                    
+                # If the market has a 'state' field, check if it's not "open" or "active"
+                if "state" in market and market["state"] not in ["open", "active", "live"]:
+                    logger.info(f"Skipping market {market_id} - state is {market['state']}")
+                    continue
+                    
+                # If the market has a 'status' field, check if it's not "open" or "active"
+                if "status" in market and market["status"] not in ["open", "active", "live"]:
+                    logger.info(f"Skipping market {market_id} - status is {market['status']}")
                     continue
                 
                 # Skip markets that have already ended
