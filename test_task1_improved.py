@@ -130,7 +130,16 @@ def main():
             
             # Now run the actual task
             logger.info("Running Task 1 to post markets to Slack")
+            
+            # Temporarily modify the config to limit posts during testing
+            import config
+            original_limit = getattr(config, 'MAX_MARKETS_TO_POST', 10)
+            config.MAX_MARKETS_TO_POST = 2  # Only post 2 markets during test
+            
             posted_markets, stats = run_task(messaging_client)
+            
+            # Restore original limit
+            config.MAX_MARKETS_TO_POST = original_limit
             
             # Save task results
             results_file = os.path.join(TMP_DIR, f"task1_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json")

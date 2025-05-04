@@ -70,6 +70,7 @@ PRIVATE_KEY = os.environ.get("PRIVATE_KEY")
 # Pipeline configuration
 APPROVAL_WINDOW_MINUTES = int(os.environ.get("APPROVAL_WINDOW_MINUTES", "30"))
 MAX_MARKETS_PER_RUN = int(os.environ.get("MAX_MARKETS_PER_RUN", "10"))
+MAX_MARKETS_TO_POST = int(os.environ.get("MAX_MARKETS_TO_POST", "10"))
 
 # Get the current timestamp
 TIMESTAMP = datetime.now().strftime("%Y%m%d_%H%M%S")

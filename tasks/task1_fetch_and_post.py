@@ -54,45 +54,70 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         # Fetch data from Polymarket API
         logger.info("Fetching data from Polymarket API")
         
-        # Load data from file and then transform it
-        load_success = transformer.load_polymarket_data()
+        # Use the PolymarketExtractor to fetch real data from the CLOB API
+        from utils.polymarket import PolymarketExtractor
         
-        if load_success:
-            # Get transformed markets from the API file
-            # The load_polymarket_data method loads the data into transformer.polymarket_data
-            market_data = transformer.polymarket_data.get('markets', [])
-            logger.info(f"Loaded {len(market_data)} markets from file")
+        try:
+            # Initialize the extractor
+            extractor = PolymarketExtractor()
+            logger.info("PolymarketExtractor initialized")
             
-            # Transform the data
-            polymarket_data = transformer.transform_markets_from_api(market_data)
-            logger.info(f"Transformed {len(polymarket_data)} markets")
-        else:
-            # Attempt to fetch from blockchain as a backup
-            logger.warning("No data from Polymarket API, attempting to fetch from blockchain")
-            try:
-                # Import dynamically to avoid circular imports
-                from utils.polymarket_blockchain import PolymarketBlockchainClient
+            # Fetch raw markets from the CLOB API
+            api_markets = extractor.fetch_polymarket_data()
+            
+            if api_markets and len(api_markets) > 0:
+                logger.info(f"Fetched {len(api_markets)} raw markets from Polymarket CLOB API")
                 
-                # Initialize blockchain client
-                blockchain_client = PolymarketBlockchainClient()
+                # Transform the fetched markets
+                polymarket_data = transformer.transform_markets_from_api(api_markets)
+                logger.info(f"Transformed {len(polymarket_data)} markets from API data")
+            else:
+                # If no markets from API, try loading from file
+                logger.warning("No markets from CLOB API, trying to load from file")
                 
-                # Fetch market data from blockchain
-                blockchain_markets = blockchain_client.fetch_markets(limit=20)
+                load_success = transformer.load_polymarket_data()
                 
-                if blockchain_markets:
-                    logger.info(f"Successfully fetched {len(blockchain_markets)} markets from blockchain")
+                if load_success:
+                    # Get markets from the file
+                    market_data = transformer.polymarket_data.get('markets', [])
+                    logger.info(f"Loaded {len(market_data)} markets from file")
                     
-                    # Transform the blockchain markets to the required format
-                    polymarket_data = transformer.transform_markets_from_api(blockchain_markets)
+                    # Transform the data
+                    polymarket_data = transformer.transform_markets_from_api(market_data)
+                    logger.info(f"Transformed {len(polymarket_data)} markets from file data")
                 else:
-                    polymarket_data = []
-                    raise Exception("Failed to fetch markets from both API and blockchain")
-            except Exception as e:
-                polymarket_data = []
-                logger.error(f"Error fetching from blockchain: {str(e)}")
-                stats["errors"].append(f"Failed to fetch market data: {str(e)}")
-                stats["status"] = "failed"
-                return [], stats
+                    # If still no data, try blockchain
+                    logger.warning("No data from file, attempting to fetch from blockchain")
+                    try:
+                        # Import dynamically to avoid circular imports
+                        from utils.polymarket_blockchain import PolymarketBlockchainClient
+                        
+                        # Initialize blockchain client
+                        blockchain_client = PolymarketBlockchainClient()
+                        
+                        # Fetch market data from blockchain
+                        blockchain_markets = blockchain_client.fetch_markets(limit=20)
+                        
+                        if blockchain_markets:
+                            logger.info(f"Successfully fetched {len(blockchain_markets)} markets from blockchain")
+                            
+                            # Transform the blockchain markets to the required format
+                            polymarket_data = transformer.transform_markets_from_api(blockchain_markets)
+                        else:
+                            polymarket_data = []
+                            raise Exception("Failed to fetch markets from all available sources")
+                    except Exception as e:
+                        polymarket_data = []
+                        logger.error(f"Error fetching from blockchain: {str(e)}")
+                        stats["errors"].append(f"Failed to fetch market data: {str(e)}")
+                        stats["status"] = "failed"
+                        return [], stats
+        except Exception as e:
+            polymarket_data = []
+            logger.error(f"Error fetching market data: {str(e)}")
+            stats["errors"].append(f"Failed to fetch market data: {str(e)}")
+            stats["status"] = "failed"
+            return [], stats
         
         # Update stats with number of markets fetched
         if isinstance(polymarket_data, list):
@@ -116,10 +141,13 @@ def run_task(messaging_client: MessagingClient) -> Tuple[List[Dict[str, Any]], D
         # Markets to post to Slack/Discord
         posted_markets = []
         
-        # Limit to 10 markets for initial post (avoid spam)
+        # Limit markets for initial post (avoid spam)
         markets_to_post = []
         if isinstance(polymarket_data, list):
-            markets_to_post = polymarket_data[:10]
+            # Check if there's a config parameter for max markets to post
+            max_markets = getattr(config, 'MAX_MARKETS_TO_POST', 10)
+            logger.info(f"Limiting to {max_markets} markets for posting")
+            markets_to_post = polymarket_data[:max_markets]
         
         # Post each market to Slack/Discord for initial approval
         for idx, market in enumerate(markets_to_post):
