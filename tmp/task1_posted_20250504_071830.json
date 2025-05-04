@@ -1,0 +1,16 @@
+{
+  "markets": [
+    {
+      "market_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
+      "question": "NBA: Bulls vs. Grizzlies (02/07/2023)",
+      "message_id": "1746343105.175289",
+      "status": "posted"
+    },
+    {
+      "market_id": "",
+      "question": "Will Google publicly launch a ChatGPT competitor by March 31?",
+      "message_id": "1746343107.768589",
+      "status": "posted"
+    }
+  ]
+}

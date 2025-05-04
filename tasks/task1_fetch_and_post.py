@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.messaging import MessagingClient
 from transform_polymarket_data_capitalized import PolymarketTransformer
-from config import DATA_DIR, TMP_DIR
+from config import DATA_DIR, TMP_DIR, MAX_MARKETS_TO_POST
+import config
 
 logger = logging.getLogger("task1")
 
