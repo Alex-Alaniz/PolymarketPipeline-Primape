@@ -105,3 +105,41 @@ class PipelineRun(db.Model):
             'markets_deployed': self.markets_deployed,
             'error': self.error
         }
+
+class ProcessedMarket(db.Model):
+    """Model for tracking processed markets from Polymarket API.
+    This prevents re-processing the same markets multiple times."""
+    __tablename__ = 'processed_markets'
+    
+    # Polymarket condition_id is the unique identifier for markets
+    condition_id = db.Column(db.String(255), primary_key=True)
+    question = db.Column(db.Text)
+    first_seen = db.Column(db.DateTime, default=datetime.utcnow)
+    last_processed = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    process_count = db.Column(db.Integer, default=1)  # Number of times this market has been processed
+    # Store if this market was posted to any channel
+    posted = db.Column(db.Boolean, default=False)
+    message_id = db.Column(db.String(255))  # Slack/Discord message ID if posted
+    
+    # Status tracking
+    approved = db.Column(db.Boolean, nullable=True)  # True=approved, False=rejected, None=pending
+    approval_date = db.Column(db.DateTime)  # When approval/rejection happened
+    approver = db.Column(db.String(255))  # User ID of approver/rejecter
+    
+    # Original raw data
+    raw_data = db.Column(JSON)  # Store the original API response JSON
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            'condition_id': self.condition_id,
+            'question': self.question,
+            'first_seen': self.first_seen.isoformat() if self.first_seen else None,
+            'last_processed': self.last_processed.isoformat() if self.last_processed else None,
+            'process_count': self.process_count,
+            'posted': self.posted,
+            'message_id': self.message_id,
+            'approved': self.approved,
+            'approval_date': self.approval_date.isoformat() if self.approval_date else None,
+            'approver': self.approver
+        }
