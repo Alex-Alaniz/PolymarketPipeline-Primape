@@ -1,0 +1,37 @@
+[
+  {
+    "name": "Polymarket Main API",
+    "base_url": "https://polymarket.com/api",
+    "working_paths": [],
+    "samples": {},
+    "schema": {}
+  },
+  {
+    "name": "Polymarket Strapi API",
+    "base_url": "https://strapi-matic.poly.market/api",
+    "working_paths": [],
+    "samples": {},
+    "schema": {}
+  },
+  {
+    "name": "Polymarket CLOB API",
+    "base_url": "https://clob.polymarket.com/api",
+    "working_paths": [],
+    "samples": {},
+    "schema": {}
+  },
+  {
+    "name": "Polymarket GraphQL API",
+    "base_url": "https://gamma-api.poly.market/graphql",
+    "working_paths": [],
+    "samples": {},
+    "schema": {}
+  },
+  {
+    "name": "Polymarket CTAPI",
+    "base_url": "https://ctapi.polymarket.com",
+    "working_paths": [],
+    "samples": {},
+    "schema": {}
+  }
+]
