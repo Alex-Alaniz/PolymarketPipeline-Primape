@@ -263,15 +263,23 @@ class PolymarketTransformer:
                     logger.info(f"Skipping market {market_id} - already processed")
                     continue
                 
-                # Skip markets that are closed or archived
-                if market.get("closed", False) or market.get("archived", False):
-                    logger.info(f"Skipping market {market_id} - closed or archived")
+                # Include markets that are either active OR accepting orders, skip archived ones
+                is_active = market.get("active", False)
+                is_accepting_orders = market.get("accepting_orders", False)
+                is_archived = market.get("archived", False)
+                
+                if (not is_active and not is_accepting_orders) or is_archived:
+                    logger.info(f"Skipping market {market_id} - not active/accepting orders or is archived")
                     continue
                 
-                # Skip markets that have already ended
-                if end_timestamp and end_timestamp < datetime.now().timestamp() * 1000:
-                    logger.info(f"Skipping market {market_id} - already ended")
-                    continue
+                # Skip markets that have ended more than 3 days ago
+                # This allows for some flexibility with markets that might have just ended
+                if end_timestamp:
+                    current_time = datetime.now().timestamp() * 1000
+                    three_days_ms = 3 * 24 * 60 * 60 * 1000  # 3 days in milliseconds
+                    if end_timestamp < (current_time - three_days_ms):
+                        logger.info(f"Skipping market {market_id} - ended more than 3 days ago")
+                        continue
                 
                 # Skip markets with insufficient data
                 if not question or "tokens" not in market:

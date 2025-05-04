@@ -1,29 +1,39 @@
 {
   "markets": [
     {
-      "original_market_id": "market1",
-      "transformed_market_id": "group_will entity win the premier league?",
-      "processed_date": "2025-05-03T17:46:54.693185"
+      "original_market_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
+      "transformed_market_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
+      "processed_date": "2025-05-04T07:09:03.656331"
     },
     {
-      "original_market_id": "market2",
-      "transformed_market_id": "group_will entity win the premier league?",
-      "processed_date": "2025-05-03T17:46:54.693193"
+      "original_market_id": "0x10f348d6ad73199a1efe44575c968d8b5607efdafed160063f55c44323a6447f",
+      "transformed_market_id": "0x10f348d6ad73199a1efe44575c968d8b5607efdafed160063f55c44323a6447f",
+      "processed_date": "2025-05-04T07:09:03.744728"
     },
     {
-      "original_market_id": "market3",
-      "transformed_market_id": "group_will entity win the premier league?",
-      "processed_date": "2025-05-03T17:46:54.693195"
+      "original_market_id": "0x8d03ffacb39e355413dfbed8c8888a28a26f2305f04edfde521d95fa9bd3cc2d",
+      "transformed_market_id": "0x8d03ffacb39e355413dfbed8c8888a28a26f2305f04edfde521d95fa9bd3cc2d",
+      "processed_date": "2025-05-04T07:09:03.750266"
     },
     {
-      "original_market_id": "market4",
-      "transformed_market_id": "market4",
-      "processed_date": "2025-05-03T17:46:54.693205"
+      "original_market_id": "0xb05e7b55ac377e52a1e747e2da419c56654de8531b28111f9d81ace4cb9df391",
+      "transformed_market_id": "0xb05e7b55ac377e52a1e747e2da419c56654de8531b28111f9d81ace4cb9df391",
+      "processed_date": "2025-05-04T07:09:03.770044"
     },
     {
-      "original_market_id": "",
-      "transformed_market_id": "",
-      "processed_date": "2025-05-04T07:03:06.888750"
+      "original_market_id": "0xb62bd4dfc19d30b1f4b6610001232a4f2bf3242de3bcdc37ac982b625dcad7de",
+      "transformed_market_id": "0xb62bd4dfc19d30b1f4b6610001232a4f2bf3242de3bcdc37ac982b625dcad7de",
+      "processed_date": "2025-05-04T07:09:03.788037"
+    },
+    {
+      "original_market_id": "0xf22ab1d1058164acf061e4fd7f36afa1dfa7bd652c5006cbd6d70b042d803e10",
+      "transformed_market_id": "0xf22ab1d1058164acf061e4fd7f36afa1dfa7bd652c5006cbd6d70b042d803e10",
+      "processed_date": "2025-05-04T07:09:03.796587"
+    },
+    {
+      "original_market_id": "0xbe7fc97e23aa2ab8d3437f7ae80a137858e63a4510670d23cf73de6c05b2a699",
+      "transformed_market_id": "0xbe7fc97e23aa2ab8d3437f7ae80a137858e63a4510670d23cf73de6c05b2a699",
+      "processed_date": "2025-05-04T07:09:03.870771"
     }
   ]
 }
