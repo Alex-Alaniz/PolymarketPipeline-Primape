@@ -132,14 +132,14 @@ class PolymarketExtractor:
             while page <= max_pages:
                 try:
                     # Build URL with pagination
-                    paginated_url = url
+                    current_url = url
                     if next_cursor:
-                        paginated_url += f"?next_cursor={next_cursor}"
+                        current_url += f"?next_cursor={next_cursor}"
                     
-                    logger.info(f"Fetching page {page} from: {paginated_url}")
+                    logger.info(f"Fetching page {page} from: {current_url}")
                     
                     # Make the request
-                    response = requests.get(paginated_url, headers=headers, timeout=10)
+                    response = requests.get(current_url, headers=headers, timeout=10)
                     
                     # Check response
                     if response.status_code == 200:
@@ -165,14 +165,18 @@ class PolymarketExtractor:
                                 # No more pages
                                 break
                         else:
-                            logger.warning(f"No 'data' field found in response from {paginated_url}")
+                            logger.warning(f"No 'data' field found in response from {current_url}")
                             break
                     else:
-                        logger.warning(f"Failed to fetch from {paginated_url}: HTTP {response.status_code}")
+                        logger.warning(f"Failed to fetch from {current_url}: HTTP {response.status_code}")
                         break
                 
                 except Exception as page_error:
-                    logger.error(f"Error fetching page {page} from {paginated_url}: {str(page_error)}")
+                    # Initialize the error URL in case it's not defined yet
+                    error_url = url
+                    if 'current_url' in locals():
+                        error_url = current_url
+                    logger.error(f"Error fetching page {page} from {error_url}: {str(page_error)}")
                     break
             
             # Return all markets collected

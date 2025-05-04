@@ -1,0 +1,252 @@
+[
+  {
+    "enable_order_book": false,
+    "active": true,
+    "closed": true,
+    "archived": false,
+    "accepting_orders": false,
+    "accepting_order_timestamp": null,
+    "minimum_order_size": 15,
+    "minimum_tick_size": 0.01,
+    "condition_id": "0x9deb0baac40648821f96f01339229a422e2f5c877de55dc4dbf981f95a1e709c",
+    "question_id": "0x956f72c01c11615250489a2fcd22dbebdc1d0da86c3f090c28a368dfee714d07",
+    "question": "NFL Saturday: Chiefs vs. Raiders",
+    "description": "In the upcoming NFL game scheduled for January 7, 2023:\n\nIf the Kansas City Chiefs win, this market will resolve to \"Chiefs\".\n\nIf the Las Vegas Raiders win, this market will resolve to \"Raiders\".\n\nIf this game ends in a tie, this market will resolve 50-50. If this game is not completed by January 15, 2023, 11:59:59 PM ET, this market will resolve 50-50.",
+    "market_slug": "nfl-saturday-chiefs-vs-raiders",
+    "end_date_iso": "2023-01-07T00:00:00Z",
+    "game_start_time": "2023-01-07T21:30:00Z",
+    "seconds_delay": 3,
+    "fpmm": "0xb6577bdC2D74A7A50FA43fB91d7283E05cd625a4",
+    "maker_base_fee": 0,
+    "taker_base_fee": 0,
+    "notifications_enabled": true,
+    "neg_risk": false,
+    "neg_risk_market_id": "",
+    "neg_risk_request_id": "",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nfl.png",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nfl.png",
+    "rewards": {
+      "rates": null,
+      "min_size": 0,
+      "max_spread": 0
+    },
+    "is_50_50_outcome": false,
+    "tokens": [
+      {
+        "token_id": "14270523446080509320829200481895961480205553513304203367521919818541658424782",
+        "outcome": "Chiefs",
+        "price": 1,
+        "winner": false
+      },
+      {
+        "token_id": "93110170397161149119544349457822484949376809039410140245101963942162463626903",
+        "outcome": "Raiders",
+        "price": 0,
+        "winner": false
+      }
+    ],
+    "tags": [
+      "All"
+    ]
+  },
+  {
+    "enable_order_book": false,
+    "active": false,
+    "closed": false,
+    "archived": true,
+    "accepting_orders": false,
+    "accepting_order_timestamp": null,
+    "minimum_order_size": 15,
+    "minimum_tick_size": 0.01,
+    "condition_id": "",
+    "question_id": "",
+    "question": "archWill Kamala Harris win the 2024 US Presidential Election?",
+    "description": "The 2024 United States presidential election is scheduled to take place on November 5, 2024.\n\nIf Kamala Harris wins the 2024 United States Presidential Election, this market will resolve to \"Yes\". Otherwise, this market will resolve to \"No\".\n\nIf this candidate's party nominates another individual, or if this candidate drops out of consideration for the party nomination, the market will immediately resolve to \"No.\"\n\nDetermination of the winner of the 2024 Presidential Election will be based on an overwhelming consensus of credible reporting, or if there is ambiguity, final official determination of the election results.",
+    "market_slug": "archwill-kamala-harris-win-the-2024-us-presidential-election-1",
+    "end_date_iso": "2024-11-05T00:00:00Z",
+    "game_start_time": null,
+    "seconds_delay": 0,
+    "fpmm": "",
+    "maker_base_fee": 0,
+    "taker_base_fee": 0,
+    "notifications_enabled": false,
+    "neg_risk": false,
+    "neg_risk_market_id": "",
+    "neg_risk_request_id": "",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/kamala+harris.png",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/kamala+harris.png",
+    "rewards": {
+      "rates": null,
+      "min_size": 0,
+      "max_spread": 0
+    },
+    "is_50_50_outcome": false,
+    "tokens": [
+      {
+        "token_id": "",
+        "outcome": "",
+        "price": 0,
+        "winner": false
+      },
+      {
+        "token_id": "",
+        "outcome": "",
+        "price": 0,
+        "winner": false
+      }
+    ],
+    "tags": [
+      "All"
+    ]
+  },
+  {
+    "enable_order_book": false,
+    "active": true,
+    "closed": true,
+    "archived": false,
+    "accepting_orders": false,
+    "accepting_order_timestamp": null,
+    "minimum_order_size": 15,
+    "minimum_tick_size": 0.01,
+    "condition_id": "0x5317986240be3ab100ccbebeb8213ab45d1f5c502e6da17e1c9b30f9c6dcb52c",
+    "question_id": "0x41dc354a1c58d3ea2aa9efec313e6dd5b87329ab764df0cdf5a9e9e0f848d9b6",
+    "question": "Will the Nuggets be the 2022-23 NBA Champion?",
+    "description": "This market will resolve to \"Yes\" if the Denver Nuggets become the 2022-23 NBA Champion. Otherwise, this market will resolve to \"No\".\n\nIf it is determined at any point that it is impossible for the Nuggets to be the 2022-23 NBA Champion based on the rules of the NBA (e.g. they're eliminated in the playoffs), this market will immediately resolve to \"No.\"\n\nIf this team is still in contention to become the champion and the champion still isn't determined by October 24, 2023, 11:59:59 PM ET, this market will resolve 50-50.",
+    "market_slug": "will-the-nuggets-be-the-2022-23-nba-champion",
+    "end_date_iso": "2023-06-17T00:00:00Z",
+    "game_start_time": null,
+    "seconds_delay": 0,
+    "fpmm": "0x2b1c33a7313A4026A866c1348f154542d5786BEc",
+    "maker_base_fee": 0,
+    "taker_base_fee": 0,
+    "notifications_enabled": true,
+    "neg_risk": false,
+    "neg_risk_market_id": "",
+    "neg_risk_request_id": "",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nuggets.png",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nuggets.png",
+    "rewards": {
+      "rates": null,
+      "min_size": 0,
+      "max_spread": 0
+    },
+    "is_50_50_outcome": false,
+    "tokens": [
+      {
+        "token_id": "112856288650667655013857354239294366111272834754068370340237314111424124768219",
+        "outcome": "Yes",
+        "price": 1,
+        "winner": true
+      },
+      {
+        "token_id": "100191321161894038936159668948333366835681046674644978333843323912268864988752",
+        "outcome": "No",
+        "price": 0,
+        "winner": false
+      }
+    ],
+    "tags": [
+      "All"
+    ]
+  },
+  {
+    "enable_order_book": false,
+    "active": true,
+    "closed": true,
+    "archived": false,
+    "accepting_orders": false,
+    "accepting_order_timestamp": null,
+    "minimum_order_size": 15,
+    "minimum_tick_size": 0.01,
+    "condition_id": "0x3d23087a0ed34ca1577afb1ae860714e9deddc8ff3cbfc5c15929c1472c59203",
+    "question_id": "0x8178d6adfffce77330771107df1ba1f68f8a68019280b4b414855c60775f3ce9",
+    "question": "Will 'Ant-Man and the Wasp: Quantumania' gross more than $125 million domestically on its 4-day opening weekend?",
+    "description": "'Ant-Man and the Wasp: Quantumania' (2022) is an upcoming American super hero film produced by Marvel Studios. It is the third installment of the Ant Man series of films, and the 31st film of the Marvel Cinematic Universe. It is scheduled for theatrical release in the USA on February 17, 2023.\n\nThis is a market on how much \u2018Ant-Man and the Wasp: Quantumania' will gross domestically on its 4-day opening weekend. The \u201cDomestic Weekend\u201d tab on https://www.boxofficemojo.com/title/tt10954600 will be used to resolve this market once the values for the 4-day opening weekend (February 17-20) are final (i.e. not studio estimates).\n\nThis market will resolve to \"Yes\" if \u2018Ant-Man and the Wasp: Quantumania\u2019 grosses more than $125,000,000 on its 4-day opening weekend. Otherwise, this market will resolve to \"No\".\n\nThe 4-day opening weekend is defined as the first Friday, Saturday, Sunday, and Monday of the film's release. Please note, this market will resolve according to the Box Office Mojo number  for the 4-day weekend, regardless of whether domestic refers to only the USA, or to USA and Canada, etc.\n\nIf there is no final data available by February 24, 2023, 11:59:59 PM ET, another credible resolution source will be chosen.",
+    "market_slug": "will-ant-man-and-the-wasp-quantumania-gross-more-than-125-million-domestically-on-its-4-day-opening-weekend",
+    "end_date_iso": "2023-02-21T00:00:00Z",
+    "game_start_time": null,
+    "seconds_delay": 0,
+    "fpmm": "0xE51627f60CA3Bfcf18ed8F6d75FD293Aa3b5D20a",
+    "maker_base_fee": 0,
+    "taker_base_fee": 0,
+    "notifications_enabled": true,
+    "neg_risk": false,
+    "neg_risk_market_id": "",
+    "neg_risk_request_id": "",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/ant+man+and+the+wasp.png",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/ant+man+and+the+wasp.png",
+    "rewards": {
+      "rates": null,
+      "min_size": 0,
+      "max_spread": 0
+    },
+    "is_50_50_outcome": false,
+    "tokens": [
+      {
+        "token_id": "20492996617166017062175278506524441320525786101399791089815795223193644269098",
+        "outcome": "Yes",
+        "price": 0.0001,
+        "winner": false
+      },
+      {
+        "token_id": "69937450069093607408209673465654674207277624495828115118359242914565762427584",
+        "outcome": "No",
+        "price": 0.9999,
+        "winner": false
+      }
+    ],
+    "tags": [
+      "All"
+    ]
+  },
+  {
+    "enable_order_book": false,
+    "active": true,
+    "closed": true,
+    "archived": false,
+    "accepting_orders": false,
+    "accepting_order_timestamp": null,
+    "minimum_order_size": 15,
+    "minimum_tick_size": 0.01,
+    "condition_id": "0x9831cf4e59285e5487e788d8a1435cb4753b9076a38512848ac1488348192f27",
+    "question_id": "0xf461b68541a23cc46304582bb4fc9c3f6d60bc4450aea2fb5e4a0ae2243d5e61",
+    "question": "Will Bryce Young be first QB selected in the 2023 NFL draft?",
+    "description": "If Bryce Young is the first quarterback selected in the National Football League's (NFL's) 2023 draft, this market will resolve to \"Yes\". Otherwise, this market will resolve to \"No\".\n\nIf no quarterbacks are drafted, the market will resolve to \"No.\"\n\nThe primary resolution source for this market will be official information from the NFL, or announcements from specific NFL teams, however a consensus of credible reporting may be used.\n",
+    "market_slug": "will-bryce-young-be-first-qb-selected-in-the-2023-nfl-draft",
+    "end_date_iso": "2023-04-28T00:00:00Z",
+    "game_start_time": null,
+    "seconds_delay": 0,
+    "fpmm": "0xDffD3efC04CbEf34Eb0eDc4f822184C9Db3B99F5",
+    "maker_base_fee": 0,
+    "taker_base_fee": 0,
+    "notifications_enabled": true,
+    "neg_risk": false,
+    "neg_risk_market_id": "",
+    "neg_risk_request_id": "",
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/bryce+young.jpeg",
+    "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/bryce+young.jpeg",
+    "rewards": {
+      "rates": null,
+      "min_size": 0,
+      "max_spread": 0
+    },
+    "is_50_50_outcome": false,
+    "tokens": [
+      {
+        "token_id": "67301836300648827488886150283993448209143439372241617696200490831510066942724",
+        "outcome": "Yes",
+        "price": 1,
+        "winner": true
+      },
+      {
+        "token_id": "907903699987598009902403958622657458213146566775626217698774584405888798686",
+        "outcome": "No",
+        "price": 0,
+        "winner": false
+      }
+    ],
+    "tags": [
+      "All"
+    ]
+  }
+]

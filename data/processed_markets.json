@@ -19,6 +19,11 @@
       "original_market_id": "market4",
       "transformed_market_id": "market4",
       "processed_date": "2025-05-03T17:46:54.693205"
+    },
+    {
+      "original_market_id": "",
+      "transformed_market_id": "",
+      "processed_date": "2025-05-04T07:03:06.888750"
     }
   ]
 }
