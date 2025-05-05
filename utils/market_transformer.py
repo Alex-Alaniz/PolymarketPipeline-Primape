@@ -82,7 +82,7 @@ class MarketTransformer:
     
     def group_related_markets(self, markets: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], str, str]]:
         """
-        Group related markets based on patterns in their questions.
+        Group related markets based on the events in their API response.
         
         Args:
             markets: List of market data dictionaries
@@ -90,91 +90,57 @@ class MarketTransformer:
         Returns:
             List of tuples (market_data, market_type, original_question)
         """
-        # Define patterns for different types of related markets
-        patterns = self.get_patterns()
+        # Use event_id as the key for grouping markets
+        grouped_by_event = defaultdict(list)
         
-        # Group markets by base question
-        grouped_markets = defaultdict(list)
-        
-        # First pass: identify and group related markets
+        # First pass: group markets by event ID
         for market in markets:
             question = market.get("question", "")
             
-            # Check if market matches any pattern
-            matched = False
+            # Extract entity from the question for multi-option markets
+            entity = None
+            if "Will " in question:
+                # Basic entity extraction - everything between "Will " and " be/win"
+                match = re.search(r"Will\s+(.*?)\s+(be|win)\s+", question, re.IGNORECASE)
+                if match:
+                    entity = match.group(1).strip()
+                    logger.info(f"Extracted entity '{entity}' from question: '{question}'")
             
-            # Special debug for EPL top goalscorer
-            epl_pattern = patterns.get("epl_top_goalscorer", "")
-            if epl_pattern and re.search(epl_pattern, question, re.IGNORECASE):
-                logger.info(f"POTENTIAL EPL MATCH: '{question}' matches EPL pattern!")
+            # Check if market has events and group by event ID
+            events = market.get("events", [])
+            if events and len(events) > 0:
+                event = events[0]  # Use the first event
+                event_id = event.get("id")
+                event_title = event.get("title")
                 
-                # Force it to the EPL goalscorer pattern first
-                pattern_name = "epl_top_goalscorer"
-                pattern = patterns.get(pattern_name)
-                entity = self.extract_entity_from_question(question, pattern)
-                if entity:
-                    standard_key = "will_entity_be_the_top_goalscorer_in_the_epl"
-                    logger.info(f"Using standard key for EPL top goalscorer: {standard_key}")
-                    grouped_markets[standard_key].append((market, question, entity))
-                    matched = True
-                    logger.info(f"Matched EPL pattern: {question} -> entity: {entity}")
-                    continue  # Skip further pattern matching
-            
-            # Try other patterns
-            for pattern_name, pattern in patterns.items():
-                logger.info(f"Trying pattern '{pattern_name}' on question: '{question}'")
-                entity = self.extract_entity_from_question(question, pattern)
-                if entity:
-                    base_question = self.extract_base_question(question, entity)
-                    # We'll use a standardized key for specific patterns to ensure grouping works
-                    if pattern_name == "epl_top_goalscorer":
-                        standard_key = "will_entity_be_the_top_goalscorer_in_the_epl"
-                        logger.info(f"Using standard key for EPL top goalscorer: {standard_key}")
-                        grouped_markets[standard_key].append((market, question, entity))
-                    elif pattern_name == "champions_league_winner":
-                        standard_key = "will_entity_win_the_uefa_champions_league"
-                        logger.info(f"Using standard key for Champions League Winner: {standard_key}")
-                        grouped_markets[standard_key].append((market, question, entity))
-                    elif pattern_name == "la_liga_winner":
-                        standard_key = "will_entity_win_la_liga"
-                        logger.info(f"Using standard key for La Liga Winner: {standard_key}")
-                        grouped_markets[standard_key].append((market, question, entity))
-                    else:
-                        # Store original question for capitalization preservation using base_question
-                        grouped_markets[base_question].append((market, question, entity))
-                    
-                    matched = True
-                    logger.info(f"Matched pattern '{pattern_name}': {question} -> entity: {entity} -> base: {base_question}")
-                    break
-            
-            # If no pattern matched, treat as individual market
-            if not matched:
-                base_question = question.lower()  # For grouping purposes only
-                grouped_markets[base_question].append((market, question, None))
+                if event_id:
+                    # Use event ID as the grouping key
+                    grouped_by_event[event_id].append((market, question, entity))
+                    logger.info(f"Grouped market with question '{question}' under event '{event_title}' (ID: {event_id})")
+                else:
+                    # No event ID, treat as individual market
+                    logger.info(f"Market with question '{question}' has no event ID, treating as individual")
+                    grouped_by_event[question].append((market, question, None))
+            else:
+                # No events, treat as individual market
+                logger.info(f"Market with question '{question}' has no events, treating as individual")
+                grouped_by_event[question].append((market, question, None))
         
         # Debug log to see what groups we identified
-        logger.info("DEBUGGING MARKET GROUPS")
-        for base_key, market_list in grouped_markets.items():
-            logger.info(f"Group key: {base_key}, Number of markets: {len(market_list)}")
-            if "goalscorer" in base_key or "top_scorer" in base_key or "epl" in base_key.lower() or base_key == "will_entity_be_the_top_goalscorer_in_the_epl":
-                logger.info(f"FOUND EPL SCORER GROUP: {base_key} with {len(market_list)} markets")
-                for i, (m, q, e) in enumerate(market_list):
-                    logger.info(f"  Market {i+1}: {q} -> entity: {e}")
+        logger.info("DEBUGGING MARKET GROUPS BY EVENT")
+        for event_id, market_list in grouped_by_event.items():
+            logger.info(f"Event ID: {event_id}, Number of markets: {len(market_list)}")
+            for i, (m, q, e) in enumerate(market_list):
+                logger.info(f"  Market {i+1}: {q} -> entity: {e}")
         
-        # Second pass: determine which groups are actually multiple-option markets
+        # Second pass: determine which groups are multiple-option markets
         result = []
-        for base_question, market_group in grouped_markets.items():
-            # Log the groups we've found
-            if len(market_group) > 1:
-                logger.info(f"Found potential market group with {len(market_group)} markets: {base_question}")
-                for i, (m, q, e) in enumerate(market_group):
-                    logger.info(f"  Market {i+1}: {q} -> entity: {e}")
-                    
+        for event_id, market_group in grouped_by_event.items():
             # If only one market in the group, it's a regular market
             if len(market_group) == 1:
                 market, original_question, _ = market_group[0]
                 result.append((market, "binary", original_question))
-            # If multiple markets with the same pattern, it's a multiple-option market
+            # If multiple markets with the same event, it's a multiple-option market
             elif len(market_group) > 1:
                 # Check if all markets have the same Yes/No options
                 all_yes_no = True
@@ -191,63 +157,32 @@ class MarketTransformer:
                         break
                 
                 if all_yes_no:
-                    # Extract the common part of the question for the group title
-                    # Use the original capitalization from the first market
-                    _, original_question, _ = market_group[0]
-                    
-                    # For specific patterns, create a better title
-                    logger.info(f"Creating title for group with base_question: {base_question}")
-                    
-                    # Special handling for EPL top goalscorer
-                    if base_question == "will_entity_be_the_top_goalscorer_in_the_epl" or "top_goalscorer_in_the_epl" in base_question:
-                        group_title = "English Premier League Top Scorer"
-                        logger.info(f"Creating EPL Top Scorer group with {len(market_group)} markets")
-                    elif "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
-                        group_title = "English Premier League Top Scorer"
-                        logger.info(f"Creating EPL Top Scorer group (secondary match) with {len(market_group)} markets")
-                    elif base_question == "will_entity_win_the_uefa_champions_league" or "uefa champions league" in base_question.lower():
-                        group_title = "Champions League Winner"
-                    elif base_question == "will_entity_win_la_liga" or "win la liga" in base_question.lower():
-                        group_title = "La Liga Winner"
-                    elif "win the premier league" in base_question.lower():
-                        group_title = "Premier League Winner"
-                    elif "win serie a" in base_question.lower():
-                        group_title = "Serie A Winner"
-                    elif "win bundesliga" in base_question.lower():
-                        group_title = "Bundesliga Winner"
-                    elif "win ligue 1" in base_question.lower():
-                        group_title = "Ligue 1 Winner"
-                    elif "president of" in base_question:
-                        country = re.search(r"president of (.*)\?", original_question, re.IGNORECASE)
-                        if country:
-                            group_title = f"The next President of {country.group(1)}"
-                        else:
-                            group_title = "The next President"
-                    elif "largest company" in base_question:
-                        group_title = "The largest company in the world by market cap on December 31"
-                    elif "oscar for" in base_question:
-                        category = re.search(r"oscar for (.*)", original_question, re.IGNORECASE)
-                        if category:
-                            group_title = f"Oscar Winner for {category.group(1)}"
-                        else:
-                            group_title = "Oscar Winner"
-                    elif "election" in base_question:
-                        election = re.search(r"win the (.*) election", original_question, re.IGNORECASE)
-                        if election:
-                            group_title = f"{election.group(1)} Election Winner"
-                        else:
-                            group_title = "Election Winner"
+                    # Get event title to use as group title
+                    events = market_group[0][0].get("events", [])
+                    if events and len(events) > 0:
+                        event_title = events[0].get("title")
                     else:
-                        # Use a generic title based on the first market's question
-                        # Remove "Will X be" or "Will X win" from the beginning
-                        group_title = re.sub(r"^Will .* (be|win) ", "", original_question)
-                        # Remove question mark
-                        group_title = group_title.rstrip("?")
-                        # Capitalize first letter
-                        group_title = group_title[0].upper() + group_title[1:]
+                        # Default title based on first market
+                        _, original_question, _ = market_group[0]
+                        event_title = re.sub(r"^Will .* (be|win) ", "", original_question).rstrip("?")
+                    
+                    logger.info(f"Creating multi-option market with title: {event_title}")
+                    
+                    # Extract entities from questions
+                    entities = []
+                    for _, _, entity in market_group:
+                        if entity:
+                            entities.append(entity)
+                    
+                    if not entities:
+                        # Fallback: try to extract entities from questions
+                        for _, question, _ in market_group:
+                            match = re.search(r"Will\s+(.*?)\s+(be|win)\s+", question, re.IGNORECASE)
+                            if match:
+                                entity = match.group(1).strip()
+                                entities.append(entity)
                     
                     # Create a multiple-option market
-                    entities = [entity for _, _, entity in market_group if entity]
                     market_ids = [m[0].get("id") for m in market_group]
                     condition_ids = [m[0].get("conditionId") for m in market_group if m[0].get("conditionId")]
                     
@@ -256,8 +191,8 @@ class MarketTransformer:
                     
                     # Create a new market data dictionary
                     multiple_market = {
-                        "id": f"group_{base_question.replace(' ', '_')}",
-                        "question": group_title,
+                        "id": f"group_{event_id}",
+                        "question": event_title,
                         "conditionId": condition_ids[0] if condition_ids else "",
                         "slug": template_market.get("slug", ""),
                         "endDate": template_market.get("endDate"),
@@ -269,7 +204,7 @@ class MarketTransformer:
                         "is_multiple_option": True
                     }
                     
-                    result.append((multiple_market, "multiple", group_title))
+                    result.append((multiple_market, "multiple", event_title))
                 else:
                     # If not all Yes/No, treat as individual markets
                     for market, original_question, _ in market_group:
