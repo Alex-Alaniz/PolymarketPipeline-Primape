@@ -102,6 +102,29 @@ def check_market_approvals() -> Tuple[int, int, int]:
             market.approval_date = datetime.utcnow()
             market.approver = approver
             
+            # For rejected markets, we need to create a placeholder Market entry
+            # to maintain foreign key relationships for ApprovalEvent
+            if not Market.query.get(market.condition_id):
+                end_date_timestamp = None
+                if market.raw_data and 'endDate' in market.raw_data:
+                    try:
+                        end_date_str = market.raw_data.get('endDate')
+                        end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                        end_date_timestamp = int(end_date.timestamp())
+                    except:
+                        pass
+                
+                placeholder = Market(
+                    id=market.condition_id,
+                    question=market.question,
+                    expiry=end_date_timestamp,
+                    status="rejected",
+                    category=market.raw_data.get('fetched_category', 'general') if market.raw_data else 'general',
+                    icon_url=market.raw_data.get('icon') if market.raw_data else None
+                )
+                db.session.add(placeholder)
+                db.session.flush()  # Flush to generate ID
+            
             # Create rejection event
             event = ApprovalEvent(
                 market_id=market.condition_id,
