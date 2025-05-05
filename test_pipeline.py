@@ -93,7 +93,7 @@ def main():
         if exit_code == 0:
             logger.info("✅ Full pipeline executed successfully")
         else:
-            logger.error("❌ Pipeline failed with exit code", exit_code)
+            logger.error(f"❌ Pipeline failed with exit code: {exit_code}")
             return exit_code
             
     except Exception as e:

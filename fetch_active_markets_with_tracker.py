@@ -206,6 +206,9 @@ def main():
     """
     logger.info("Starting market fetcher with database tracking")
     
+    # Import Flask app to get application context
+    from main import app
+    
     try:
         # Fetch markets from Polymarket API
         markets = fetch_markets(limit=100)
@@ -220,17 +223,19 @@ def main():
         active_markets = filter_active_non_expired_markets(markets)
         logger.info(f"Found {len(active_markets)} active, non-expired markets")
         
-        # Filter out markets already in the database
-        new_markets = filter_new_markets(active_markets)
-        logger.info(f"Found {len(new_markets)} new markets")
-        
-        if not new_markets:
-            logger.info("No new markets to process. Exiting.")
-            return 0
-        
-        # Post new markets to Slack for approval
-        posted_markets = post_new_markets(new_markets, max_to_post=5)
-        logger.info(f"Posted {len(posted_markets)} markets to Slack for approval")
+        # Database operations need application context
+        with app.app_context():
+            # Filter out markets already in the database
+            new_markets = filter_new_markets(active_markets)
+            logger.info(f"Found {len(new_markets)} new markets")
+            
+            if not new_markets:
+                logger.info("No new markets to process. Exiting.")
+                return 0
+            
+            # Post new markets to Slack for approval
+            posted_markets = post_new_markets(new_markets, max_to_post=5)
+            logger.info(f"Posted {len(posted_markets)} markets to Slack for approval")
         
         logger.info("Market fetching complete")
         return 0

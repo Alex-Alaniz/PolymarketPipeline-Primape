@@ -139,9 +139,14 @@ def main():
     """
     logger.info("Starting market approval check")
     
+    # Import Flask app to get application context
+    from main import app
+    
     try:
-        # Check for approvals/rejections
-        pending, approved, rejected = check_market_approvals()
+        # Use application context for database operations
+        with app.app_context():
+            # Check for approvals/rejections
+            pending, approved, rejected = check_market_approvals()
         
         logger.info(f"Completed market approval check: {approved} approved, {rejected} rejected, {pending} pending")
         return 0

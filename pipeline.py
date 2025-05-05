@@ -67,6 +67,9 @@ class PolymarketPipeline:
         """
         logger.info("Starting Polymarket pipeline")
         
+        # Import Flask app to get application context
+        from main import app
+        
         try:
             # Step 1: Extract Polymarket data
             logger.info("Step 1: Extracting Polymarket data")
@@ -85,26 +88,28 @@ class PolymarketPipeline:
             
             logger.info(f"Found {len(active_markets)} active markets from Polymarket")
             
-            # Step 2: Post markets for approval in Slack
-            logger.info("Step 2: Posting markets for approval")
-            new_markets = filter_new_markets(active_markets)
-            
-            if not new_markets:
-                logger.info("No new markets to post for approval")
-            else:
-                posted_markets = post_new_markets(new_markets, max_to_post=5)
-                self.stats["markets_posted"] = len(posted_markets)
-                logger.info(f"Posted {len(posted_markets)} markets for approval")
-            
-            # Step 3: Check for market approvals
-            logger.info("Step 3: Checking market approvals")
-            pending, approved, rejected = check_market_approvals()
-            self.stats["markets_approved"] = approved
-            self.stats["markets_rejected"] = rejected
-            logger.info(f"Approval status: {approved} approved, {rejected} rejected, {pending} pending")
-            
-            # Update database run record if available
-            self._update_db_run()
+            # Use application context for database operations
+            with app.app_context():
+                # Step 2: Post markets for approval in Slack
+                logger.info("Step 2: Posting markets for approval")
+                new_markets = filter_new_markets(active_markets)
+                
+                if not new_markets:
+                    logger.info("No new markets to post for approval")
+                else:
+                    posted_markets = post_new_markets(new_markets, max_to_post=5)
+                    self.stats["markets_posted"] = len(posted_markets)
+                    logger.info(f"Posted {len(posted_markets)} markets for approval")
+                
+                # Step 3: Check for market approvals
+                logger.info("Step 3: Checking market approvals")
+                pending, approved, rejected = check_market_approvals()
+                self.stats["markets_approved"] = approved
+                self.stats["markets_rejected"] = rejected
+                logger.info(f"Approval status: {approved} approved, {rejected} rejected, {pending} pending")
+                
+                # Update database run record if available
+                self._update_db_run()
             
             # Step 4: Post summary report
             self._post_summary()
