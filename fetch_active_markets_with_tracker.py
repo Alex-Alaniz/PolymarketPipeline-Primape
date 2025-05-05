@@ -184,7 +184,7 @@ React with :white_check_mark: to approve or :x: to reject.
     
     return message
 
-def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 5) -> List[ProcessedMarket]:
+def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> List[ProcessedMarket]:
     """
     Post new markets to Slack for approval and update the database.
     
