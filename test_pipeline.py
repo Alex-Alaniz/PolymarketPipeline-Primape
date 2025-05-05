@@ -88,9 +88,14 @@ def create_test_market(index=1):
     logger.info(f"Created test ProcessedMarket: {market_id}")
     return processed
 
-def simulate_market_approval(processed_market):
-    """Simulate the approval of a market in Slack."""
-    logger.info(f"Simulating approval for market: {processed_market.question}")
+def simulate_market_approval(processed_market, approve=True):
+    """Simulate the approval or rejection of a market in Slack.
+    
+    Args:
+        processed_market: The ProcessedMarket object to approve/reject
+        approve: If True, approve the market; if False, reject it
+    """
+    logger.info(f"Simulating {'approval' if approve else 'rejection'} for market: {processed_market.question}")
     
     # Post to mock Slack
     from utils.messaging import post_market_for_approval
@@ -105,16 +110,19 @@ def simulate_market_approval(processed_market):
         processed_market.message_id = message_id
         db.session.commit()
     
-    # Add the approval reaction
-    approve_test_market(processed_market.message_id)
+    # Add the appropriate reaction
+    if approve:
+        approve_test_market(processed_market.message_id)
+    else:
+        reject_test_market(processed_market.message_id)
     
     # Update the database record
-    processed_market.approved = True
+    processed_market.approved = approve
     processed_market.approval_date = datetime.utcnow()
     processed_market.approver = "TEST_USER"
     db.session.commit()
     
-    logger.info(f"Market {processed_market.condition_id} marked as approved")
+    logger.info(f"Market {processed_market.condition_id} marked as {'approved' if approve else 'rejected'}")
     return processed_market
 
 def test_market_fetching():
@@ -158,10 +166,12 @@ def test_approval_workflow():
     # Create some test markets
     test_markets = [create_test_market(i) for i in range(1, 4)]
     
-    # Simulate approval for some of them
-    approved_markets = [simulate_market_approval(market) for market in test_markets[:2]]
+    # Simulate approval/rejection for markets
+    simulate_market_approval(test_markets[0], approve=True)  # Approve market 1
+    simulate_market_approval(test_markets[1], approve=False) # Reject market 2
+    # Market 3 remains pending
     
-    # Run the approval check
+    # Run the approval check to actually create the market entries
     try:
         pending, approved, rejected = check_market_approvals()
         logger.info(f"Approval check results: {pending} pending, {approved} approved, {rejected} rejected")
@@ -169,14 +179,17 @@ def test_approval_workflow():
         # Check if our test markets were detected correctly
         approved_in_db = Market.query.filter(
             Market.question.like("TEST:%"),
-            Market.status.in_(["new", "deployed"])
+            Market.status.in_(["new", "deployed", "rejected"])  # Include rejected markets
         ).all()
         
         logger.info(f"Found {len(approved_in_db)} test markets in the Market table")
         for market in approved_in_db:
             logger.info(f"  - {market.id}: {market.question} (Status: {market.status})")
         
-        return len(approved_in_db) >= len(approved_markets)
+        # The test is successful if both the approved market and the rejected market
+        # are properly recorded in the Market table
+        # Expected: 2 entries in the Market table (1 approved, 1 rejected)
+        return len(approved_in_db) == 2
     
     except Exception as e:
         logger.error(f"Error testing approval workflow: {str(e)}")

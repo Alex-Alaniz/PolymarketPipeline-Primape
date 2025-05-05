@@ -147,7 +147,8 @@ def filter_active_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     if not markets:
         return []
         
-    now = datetime.now()
+    # Use UTC for consistent timezone-aware comparison
+    now = datetime.now().astimezone()
     filtered_markets = []
     
     # Tracking for debugging
