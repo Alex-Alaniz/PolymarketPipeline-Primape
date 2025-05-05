@@ -24,6 +24,8 @@ class Market(db.Model):
     status = db.Column(db.String(50), default='new')
     banner_path = db.Column(db.String(255))
     banner_uri = db.Column(db.String(255))
+    icon_url = db.Column(db.String(255))  # Added icon URL for frontend mapping
+    apechain_market_id = db.Column(db.String(255))  # Added Apechain market ID for tracking
     github_commit = db.Column(db.String(255))
     blockchain_tx = db.Column(db.String(255))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -43,6 +45,8 @@ class Market(db.Model):
             'status': self.status,
             'banner_path': self.banner_path,
             'banner_uri': self.banner_uri,
+            'icon_url': self.icon_url,
+            'apechain_market_id': self.apechain_market_id,
             'github_commit': self.github_commit,
             'blockchain_tx': self.blockchain_tx,
             'created_at': self.created_at.isoformat() if self.created_at else None,

@@ -26,45 +26,104 @@ logging.basicConfig(
 
 logger = logging.getLogger("filter_active_markets")
 
-def fetch_markets(limit: int = 100) -> List[Dict[str, Any]]:
+def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     """
     Fetch markets from Polymarket API using the gamma API endpoint.
+    Fetches a diverse set of markets across different categories.
     
     Args:
-        limit: Maximum number of markets to fetch
+        limit: Maximum number of markets to fetch per query
         
     Returns:
         List of market data dictionaries
     """
-    # API endpoint with specified filtering parameters
-    url = f"https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit={limit}"
+    all_markets = []
     
-    logger.info(f"Fetching markets from: {url}")
+    # Categories to explicitly target for diversity
+    categories = [
+        {"query": "politics", "count": 50},
+        {"query": "sports", "count": 50},
+        {"query": "crypto", "count": 30},
+        {"query": "news", "count": 40},
+        {"query": "tech", "count": 30}
+    ]
+    
+    # Base parameters for all requests
+    base_params = {
+        "closed": "false",
+        "archived": "false",
+        "active": "true"
+    }
     
     headers = {
         "User-Agent": "Mozilla/5.0",
         "Accept": "application/json"
     }
     
+    # First get general markets
+    general_url = "https://gamma-api.polymarket.com/markets"
+    params = base_params.copy()
+    params["limit"] = limit
+    
+    logger.info(f"Fetching general markets from: {general_url}")
+    
     try:
-        response = requests.get(url, headers=headers, timeout=15)
+        response = requests.get(general_url, params=params, headers=headers, timeout=15)
         
         if response.status_code == 200:
             data = response.json()
             
             if isinstance(data, list):
-                markets = data
-                logger.info(f"Fetched {len(markets)} markets from API")
-                return markets
+                all_markets.extend(data)
+                logger.info(f"Fetched {len(data)} general markets from API")
             else:
-                logger.error(f"Unexpected response format: {type(data)}")
+                logger.error(f"Unexpected response format for general markets: {type(data)}")
         else:
-            logger.error(f"Failed to fetch markets: HTTP {response.status_code}")
+            logger.error(f"Failed to fetch general markets: HTTP {response.status_code}")
     
     except Exception as e:
-        logger.error(f"Error fetching markets: {str(e)}")
+        logger.error(f"Error fetching general markets: {str(e)}")
     
-    return []
+    # Now fetch category-specific markets
+    for category in categories:
+        category_url = "https://gamma-api.polymarket.com/markets/search"
+        params = base_params.copy()
+        params["limit"] = category["count"]
+        params["q"] = category["query"]
+        
+        logger.info(f"Fetching {category['query']} markets from: {category_url}")
+        
+        try:
+            response = requests.get(category_url, params=params, headers=headers, timeout=15)
+            
+            if response.status_code == 200:
+                data = response.json()
+                
+                if isinstance(data, list):
+                    # Enrich with category data for better tracking
+                    for market in data:
+                        market["fetched_category"] = category["query"]
+                    
+                    all_markets.extend(data)
+                    logger.info(f"Fetched {len(data)} {category['query']} markets from API")
+                else:
+                    logger.error(f"Unexpected response format for {category['query']} markets: {type(data)}")
+            else:
+                logger.error(f"Failed to fetch {category['query']} markets: HTTP {response.status_code}")
+        
+        except Exception as e:
+            logger.error(f"Error fetching {category['query']} markets: {str(e)}")
+    
+    # Remove duplicates by ID
+    unique_markets = {}
+    for market in all_markets:
+        if market.get("id") and market.get("id") not in unique_markets:
+            unique_markets[market.get("id")] = market
+    
+    result = list(unique_markets.values())
+    logger.info(f"Combined total of {len(result)} unique markets after removing duplicates")
+    
+    return result
 
 def is_valid_url(url: Any) -> bool:
     """
@@ -245,8 +304,8 @@ def main():
     """
     logger.info("Starting active market filter")
     
-    # Fetch markets from Polymarket API
-    markets = fetch_markets(limit=100)
+    # Fetch markets from Polymarket API - using the default limit
+    markets = fetch_markets()
     
     if not markets:
         logger.error("No markets fetched. Exiting.")
@@ -257,6 +316,16 @@ def main():
     
     # Save filtered markets to file
     save_filtered_markets(active_markets, "data/active_markets.json")
+    
+    # Display sample of active markets with category breakdown
+    logger.info("\nMarket category breakdown:")
+    categories = {}
+    for market in active_markets:
+        category = market.get("fetched_category", "general")
+        categories[category] = categories.get(category, 0) + 1
+    
+    for category, count in categories.items():
+        logger.info(f"  - {category.capitalize()}: {count} markets")
     
     # Display sample of active markets
     display_active_markets(active_markets)

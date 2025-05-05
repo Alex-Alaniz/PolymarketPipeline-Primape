@@ -10,6 +10,7 @@ Market table for processing by the pipeline.
 
 import os
 import sys
+import json
 import logging
 from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
@@ -108,19 +109,28 @@ def create_market_entry(raw_data: Dict[str, Any]) -> bool:
             logger.info(f"Market {raw_data.get('id')} already exists in Market table")
             return True
             
+        # Parse options from string representation to list
+        options_str = raw_data.get("outcomes", "[]")
+        try:
+            options = json.loads(options_str)
+        except:
+            # Default to binary Yes/No if cannot parse
+            options = ["Yes", "No"]
+            
         # Create a new Market entry
         market = Market(
             id=raw_data.get("id"),
             question=raw_data.get("question"),
-            type="binary" if raw_data.get("outcomes") == "[\"Yes\", \"No\"]" else "multiple",
+            type="binary" if options == ["Yes", "No"] else "multiple",
             category=raw_data.get("events", [{}])[0].get("slug") if raw_data.get("events") else None,
             sub_category=None,  # No subcategory in the API data
             expiry=int(datetime.fromisoformat(raw_data.get("endDate", "").replace('Z', '+00:00')).timestamp()) if raw_data.get("endDate") else None,
             original_market_id=raw_data.get("conditionId"),
-            options=raw_data.get("outcomes"),
+            options=options_str,
             status="new",
-            banner_path=raw_data.get("image"),  # Use the existing image URL
-            banner_uri=raw_data.get("image"),  # Use the same image URL as URI
+            banner_path=raw_data.get("image"),  # Store the original Polymarket image URL
+            banner_uri=raw_data.get("image"),  # Store the same URL as URI for frontend use
+            icon_url=raw_data.get("icon"),  # Store the icon URL for frontend use
         )
         
         db.session.add(market)
