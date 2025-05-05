@@ -170,6 +170,7 @@ def format_market_message(market: Dict[str, Any]) -> str:
     question = market.get("question", "Unknown")
     end_date = market.get("endDate", "Unknown")
     category = market.get("fetched_category", "general")
+    is_multiple = market.get("is_multiple_option", False)
     
     # Extract options
     options_text = ""
@@ -188,8 +189,19 @@ def format_market_message(market: Dict[str, Any]) -> str:
         
     if outcomes:
         options_text = "*Options:*\n"
-        for i, option in enumerate(outcomes):
-            options_text += f"  {i+1}. {option}\n"
+        
+        # Handle different formats of options
+        if is_multiple:
+            # Multiple-option market (consolidated)
+            for i, option in enumerate(outcomes):
+                options_text += f"  {i+1}. {option}\n"
+        else:
+            # Binary market (Yes/No)
+            for i, option in enumerate(outcomes):
+                options_text += f"  {i+1}. {option}\n"
+    
+    # Add market type
+    market_type = "Multiple-choice Market" if is_multiple else "Binary Market (Yes/No)"
     
     # Format message
     message = f"""
@@ -197,6 +209,7 @@ def format_market_message(market: Dict[str, Any]) -> str:
 
 *Question:* {question}
 *Category:* {category}
+*Type:* {market_type}
 *End Date:* {end_date}
 {options_text}
 React with :white_check_mark: to approve or :x: to reject.
@@ -304,8 +317,13 @@ def main():
             
         logger.info(f"Filtered to {len(active_markets)} active markets")
         
+        # Transform markets to consolidate multi-option markets
+        logger.info("Transforming markets")
+        transformed_markets = transform_markets(active_markets)
+        logger.info(f"Transformed into {len(transformed_markets)} markets")
+        
         # Filter new markets
-        new_markets = filter_new_markets(active_markets)
+        new_markets = filter_new_markets(transformed_markets)
         
         if not new_markets:
             logger.info("No new markets found")

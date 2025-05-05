@@ -216,6 +216,15 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
                     "text": f"*End Date:* {market_data.get('endDate', 'N/A')}"
                 }
             ]
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Type:* {('Multiple-choice Market' if market_data.get('is_multiple_option', False) else 'Binary Market (Yes/No)')}"
+                }
+            ]
         }
     ]
     
