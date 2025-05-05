@@ -1,398 +1,232 @@
-"""
-Messaging Client for Slack/Discord
+#!/usr/bin/env python3
 
-This module provides a unified interface for posting messages to Slack or Discord
-and handling reactions for the approval process.
+"""
+Messaging utilities for Polymarket pipeline.
+
+This module provides functions for posting messages to messaging platforms 
+(Slack/Discord) and checking for reactions.
 """
 
 import os
 import logging
-import time
-import json
-from typing import List, Dict, Any, Optional
-
-import requests
+from typing import Dict, Any, List, Optional, Tuple
+from datetime import datetime, timedelta
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-from config import SLACK_BOT_TOKEN, SLACK_CHANNEL, DISCORD_TOKEN, DISCORD_CHANNEL, MESSAGING_PLATFORM
-
 logger = logging.getLogger("messaging")
 
-class MessagingClient:
-    """Client for interacting with Slack or Discord"""
+# Initialize the Slack client using the bot token
+SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
+SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
+
+slack_client = WebClient(token=SLACK_BOT_TOKEN) if SLACK_BOT_TOKEN else None
+
+# Reaction emojis for approval/rejection
+APPROVE_EMOJI = "white_check_mark"
+REJECT_EMOJI = "x"
+
+def post_market_for_approval(market: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+    """
+    Post a market to Slack for approval.
     
-    def __init__(self, platform: str = None, channel_id: str = None):
-        """
-        Initialize the messaging client
+    Args:
+        market: Market data dictionary
         
-        Args:
-            platform: Messaging platform to use ('slack' or 'discord')
-            channel_id: Channel ID to post messages to
-        """
-        # Use configured platform if not specified
-        self.platform = platform or MESSAGING_PLATFORM
-        
-        # Initialize platform-specific client
-        if self.platform == "slack":
-            # Get Slack token and channel ID
-            self.slack_token = SLACK_BOT_TOKEN
-            self.slack_channel = channel_id or SLACK_CHANNEL
-            
-            if not self.slack_token:
-                raise ValueError("SLACK_BOT_TOKEN is required for Slack integration")
-            if not self.slack_channel:
-                raise ValueError("SLACK_CHANNEL_ID is required for Slack integration")
-            
-            # Initialize Slack client
-            logger.info(f"Using Slack token: {self.slack_token[:4]}...{self.slack_token[-4:]}")
-            self.client = WebClient(token=self.slack_token)
-            
-            # Try to join the channel (if not already joined)
-            try:
-                logger.info(f"Attempting to join channel {self.slack_channel}")
-                join_response = self.client.conversations_join(channel=self.slack_channel)
-                logger.info(f"Join response: {join_response}")
-            except SlackApiError as e:
-                # Some errors are expected (e.g., already in channel)
-                if "already_in_channel" in str(e):
-                    logger.info(f"Already in channel {self.slack_channel}")
-                else:
-                    logger.warning(f"Error joining channel: {str(e)}")
-            
-            logger.info(f"Initialized Slack client with channel {self.slack_channel}")
-            
-        elif self.platform == "discord":
-            # Get Discord token and channel
-            self.discord_token = DISCORD_TOKEN
-            self.discord_channel = channel_id or DISCORD_CHANNEL
-            
-            if not self.discord_token:
-                raise ValueError("DISCORD_TOKEN is required for Discord integration")
-            if not self.discord_channel:
-                raise ValueError("DISCORD_CHANNEL is required for Discord integration")
-            
-            # Discord uses a different client (direct API calls for simplicity)
-            self.client = None
-            self.discord_api_url = "https://discord.com/api/v9"
-            logger.info(f"Initialized Discord client with channel {self.discord_channel}")
-            
-        else:
-            raise ValueError(f"Unsupported messaging platform: {self.platform}")
+    Returns:
+        Tuple of (success, message_id) where message_id is the Slack timestamp
+    """
+    if not slack_client or not SLACK_CHANNEL_ID:
+        logger.error("Slack client or channel ID not configured.")
+        return False, None
     
-    def post_message(self, text: str, blocks: List[Dict[str, Any]] = None) -> Optional[str]:
-        """
-        Post a message to the configured channel
-        
-        Args:
-            text: Message text (shown in notifications and fallbacks)
-            blocks: Message blocks for rich formatting (Slack) or embeds (Discord)
-            
-        Returns:
-            str: Message ID if successful, None otherwise
-        """
-        if self.platform == "slack":
-            try:
-                # Post the message to Slack
-                response = self.client.chat_postMessage(
-                    channel=self.slack_channel,
-                    text=text,
-                    blocks=blocks
-                )
-                
-                # Return the message ID (ts in Slack)
-                return response["ts"]
-                
-            except SlackApiError as e:
-                logger.error(f"Error posting message to Slack: {str(e)}")
-                return None
-                
-        elif self.platform == "discord":
-            try:
-                # Prepare the payload for Discord
-                payload = {
-                    "content": text
+    try:
+        # Format the message blocks
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": "🏦 New Market for Approval",
+                    "emoji": True
                 }
-                
-                # Convert blocks to Discord embeds if provided
-                if blocks:
-                    # Simple conversion, not comprehensive
-                    embeds = [{"title": "Market Information", "description": text}]
-                    payload["embeds"] = embeds
-                
-                # Send the request to Discord API
-                headers = {
-                    "Authorization": f"Bot {self.discord_token}",
-                    "Content-Type": "application/json"
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Question:* {market.get('question', 'N/A')}"
                 }
-                
-                response = requests.post(
-                    f"{self.discord_api_url}/channels/{self.discord_channel}/messages",
-                    headers=headers,
-                    data=json.dumps(payload)
-                )
-                
-                if response.status_code == 200:
-                    return response.json().get("id")
-                else:
-                    logger.error(f"Error posting to Discord: {response.status_code} - {response.text}")
-                    return None
-                    
-            except Exception as e:
-                logger.error(f"Error posting message to Discord: {str(e)}")
-                return None
-    
-    def add_reactions(self, message_id: str, reactions: List[str]) -> bool:
-        """
-        Add reactions to a message for approval/rejection
-        
-        Args:
-            message_id: Message ID to add reactions to
-            reactions: List of reaction emoji names to add
-            
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if self.platform == "slack":
-            try:
-                # Add each reaction
-                for reaction in reactions:
-                    self.client.reactions_add(
-                        channel=self.slack_channel,
-                        timestamp=message_id,
-                        name=reaction
-                    )
-                    # Sleep to avoid rate limiting
-                    time.sleep(0.5)
-                
-                return True
-                
-            except SlackApiError as e:
-                logger.error(f"Error adding reactions to Slack message: {str(e)}")
-                return False
-                
-        elif self.platform == "discord":
-            try:
-                # Discord uses unicode emoji or custom emoji IDs
-                # Need to convert from name to unicode or ID
-                emoji_map = {
-                    "white_check_mark": "%E2%9C%85",  # URL encoded ✅
-                    "x": "%E2%9D%8C"  # URL encoded ❌
-                }
-                
-                # Add each reaction
-                headers = {
-                    "Authorization": f"Bot {self.discord_token}"
-                }
-                
-                success = True
-                
-                for reaction in reactions:
-                    emoji = emoji_map.get(reaction, reaction)
-                    
-                    response = requests.put(
-                        f"{self.discord_api_url}/channels/{self.discord_channel}/messages/{message_id}/reactions/{emoji}/@me",
-                        headers=headers
-                    )
-                    
-                    if response.status_code not in [204, 200]:
-                        logger.error(f"Error adding reaction to Discord: {response.status_code} - {response.text}")
-                        success = False
-                    
-                    # Sleep to avoid rate limiting
-                    time.sleep(0.5)
-                
-                return success
-                
-            except Exception as e:
-                logger.error(f"Error adding reactions to Discord message: {str(e)}")
-                return False
-    
-    def get_reactions(self, message_id: str) -> Dict[str, int]:
-        """
-        Get reactions for a message
-        
-        Args:
-            message_id: Message ID to get reactions for
-            
-        Returns:
-            Dict[str, int]: Dictionary of reaction emoji names and counts
-        """
-        reactions = {}
-        
-        if self.platform == "slack":
-            try:
-                # Get reactions from Slack
-                response = self.client.reactions_get(
-                    channel=self.slack_channel,
-                    timestamp=message_id
-                )
-                
-                # Extract reactions
-                message = response.get("message", {})
-                for reaction in message.get("reactions", []):
-                    reactions[reaction["name"]] = reaction["count"]
-                
-            except SlackApiError as e:
-                logger.error(f"Error getting reactions from Slack: {str(e)}")
-                
-        elif self.platform == "discord":
-            try:
-                # Get message from Discord
-                headers = {
-                    "Authorization": f"Bot {self.discord_token}"
-                }
-                
-                response = requests.get(
-                    f"{self.discord_api_url}/channels/{self.discord_channel}/messages/{message_id}",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    message = response.json()
-                    
-                    # Extract reactions
-                    for reaction in message.get("reactions", []):
-                        reactions[reaction["emoji"]["name"]] = reaction["count"]
-                else:
-                    logger.error(f"Error getting message from Discord: {response.status_code} - {response.text}")
-                
-            except Exception as e:
-                logger.error(f"Error getting reactions from Discord: {str(e)}")
-        
-        return reactions
-    
-    def post_image(self, text: str, image_path: str) -> Optional[str]:
-        """
-        Post an image with text to the configured channel
-        
-        Args:
-            text: Message text
-            image_path: Path to the image file
-            
-        Returns:
-            str: Message ID if successful, None otherwise
-        """
-        if self.platform == "slack":
-            try:
-                # Upload the image to Slack
-                response = self.client.files_upload_v2(
-                    channel=self.slack_channel,
-                    file=image_path,
-                    initial_comment=text
-                )
-                
-                # Return the message ID (ts in Slack)
-                return response.get("message_ts")
-                
-            except SlackApiError as e:
-                logger.error(f"Error posting image to Slack: {str(e)}")
-                return None
-                
-        elif self.platform == "discord":
-            try:
-                # Upload the image to Discord
-                with open(image_path, "rb") as image_file:
-                    files = {
-                        "file": (os.path.basename(image_path), image_file)
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*ID:* {market.get('id', 'N/A')}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Condition ID:* {market.get('conditionId', 'N/A')}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*End Date:* {market.get('endDate', 'N/A')}"
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Outcomes:* {market.get('outcomes', 'N/A')}"
                     }
-                    
-                    payload = {
-                        "content": text
-                    }
-                    
-                    headers = {
-                        "Authorization": f"Bot {self.discord_token}"
-                    }
-                    
-                    response = requests.post(
-                        f"{self.discord_api_url}/channels/{self.discord_channel}/messages",
-                        headers=headers,
-                        data={"payload_json": json.dumps(payload)},
-                        files=files
-                    )
-                    
-                    if response.status_code == 200:
-                        return response.json().get("id")
-                    else:
-                        logger.error(f"Error posting image to Discord: {response.status_code} - {response.text}")
-                        return None
-                    
-            except Exception as e:
-                logger.error(f"Error posting image to Discord: {str(e)}")
-                return None
-    
-    def get_channel_history(self, limit: int = 100) -> List[Dict[str, Any]]:
-        """
-        Get recent messages from the channel
-        
-        Args:
-            limit: Maximum number of messages to retrieve
-            
-        Returns:
-            List[Dict[str, Any]]: List of messages with their reactions
-        """
-        messages = []
-        
-        if self.platform == "slack":
-            try:
-                # Get channel history from Slack
-                response = self.client.conversations_history(
-                    channel=self.slack_channel,
-                    limit=limit
-                )
-                
-                # Process messages
-                for msg in response["messages"]:
-                    message_data = {
-                        "id": msg["ts"],
-                        "text": msg.get("text", ""),
-                        "user": msg.get("user", ""),
-                        "reactions": {}
-                    }
-                    
-                    # Extract reactions
-                    for reaction in msg.get("reactions", []):
-                        message_data["reactions"][reaction["name"]] = reaction["count"]
-                    
-                    messages.append(message_data)
-                
-            except SlackApiError as e:
-                logger.error(f"Error getting channel history from Slack: {str(e)}")
-                
-        elif self.platform == "discord":
-            try:
-                # Get channel history from Discord
-                headers = {
-                    "Authorization": f"Bot {self.discord_token}"
+                ]
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Description:* {market.get('description', 'N/A')[:200]}..."
                 }
-                
-                response = requests.get(
-                    f"{self.discord_api_url}/channels/{self.discord_channel}/messages?limit={limit}",
-                    headers=headers
-                )
-                
-                if response.status_code == 200:
-                    discord_messages = response.json()
-                    
-                    # Process messages
-                    for msg in discord_messages:
-                        message_data = {
-                            "id": msg["id"],
-                            "text": msg.get("content", ""),
-                            "user": msg.get("author", {}).get("id", ""),
-                            "reactions": {}
-                        }
-                        
-                        # Extract reactions
-                        for reaction in msg.get("reactions", []):
-                            message_data["reactions"][reaction["emoji"]["name"]] = reaction["count"]
-                        
-                        messages.append(message_data)
-                else:
-                    logger.error(f"Error getting channel history from Discord: {response.status_code} - {response.text}")
-                
-            except Exception as e:
-                logger.error(f"Error getting channel history from Discord: {str(e)}")
+            }
+        ]
         
-        return messages
+        # Add image if available
+        image_url = market.get("image")
+        if image_url and isinstance(image_url, str):
+            blocks.append({
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Market Image",
+                    "emoji": True
+                },
+                "image_url": image_url,
+                "alt_text": "Market image"
+            })
+        
+        # Add instructions for approval/rejection
+        blocks.append({
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"React with :{APPROVE_EMOJI}: to approve or :{REJECT_EMOJI}: to reject this market."
+                }
+            ]
+        })
+        
+        # Post the message to Slack
+        response = slack_client.chat_postMessage(
+            channel=SLACK_CHANNEL_ID,
+            blocks=blocks,
+            text=f"New market for approval: {market.get('question', 'N/A')}"
+        )
+        
+        # Return the timestamp (used as message ID in Slack)
+        message_id = response.get("ts")
+        logger.info(f"Posted market {market.get('id')} to Slack, message ID: {message_id}")
+        return True, message_id
+        
+    except SlackApiError as e:
+        logger.error(f"Error posting to Slack: {e}")
+        return False, None
+    except Exception as e:
+        logger.error(f"Unexpected error posting to Slack: {e}")
+        return False, None
+
+def check_message_reactions(message_id: str, timeout_minutes: int = 30) -> Tuple[str, Optional[str]]:
+    """
+    Check for approval/rejection reactions on a Slack message.
+    
+    Args:
+        message_id: Slack message timestamp ID
+        timeout_minutes: Minutes after which the approval times out
+        
+    Returns:
+        Tuple of (status, user_id) where:
+            status is one of: "approved", "rejected", "pending", "timeout"
+            user_id is the ID of the user who approved/rejected (or None)
+    """
+    if not slack_client or not SLACK_CHANNEL_ID:
+        logger.error("Slack client or channel ID not configured.")
+        return "pending", None
+    
+    try:
+        # Check if message has timed out
+        message_response = slack_client.conversations_history(
+            channel=SLACK_CHANNEL_ID,
+            latest=message_id,
+            limit=1,
+            inclusive=True
+        )
+        
+        if not message_response.get("messages"):
+            logger.warning(f"Message {message_id} not found in channel.")
+            return "pending", None
+            
+        message = message_response["messages"][0]
+        message_time = float(message_id)
+        current_time = datetime.now().timestamp()
+        
+        # Check if the message has timed out
+        if current_time - message_time > timeout_minutes * 60:
+            logger.info(f"Message {message_id} has timed out after {timeout_minutes} minutes.")
+            return "timeout", None
+        
+        # Check for reactions
+        reactions = message.get("reactions", [])
+        
+        for reaction in reactions:
+            # Check for approval emoji
+            if reaction.get("name") == APPROVE_EMOJI:
+                # Get the first user who reacted with approval
+                approver = reaction.get("users", [])[0] if reaction.get("users") else None
+                return "approved", approver
+            
+            # Check for rejection emoji
+            if reaction.get("name") == REJECT_EMOJI:
+                # Get the first user who reacted with rejection
+                rejecter = reaction.get("users", [])[0] if reaction.get("users") else None
+                return "rejected", rejecter
+        
+        # No approval/rejection reactions found
+        return "pending", None
+        
+    except SlackApiError as e:
+        logger.error(f"Error checking reactions in Slack: {e}")
+        return "pending", None
+    except Exception as e:
+        logger.error(f"Unexpected error checking reactions: {e}")
+        return "pending", None
+
+def post_markets_to_slack(markets: List[Dict[str, Any]], max_to_post: int = 5) -> List[Dict[str, Any]]:
+    """
+    Post multiple markets to Slack for approval.
+    
+    Args:
+        markets: List of market data dictionaries
+        max_to_post: Maximum number of markets to post
+        
+    Returns:
+        List of posted markets with message IDs
+    """
+    posted_markets = []
+    count = 0
+    
+    for market in markets:
+        if count >= max_to_post:
+            break
+            
+        success, message_id = post_market_for_approval(market)
+        
+        if success and message_id:
+            # Add message ID to market data
+            market_with_msg = market.copy()
+            market_with_msg["message_id"] = message_id
+            posted_markets.append(market_with_msg)
+            count += 1
+            
+            # Add a small delay between posts to avoid rate limiting
+            import time
+            time.sleep(1)
+    
+    logger.info(f"Posted {count} markets to Slack for approval.")
+    return posted_markets

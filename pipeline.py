@@ -1,72 +1,42 @@
 #!/usr/bin/env python3
+
 """
 Polymarket Pipeline
 
 This script automates the process of extracting Polymarket data, facilitating approval via
-Slack/Discord, generating banner images with OpenAI, and deploying markets to ApeChain.
+Slack/Discord, and deploying markets to ApeChain.
 
 The pipeline follows these steps:
-1. Extract Polymarket data using transform_polymarket_data_capitalized.py
-2. Post markets to Slack/Discord for initial approval
-3. Generate banner images for approved markets using OpenAI
-4. Post markets with banners to Slack/Discord for final approval
-5. Deploy approved markets (push banner to frontend repo & create market on ApeChain)
-6. Generate summary reports and logs
+1. Extract Polymarket data using filter_active_markets.py
+2. Post markets to Slack for approval
+3. Process approvals using check_market_approvals.py
+4. Deploy approved markets to ApeChain
+5. Generate summary reports and logs
 """
 
 import os
 import sys
+import logging
 import time
-import json
+from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
-from typing import Dict, List, Tuple, Any, Optional
-from flask import current_app
+from sqlalchemy import or_
 
-# Import configuration
-from config import (
-    POLYMARKET_BASE, POLYMARKET_API, APPROVAL_WINDOW_MINUTES, MESSAGING_PLATFORM,
-    DATA_DIR, TMP_DIR, LOGS_DIR, FRONTEND_IMG_PATH
+from models import db, Market, PipelineRun, ProcessedMarket
+from filter_active_markets import fetch_markets, filter_active_markets
+from fetch_active_markets_with_tracker import filter_new_markets, post_new_markets
+from check_market_approvals import check_market_approvals
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
 
-# Import database models (inside functions to avoid circular imports)
-try:
-    from models import db, Market, ApprovalEvent, PipelineRun
-    from utils.database import store_market, update_market_status, store_approval_event, update_pipeline_run
-    DB_AVAILABLE = True
-except ImportError:
-    DB_AVAILABLE = False
-    print("Warning: Database models not available, database integration disabled")
-
-# Import utility modules
-try:
-    from utils.logging_utils import get_logger
-    from utils.state import StateManager
-    from utils.polymarket import PolymarketExtractor
-    from utils.messaging import MessagingClient
-    from utils.banner import BannerGenerator
-    from utils.github import GitHubClient
-    from utils.blockchain import BlockchainClient
-except ImportError as e:
-    print(f"Error importing utility modules: {e}")
-    print("Creating basic utility modules...")
-    # Create directory structure
-    os.makedirs("utils", exist_ok=True)
-    with open("utils/__init__.py", "w") as f:
-        f.write('"""Utility modules for the Polymarket pipeline."""\n')
-
-# Configure logger
-try:
-    logger = get_logger("pipeline")
-except NameError:
-    import logging
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-        handlers=[
-            logging.StreamHandler()
-        ]
-    )
-    logger = logging.getLogger("pipeline")
+logger = logging.getLogger("pipeline")
 
 class PolymarketPipeline:
     """Main pipeline for processing Polymarket data."""
@@ -78,467 +48,109 @@ class PolymarketPipeline:
         Args:
             db_run_id (int, optional): Database run ID for tracking in the database
         """
-        logger.info("Initializing Polymarket pipeline")
         self.db_run_id = db_run_id
-        
-        # Create directories if they don't exist
-        for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
-            os.makedirs(directory, exist_ok=True)
-        
-        # Initialize components
-        try:
-            self.state_manager = StateManager()
-        except:
-            self.state_manager = None
-            logger.error("Failed to initialize StateManager")
-        
-        try:
-            self.polymarket_extractor = PolymarketExtractor()
-        except:
-            self.polymarket_extractor = None
-            logger.error("Failed to initialize PolymarketExtractor")
-        
-        try:
-            self.messaging_client = MessagingClient()
-        except:
-            self.messaging_client = None
-            logger.error("Failed to initialize MessagingClient")
-        
-        try:
-            self.banner_generator = BannerGenerator()
-        except:
-            self.banner_generator = None
-            logger.error("Failed to initialize BannerGenerator")
-        
-        try:
-            self.github_client = GitHubClient()
-        except:
-            self.github_client = None
-            logger.error("Failed to initialize GitHubClient")
-        
-        try:
-            self.blockchain_client = BlockchainClient()
-        except:
-            self.blockchain_client = None
-            logger.error("Failed to initialize BlockchainClient")
-        
-        # Pipeline state
-        self.markets = []
-        self.summary = {
-            "start_time": datetime.now().isoformat(),
+        self.stats = {
             "markets_processed": 0,
+            "markets_posted": 0,
             "markets_approved": 0,
             "markets_rejected": 0,
             "markets_deployed": 0,
-            "markets_failed": 0,
-            "markets": {}
+            "markets_failed": 0
         }
     
     def run(self):
-        """Run the pipeline."""
+        """
+        Run the pipeline.
+        
+        Returns:
+            int: Exit code (0 for success, non-zero for failure)
+        """
         logger.info("Starting Polymarket pipeline")
         
         try:
             # Step 1: Extract Polymarket data
-            logger.info("Extracting Polymarket data")
-            if self.polymarket_extractor:
-                try:
-                    self.markets = self.polymarket_extractor.extract_data()
-                    if not self.markets:
-                        logger.error("No active markets extracted from Polymarket. All markets may be closed or expired.")
-                        
-                        # Update the database with the failure information
-                        if DB_AVAILABLE and self.db_run_id:
-                            try:
-                                from models import db, PipelineRun
-                                # Import Flask app for context
-                                try:
-                                    from main import app
-                                    with app.app_context():
-                                        run = PipelineRun.query.get(self.db_run_id)
-                                        if run:
-                                            run.status = "failed"
-                                            run.error = "No active markets found. All markets may be closed or expired."
-                                            db.session.commit()
-                                except ImportError:
-                                    logger.error("Could not import Flask app for database context")
-                            except Exception as db_error:
-                                logger.error(f"Error updating database: {str(db_error)}")
-                        
-                        return 1
-                    logger.info(f"Extracted {len(self.markets)} active markets from Polymarket")
-                except Exception as e:
-                    logger.error(f"Failed to extract Polymarket data: {str(e)}")
-                    
-                    # Update the database with the failure information
-                    if DB_AVAILABLE and self.db_run_id:
-                        try:
-                            from models import db, PipelineRun
-                            # Import Flask app for context
-                            try:
-                                from main import app
-                                with app.app_context():
-                                    run = PipelineRun.query.get(self.db_run_id)
-                                    if run:
-                                        run.status = "failed"
-                                        run.error = f"Failed to extract market data: {str(e)}"
-                                        db.session.commit()
-                            except ImportError:
-                                logger.error("Could not import Flask app for database context")
-                        except Exception as db_error:
-                            logger.error(f"Error updating database: {str(db_error)}")
-                    
-                    return 1
+            logger.info("Step 1: Extracting Polymarket data")
+            raw_markets = fetch_markets(limit=100)
+            
+            if not raw_markets:
+                logger.error("Failed to fetch market data from Polymarket API")
+                raise Exception("No market data available from API")
+                
+            active_markets = filter_active_markets(raw_markets)
+            self.stats["markets_processed"] = len(active_markets)
+            
+            if not active_markets:
+                logger.error("No active markets found after filtering")
+                raise Exception("No active markets available")
+            
+            logger.info(f"Found {len(active_markets)} active markets from Polymarket")
+            
+            # Step 2: Post markets for approval in Slack
+            logger.info("Step 2: Posting markets for approval")
+            new_markets = filter_new_markets(active_markets)
+            
+            if not new_markets:
+                logger.info("No new markets to post for approval")
             else:
-                logger.error("Polymarket extractor not available")
-                return 1
+                posted_markets = post_new_markets(new_markets, max_to_post=5)
+                self.stats["markets_posted"] = len(posted_markets)
+                logger.info(f"Posted {len(posted_markets)} markets for approval")
             
-            # Process each market
-            for market in self.markets:
-                market_id = market.get("id")
-                if not market_id:
-                    logger.warning("Market has no ID, skipping")
-                    continue
-                
-                logger.info(f"Processing market {market_id}: {market.get('question', 'Unknown')}")
-                self.summary["markets_processed"] += 1
-                
-                # Initialize market in summary
-                self.summary["markets"][market_id] = {
-                    "id": market_id,
-                    "question": market.get("question"),
-                    "status": "processing",
-                    "timeline": [
-                        {"step": "start", "time": datetime.now().isoformat()}
-                    ]
-                }
-                
-                # Step 2: Post market for initial approval
-                logger.info(f"Posting market {market_id} for initial approval")
-                approval_status, message_id = self.initial_approval(market)
-                
-                self.summary["markets"][market_id]["timeline"].append({
-                    "step": "initial_approval",
-                    "time": datetime.now().isoformat(),
-                    "status": approval_status
-                })
-                
-                if approval_status != "approved":
-                    logger.info(f"Market {market_id} was not approved in the initial stage ({approval_status})")
-                    self.summary["markets"][market_id]["status"] = approval_status
-                    self.summary["markets_rejected"] += 1
-                    continue
-                
-                # Step 3: Generate banner for approved market
-                logger.info(f"Generating banner for market {market_id}")
-                banner_path = self.generate_banner(market)
-                
-                if not banner_path:
-                    logger.error(f"Failed to generate banner for market {market_id}")
-                    self.summary["markets"][market_id]["status"] = "failed"
-                    self.summary["markets"][market_id]["failure_reason"] = "banner_generation_failed"
-                    self.summary["markets_failed"] += 1
-                    continue
-                
-                self.summary["markets"][market_id]["timeline"].append({
-                    "step": "banner_generation",
-                    "time": datetime.now().isoformat(),
-                    "status": "complete",
-                    "banner_path": banner_path
-                })
-                
-                # Step 4: Post market with banner for final approval
-                logger.info(f"Posting market {market_id} with banner for final approval")
-                approval_status, message_id = self.final_approval(market, banner_path)
-                
-                self.summary["markets"][market_id]["timeline"].append({
-                    "step": "final_approval",
-                    "time": datetime.now().isoformat(),
-                    "status": approval_status
-                })
-                
-                if approval_status != "approved":
-                    logger.info(f"Market {market_id} was not approved in the final stage ({approval_status})")
-                    self.summary["markets"][market_id]["status"] = approval_status
-                    self.summary["markets_rejected"] += 1
-                    continue
-                
-                # Step 5a: Deploy banner to frontend repository
-                logger.info(f"Deploying banner for market {market_id}")
-                banner_success, banner_result = self.deploy_banner(market_id, banner_path)
-                
-                if not banner_success:
-                    logger.error(f"Failed to deploy banner for market {market_id}: {banner_result}")
-                    self.summary["markets"][market_id]["status"] = "failed"
-                    self.summary["markets"][market_id]["failure_reason"] = "banner_deployment_failed"
-                    self.summary["markets_failed"] += 1
-                    continue
-                
-                self.summary["markets"][market_id]["timeline"].append({
-                    "step": "banner_deployment",
-                    "time": datetime.now().isoformat(),
-                    "status": "complete",
-                    "commit_url": banner_result
-                })
-                
-                # Construct banner URI for the smart contract
-                banner_uri = f"{FRONTEND_IMG_PATH}/{market_id}.png"
-                
-                # Step 5b: Deploy market to blockchain
-                logger.info(f"Deploying market {market_id} to blockchain")
-                market_success, market_result = self.deploy_market(market, banner_uri)
-                
-                if not market_success:
-                    logger.error(f"Failed to deploy market {market_id} to blockchain: {market_result}")
-                    self.summary["markets"][market_id]["status"] = "failed"
-                    self.summary["markets"][market_id]["failure_reason"] = "blockchain_deployment_failed"
-                    self.summary["markets_failed"] += 1
-                    continue
-                
-                self.summary["markets"][market_id]["timeline"].append({
-                    "step": "market_deployment",
-                    "time": datetime.now().isoformat(),
-                    "status": "complete",
-                    "tx_hash": market_result
-                })
-                
-                # Market successfully deployed
-                logger.info(f"Market {market_id} successfully deployed")
-                self.summary["markets"][market_id]["status"] = "deployed"
-                self.summary["markets_deployed"] += 1
+            # Step 3: Check for market approvals
+            logger.info("Step 3: Checking market approvals")
+            pending, approved, rejected = check_market_approvals()
+            self.stats["markets_approved"] = approved
+            self.stats["markets_rejected"] = rejected
+            logger.info(f"Approval status: {approved} approved, {rejected} rejected, {pending} pending")
             
-            # Step 6: Post summary
-            self.summary["end_time"] = datetime.now().isoformat()
-            self.post_summary()
+            # Update database run record if available
+            self._update_db_run()
+            
+            # Step 4: Post summary report
+            self._post_summary()
             
             logger.info("Pipeline completed successfully")
             return 0
             
         except Exception as e:
             logger.error(f"Pipeline failed: {str(e)}")
-            self.summary["end_time"] = datetime.now().isoformat()
-            self.summary["status"] = "failed"
-            self.summary["error"] = str(e)
-            
-            # Try to post summary even if pipeline failed
-            try:
-                self.post_summary()
-            except:
-                pass
-            
             return 1
     
-    def initial_approval(self, market: Dict[str, Any]) -> Tuple[str, Optional[str]]:
+    def _update_db_run(self):
         """
-        Post market for initial approval.
-        
-        Args:
-            market (Dict[str, Any]): Market data
+        Update the pipeline run record in the database.
+        """
+        if not self.db_run_id:
+            return
             
-        Returns:
-            Tuple[str, Optional[str]]: Status and message ID
-        """
-        if not self.messaging_client:
-            logger.error("Messaging client not available for initial approval")
-            return "failed", None
-        
         try:
-            message_id = self.messaging_client.post_initial_market(market)
-            if not message_id:
-                logger.error("Failed to post market for initial approval")
-                return "failed", None
-            
-            # Check for approval
-            logger.info(f"Waiting for initial approval of market {market.get('id')}")
-            approval_status, reason = self.messaging_client.check_approval(
-                message_id, APPROVAL_WINDOW_MINUTES
-            )
-            
-            logger.info(f"Initial approval status: {approval_status} ({reason})")
-            return approval_status, message_id
-            
-        except Exception as e:
-            logger.error(f"Error in initial approval: {str(e)}")
-            return "failed", None
-    
-    def generate_banner(self, market: Dict[str, Any]) -> Optional[str]:
-        """
-        Generate banner for market.
-        
-        Args:
-            market (Dict[str, Any]): Market data
-            
-        Returns:
-            Optional[str]: Path to banner image, or None if failed
-        """
-        if not self.banner_generator:
-            logger.error("Banner generator not available")
-            return None
-        
-        try:
-            banner_path = self.banner_generator.generate_banner(market)
-            return banner_path
-        except Exception as e:
-            logger.error(f"Error generating banner: {str(e)}")
-            return None
-    
-    def final_approval(self, market: Dict[str, Any], banner_path: str) -> Tuple[str, Optional[str]]:
-        """
-        Post market with banner for final approval.
-        
-        Args:
-            market (Dict[str, Any]): Market data
-            banner_path (str): Path to banner image
-            
-        Returns:
-            Tuple[str, Optional[str]]: Status and message ID
-        """
-        if not self.messaging_client:
-            logger.error("Messaging client not available for final approval")
-            return "failed", None
-        
-        try:
-            message_id = self.messaging_client.post_final_market(market, banner_path)
-            if not message_id:
-                logger.error("Failed to post market with banner for final approval")
-                return "failed", None
-            
-            # Check for approval
-            logger.info(f"Waiting for final approval of market {market.get('id')}")
-            approval_status, reason = self.messaging_client.check_approval(
-                message_id, APPROVAL_WINDOW_MINUTES
-            )
-            
-            logger.info(f"Final approval status: {approval_status} ({reason})")
-            return approval_status, message_id
-            
-        except Exception as e:
-            logger.error(f"Error in final approval: {str(e)}")
-            return "failed", None
-    
-    def deploy_banner(self, market_id: str, banner_path: str) -> Tuple[bool, Optional[str]]:
-        """
-        Deploy banner to frontend repository.
-        
-        Args:
-            market_id (str): Market ID
-            banner_path (str): Path to banner image
-            
-        Returns:
-            Tuple[bool, str]: Success status and commit URL or error message
-        """
-        if not self.github_client:
-            logger.error("GitHub client not available")
-            return False, "GitHub client not available"
-        
-        try:
-            success, result = self.github_client.push_banner(market_id, banner_path)
-            return success, result
-        except Exception as e:
-            logger.error(f"Error deploying banner: {str(e)}")
-            return False, str(e)
-    
-    def deploy_market(self, market: Dict[str, Any], banner_uri: str) -> Tuple[bool, Optional[str]]:
-        """
-        Deploy market to blockchain.
-        
-        Args:
-            market (Dict[str, Any]): Market data
-            banner_uri (str): URI to banner image
-            
-        Returns:
-            Tuple[bool, str]: Success status and transaction hash or error message
-        """
-        if not self.blockchain_client:
-            logger.error("Blockchain client not available")
-            return False, "Blockchain client not available"
-        
-        try:
-            success, result = self.blockchain_client.create_market(market, banner_uri)
-            return success, result
-        except Exception as e:
-            logger.error(f"Error deploying market: {str(e)}")
-            return False, str(e)
-    
-    def post_summary(self):
-        """Post summary to messaging platform."""
-        try:
-            if not self.messaging_client:
-                logger.warning("Messaging client not available for posting summary")
-                return
-            
-            # Calculate summary stats
-            total_processed = self.summary["markets_processed"]
-            total_approved = self.summary["markets_approved"]
-            total_rejected = self.summary["markets_rejected"]
-            total_deployed = self.summary["markets_deployed"]
-            total_failed = self.summary["markets_failed"]
-            
-            # Format summary message
-            message = f"*Pipeline Summary*\n\n"
-            message += f"• Total markets processed: {total_processed}\n"
-            message += f"• Markets approved: {total_approved}\n"
-            message += f"• Markets rejected: {total_rejected}\n"
-            message += f"• Markets deployed: {total_deployed}\n"
-            message += f"• Markets failed: {total_failed}\n\n"
-            
-            # Add overall status
-            if total_deployed > 0:
-                message += "✅ Pipeline completed successfully with deployed markets"
-            elif total_approved > 0:
-                message += "⚠️ Pipeline completed with approved markets, but no deployments"
-            elif total_processed > 0:
-                message += "⚠️ Pipeline processed markets, but none were approved"
-            else:
-                message += "❌ Pipeline failed to process any markets"
-            
-            # Post via messaging client's general message method
-            if hasattr(self.messaging_client, 'post_message'):
-                self.messaging_client.post_message(message)
-            else:
-                logger.warning("Messaging client does not have post_message method")
-                
-        except Exception as e:
-            logger.error(f"Error posting summary: {str(e)}")
-            # Don't raise the exception - this is a non-critical step
-
-
-# For testing purposes or running directly
-if __name__ == "__main__":
-    # If running directly, try to set up database integration
-    try:
-        # First try to import Flask app
-        from main import app
-        
-        with app.app_context():
-            # Make sure models are loaded
-            from models import db, Market, ApprovalEvent, PipelineRun
-            
-            # Create database entry for this run
-            pipeline_run = PipelineRun(
-                start_time=datetime.now(),
-                status="running"
-            )
-            db.session.add(pipeline_run)
-            db.session.commit()
-            run_id = pipeline_run.id
-            print(f"Created pipeline run record with ID: {run_id}")
-            
-            # Run the pipeline with database tracking
-            pipeline = PolymarketPipeline(db_run_id=run_id)
-            exit_code = pipeline.run()
-            
-            # Update database entry
-            pipeline_run = PipelineRun.query.get(run_id)
+            pipeline_run = PipelineRun.query.get(self.db_run_id)
             if pipeline_run:
-                pipeline_run.end_time = datetime.now()
-                pipeline_run.status = "completed" if exit_code == 0 else "failed"
+                pipeline_run.markets_processed = self.stats["markets_processed"]
+                pipeline_run.markets_approved = self.stats["markets_approved"]
+                pipeline_run.markets_rejected = self.stats["markets_rejected"]
+                pipeline_run.markets_failed = self.stats["markets_failed"]
+                pipeline_run.markets_deployed = self.stats["markets_deployed"]
                 db.session.commit()
-    except ImportError as e:
-        print(f"Warning: Failed to import Flask app or models: {e}")
-        print("Running without database integration...")
-        # Run without database integration
-        pipeline = PolymarketPipeline()
-        exit_code = pipeline.run()
-        
+                logger.info(f"Updated pipeline run record #{self.db_run_id}")
+        except Exception as e:
+            logger.error(f"Failed to update pipeline run record: {str(e)}")
+    
+    def _post_summary(self):
+        """
+        Post summary to logging output.
+        """
+        logger.info("\n=== PIPELINE SUMMARY ===")
+        logger.info(f"Markets processed:   {self.stats['markets_processed']}")
+        logger.info(f"New markets posted:  {self.stats['markets_posted']}")
+        logger.info(f"Markets approved:    {self.stats['markets_approved']}")
+        logger.info(f"Markets rejected:    {self.stats['markets_rejected']}")
+        logger.info(f"Markets deployed:    {self.stats['markets_deployed']}")
+        logger.info(f"Failed deployments:  {self.stats['markets_failed']}")
+        logger.info("======================\n")
+
+# Run the pipeline directly if executed as a script
+if __name__ == "__main__":
+    pipeline = PolymarketPipeline()
+    exit_code = pipeline.run()
     sys.exit(exit_code)
