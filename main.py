@@ -4,12 +4,12 @@ Entry point for the Polymarket pipeline.
 This file allows running the pipeline via the web interface workflow.
 
 Steps in the pipeline:
-1. Fetch Polymarket data using transform_polymarket_data_capitalized.py
-2. Post markets to Slack/Discord for initial approval
-3. Generate banner images for approved markets using OpenAI
-4. Post markets with banners to Slack/Discord for final approval
-5. Deploy approved markets (push banner to frontend repo & create market on ApeChain)
-6. Generate summary reports and logs
+1. Fetch active markets from Polymarket public API with category diversity
+2. Filter markets to only include non-expired ones with valid image assets
+3. Post new markets to Slack for approval (tracked in database)
+4. Check for market approvals/rejections in Slack
+5. Deploy approved markets to ApeChain with proper UI mapping
+6. Generate comprehensive pipeline statistics and logs
 """
 from flask import Flask, jsonify, request, render_template_string, send_from_directory
 import os
@@ -201,10 +201,11 @@ HTML_TEMPLATE = """
         <div class="info">
             <p>This application runs the Polymarket Pipeline, automating the process of:</p>
             <ol>
-                <li>Extracting Polymarket data from the API (only active/open markets)</li>
-                <li>Facilitating two-stage approvals via Slack (click ☑️ to approve, 🚫 to reject)</li>
-                <li>Generating banner images with OpenAI for approved markets</li>
-                <li>Deploying approved markets to ApeChain and pushing banners to the frontend repo</li>
+                <li>Fetching diverse markets from Polymarket API across multiple categories</li>
+                <li>Filtering to active, non-expired markets with valid image assets</li>
+                <li>Posting new markets to Slack for approval (with ✅ to approve, ❌ to reject)</li>
+                <li>Tracking market approvals/rejections in the database</li>
+                <li>Deploying approved markets to ApeChain with frontend mappings</li>
             </ol>
             
             <p class="alert alert-info mt-3">
@@ -520,7 +521,7 @@ def pipeline_flow():
             <h1>Polymarket Pipeline Flow Diagram</h1>
             
             <div class="pipeline-description">
-                <p>This diagram illustrates the complete workflow of our Polymarket Pipeline system, from data extraction through approval and image generation to final deployment on ApeChain.</p>
+                <p>This diagram illustrates the complete workflow of our Polymarket Pipeline system, from market data extraction through approval to integration with ApeChain for deployment.</p>
             </div>
             
             <div>
@@ -528,30 +529,45 @@ def pipeline_flow():
                 <div id="text-flow-diagram">
                     <h3>Pipeline Process Flow:</h3>
                     <ol class="pipeline-steps">
-                        <li><span class="text-info">Fetch Active Markets</span> from Polymarket API</li>
-                        <li><span class="text-info">Filter & Track Markets</span> in PostgreSQL database</li>
-                        <li><span class="text-warning">Post Markets to Slack</span> for initial approval</li>
-                        <li><span class="text-warning">Check Market Approvals</span> from Slack reactions</li>
+                        <li><span class="text-info">Fetch Diverse Markets</span> from Polymarket API across multiple categories</li>
+                        <li><span class="text-info">Filter Active Markets</span> using expiration date and asset validation</li>
+                        <li><span class="text-info">Track Markets</span> in PostgreSQL database to prevent duplicates</li>
+                        <li><span class="text-warning">Post New Markets to Slack</span> for approval</li>
+                        <li><span class="text-warning">Check Market Approvals</span> from Slack reactions (✅/❌)</li>
                         <li><span class="text-info">Update Database</span> with approval status</li>
-                        <li><span class="text-success">Generate Banner Images</span> using OpenAI DALL-E for approved markets</li>
-                        <li><span class="text-warning">Post Banners to Slack</span> for final approval</li>
-                        <li><span class="text-warning">Check Banner Approvals</span> from Slack reactions</li>
-                        <li><span class="text-info">Update Database</span> with banner approval status</li>
-                        <li><span class="text-success">Deploy to ApeChain</span> smart contract with approved markets and banners</li>
+                        <li><span class="text-success">Create Market Records</span> for approved markets</li>
+                        <li><span class="text-success">Deploy to ApeChain</span> smart contract with frontend mapping</li>
                     </ol>
                 </div>
                 
                 <div>
                     <h3>Database Structure</h3>
-                    <p>The <b>ProcessedMarket</b> table in our PostgreSQL database has these key fields:</p>
-                    <ul style="text-align: left; width: fit-content; margin: 0 auto;">
-                        <li><b>condition_id</b> - Unique identifier from Polymarket (PK)</li>
-                        <li><b>question</b> - Market question text</li>
-                        <li><b>approved</b> - Market approval status (boolean)</li>
-                        <li><b>image_generated</b> - Whether a banner was generated (boolean)</li>
-                        <li><b>image_approved</b> - Banner approval status (boolean)</li>
-                        <li><b>image_uri</b> - Final URI of the approved banner</li>
-                    </ul>
+                    <p>The system uses two primary tables in our PostgreSQL database:</p>
+                    
+                    <div style="text-align: left; width: fit-content; margin: 20px auto;">
+                        <h4 class="text-info">ProcessedMarket Table</h4>
+                        <ul style="text-align: left;">
+                            <li><b>condition_id</b> - Unique identifier from Polymarket (PK)</li>
+                            <li><b>question</b> - Market question text</li>
+                            <li><b>first_seen</b> - When the market was first discovered</li>
+                            <li><b>posted</b> - Whether posted to Slack (boolean)</li> 
+                            <li><b>message_id</b> - Slack message ID for tracking</li>
+                            <li><b>approved</b> - Market approval status (boolean or null)</li>
+                            <li><b>raw_data</b> - Original data from Polymarket API</li>
+                        </ul>
+                        
+                        <h4 class="text-success">Market Table</h4>
+                        <ul style="text-align: left;">
+                            <li><b>id</b> - Primary key, matches condition_id</li>
+                            <li><b>question</b> - Market question text</li> 
+                            <li><b>type</b> - Market type (binary, etc.)</li>
+                            <li><b>category</b> - Market category for diversity tracking</li>
+                            <li><b>expiry</b> - Market expiration timestamp</li>
+                            <li><b>status</b> - Processing status</li>
+                            <li><b>icon_url</b> - URL for frontend icon display</li>
+                            <li><b>apechain_market_id</b> - ID on ApeChain</li>
+                        </ul>
+                    </div>
                 </div>
             </div>
             
