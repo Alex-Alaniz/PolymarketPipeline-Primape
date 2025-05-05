@@ -53,6 +53,31 @@ def filter_new_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     if not markets:
         return []
+    
+    # Log markets received for filtering
+    logger.info(f"Filtering {len(markets)} markets")
+    multi_count = sum(1 for m in markets if m.get("is_multiple_option", False))
+    logger.info(f"Received {multi_count} multiple-option markets to filter")
+    
+    # For debugging, log the first few markets
+    for i, market in enumerate(markets[:3]):
+        logger.info(f"Market {i+1} to filter:")
+        logger.info(f"  ID: {market.get('id')}")
+        logger.info(f"  Question: {market.get('question', 'Unknown')}")
+        logger.info(f"  Type: {'Multiple-option' if market.get('is_multiple_option', False) else 'Binary'}")
+        if market.get('is_multiple_option', False):
+            # Parse outcomes which come as a JSON string
+            outcomes_raw = market.get("outcomes", "[]")
+            outcomes = []
+            try:
+                if isinstance(outcomes_raw, str):
+                    import json
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                logger.info(f"  Options ({len(outcomes)}): {outcomes}")
+            except Exception as e:
+                logger.error(f"Error parsing outcomes: {str(e)}")
         
     # Get condition IDs of markets already in database
     existing_ids = set()
@@ -78,15 +103,26 @@ def filter_new_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         if market.get("is_multiple_option"):
             # Use the group ID as the unique identifier
             market_id = market.get("id")
+            logger.info(f"Checking multiple-option market: {market.get('question')} with ID: {market_id}")
             if market_id not in existing_ids:
                 new_markets.append(market)
+                logger.info(f"  Added as new multiple-option market")
+            else:
+                logger.info(f"  Skipped as existing multiple-option market")
         else:
             # For binary markets, use the condition ID
             condition_id = market.get("conditionId")
+            logger.info(f"Checking binary market: {market.get('question')} with ID: {condition_id}")
             if condition_id not in existing_ids:
                 new_markets.append(market)
+                logger.info(f"  Added as new binary market")
+            else:
+                logger.info(f"  Skipped as existing binary market")
     
-    logger.info(f"Filtered to {len(new_markets)} new markets")
+    # Log results
+    multi_count_after = sum(1 for m in new_markets if m.get("is_multiple_option", False))
+    logger.info(f"Filtered to {len(new_markets)} new markets, including {multi_count_after} multiple-option markets")
+    
     return new_markets
 
 def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:

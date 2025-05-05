@@ -303,6 +303,10 @@ def transform_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     logger.info(f"Transformed {len(markets)} markets into {len(transformed)} markets")
     logger.info(f"Found {multiple_count} multiple-option markets")
     
+    # Save transformed markets for direct inspection
+    with open("transformed_markets.json", "w") as f:
+        json.dump(transformed, f, indent=2, default=str)
+    
     # Debug the multiple-option markets
     if multiple_count > 0:
         logger.info("DEBUGGING MULTIPLE-OPTION MARKETS:")

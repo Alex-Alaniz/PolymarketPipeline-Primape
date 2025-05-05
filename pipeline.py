@@ -167,8 +167,50 @@ class PolymarketPipeline:
         Returns:
             int: Number of markets posted
         """
+        # First, log which markets we have before filtering
+        logger.info("Initial markets before filtering:")
+        for i, market in enumerate(markets[:5]):  # Just log the first 5 to avoid too much output
+            logger.info(f"Market {i+1}:")
+            logger.info(f"  - Type: {'Multiple-option' if market.get('is_multiple_option') else 'Binary'}")
+            logger.info(f"  - Question: {market.get('question', 'Unknown')}")
+            if market.get('is_multiple_option'):
+                logger.info(f"  - ID: {market.get('id')}")
+                # Parse outcomes which come as a JSON string
+                outcomes_raw = market.get("outcomes", "[]")
+                outcomes = []
+                try:
+                    if isinstance(outcomes_raw, str):
+                        import json
+                        outcomes = json.loads(outcomes_raw)
+                    else:
+                        outcomes = outcomes_raw
+                    logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+                except Exception as e:
+                    logger.error(f"Error parsing outcomes: {str(e)}")
+        
         logger.info("Filtering new markets")
         new_markets = filter_new_markets(markets)
+        
+        # Log which markets we have after filtering
+        logger.info("Markets after filtering:")
+        for i, market in enumerate(new_markets[:5]):  # Just log the first 5 to avoid too much output
+            logger.info(f"Market {i+1}:")
+            logger.info(f"  - Type: {'Multiple-option' if market.get('is_multiple_option') else 'Binary'}")
+            logger.info(f"  - Question: {market.get('question', 'Unknown')}")
+            if market.get('is_multiple_option'):
+                logger.info(f"  - ID: {market.get('id')}")
+                # Parse outcomes which come as a JSON string
+                outcomes_raw = market.get("outcomes", "[]")
+                outcomes = []
+                try:
+                    if isinstance(outcomes_raw, str):
+                        import json
+                        outcomes = json.loads(outcomes_raw)
+                    else:
+                        outcomes = outcomes_raw
+                    logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+                except Exception as e:
+                    logger.error(f"Error parsing outcomes: {str(e)}")
         
         self.update_stats(new_markets=len(new_markets))
         logger.info(f"Found {len(new_markets)} new markets")
