@@ -1,120 +1,103 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
+
 """
-Script to update the database schema with new columns for image generation tracking.
+Update Database Schema
+
+This script updates the database schema to match the current models.
+It adds new fields and ensures all necessary tables exist.
 """
+
 import os
 import sys
 import logging
 from datetime import datetime
-import psycopg2
-from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[logging.StreamHandler(sys.stdout)]
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
 )
-logger = logging.getLogger('db_update')
 
-def connect_to_db():
-    """Connect to the PostgreSQL database."""
-    try:
-        # Connect using environment variables
-        conn = psycopg2.connect(
-            dbname=os.environ.get('PGDATABASE'),
-            user=os.environ.get('PGUSER'),
-            password=os.environ.get('PGPASSWORD'),
-            host=os.environ.get('PGHOST'),
-            port=os.environ.get('PGPORT')
-        )
-        conn.set_isolation_level(ISOLATION_LEVEL_AUTOCOMMIT)
-        logger.info("Successfully connected to the database")
-        return conn
-    except Exception as e:
-        logger.error(f"Error connecting to the database: {str(e)}")
-        sys.exit(1)
+logger = logging.getLogger("update_db_schema")
 
-def check_column_exists(cursor, table, column):
-    """Check if a column exists in a table."""
+def add_column_if_not_exists(conn, table, column, column_type):
+    """
+    Add a column to a table if it doesn't already exist.
+    
+    Args:
+        conn: Database connection
+        table: Table name
+        column: Column name
+        column_type: Column type (e.g., 'VARCHAR(255)')
+    
+    Returns:
+        bool: True if column was added, False if it already existed
+    """
+    cursor = conn.cursor()
+    
+    # Check if column exists
     cursor.execute(f"""
         SELECT column_name 
         FROM information_schema.columns 
-        WHERE table_name = '{table}' AND column_name = '{column}'
-    """)
-    return cursor.fetchone() is not None
-
-def add_image_tracking_columns(cursor):
-    """Add image generation tracking columns to the processed_markets table."""
-    try:
-        # Check if table exists
-        cursor.execute("SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'processed_markets')")
-        table_exists = cursor.fetchone()[0]
-        
-        if not table_exists:
-            logger.error("The processed_markets table does not exist. Run init_db.py first.")
+        WHERE table_name = %s 
+        AND column_name = %s
+    """, (table, column))
+    
+    if cursor.fetchone() is None:
+        # Column doesn't exist, add it
+        try:
+            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
+            conn.commit()
+            logger.info(f"Added column '{column}' to table '{table}'")
+            return True
+        except Exception as e:
+            conn.rollback()
+            logger.error(f"Error adding column '{column}' to table '{table}': {str(e)}")
             return False
-        
-        # Add each column if it doesn't exist
-        columns_to_add = [
-            ('image_generated', 'BOOLEAN DEFAULT FALSE'),
-            ('image_path', 'VARCHAR(255)'),
-            ('image_generation_attempts', 'INTEGER DEFAULT 0'),
-            ('image_approved', 'BOOLEAN'),
-            ('image_approval_date', 'TIMESTAMP'),
-            ('image_approver', 'VARCHAR(255)'),
-            ('image_message_id', 'VARCHAR(255)'),
-            ('image_uri', 'VARCHAR(255)')
-        ]
-        
-        for column, data_type in columns_to_add:
-            if not check_column_exists(cursor, 'processed_markets', column):
-                logger.info(f"Adding column {column} to processed_markets table")
-                cursor.execute(f"ALTER TABLE processed_markets ADD COLUMN {column} {data_type}")
-            else:
-                logger.info(f"Column {column} already exists in processed_markets table")
-        
-        logger.info("Successfully updated processed_markets table with image tracking columns")
-        return True
-    except Exception as e:
-        logger.error(f"Error adding image tracking columns: {str(e)}")
+    else:
+        logger.info(f"Column '{column}' already exists in table '{table}'")
         return False
 
+def update_db_schema():
+    """
+    Update the database schema with new columns.
+    """
+    logger.info("Updating database schema...")
+    
+    # Import Flask app to get application context
+    from main import app
+    from models import db
+    
+    # Use application context for database operations
+    with app.app_context():
+        # Get SQLAlchemy connection
+        connection = db.session.connection()
+        
+        # Get raw connection
+        conn = connection.connection
+        
+        # Add new columns to the markets table
+        add_column_if_not_exists(conn, 'markets', 'icon_url', 'VARCHAR(255)')
+        add_column_if_not_exists(conn, 'markets', 'apechain_market_id', 'VARCHAR(255)')
+        
+        # Commit the changes
+        db.session.commit()
+        
+        logger.info("Database schema update complete")
+        
 def main():
-    """Main function to update the database schema."""
-    logger.info("Starting database schema update")
-    
-    # Connect to the database
-    conn = connect_to_db()
-    cursor = conn.cursor()
-    
+    """
+    Main function to run the database schema update.
+    """
     try:
-        # Add image tracking columns
-        success = add_image_tracking_columns(cursor)
-        
-        if success:
-            logger.info("Database schema update completed successfully")
-        else:
-            logger.error("Database schema update failed")
-            
-        # Show the current schema
-        cursor.execute("""
-            SELECT column_name, data_type 
-            FROM information_schema.columns 
-            WHERE table_name = 'processed_markets'
-            ORDER BY ordinal_position
-        """)
-        columns = cursor.fetchall()
-        
-        logger.info("\nCurrent schema for processed_markets table:")
-        for column, data_type in columns:
-            logger.info(f"  - {column} ({data_type})")
-            
+        update_db_schema()
+        return 0
     except Exception as e:
         logger.error(f"Error updating database schema: {str(e)}")
-    finally:
-        cursor.close()
-        conn.close()
+        return 1
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

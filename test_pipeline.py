@@ -14,11 +14,14 @@ import logging
 from datetime import datetime, timedelta
 import time
 
+# Set testing environment flag
+os.environ["TESTING"] = "true"
+
 from models import db, Market, ProcessedMarket
 from filter_active_markets import fetch_markets, filter_active_markets
 from check_market_approvals import check_market_approvals
 from pipeline import PolymarketPipeline
-from utils.messaging import post_market_for_approval
+from test_utils.mock_slack import post_message, approve_test_market, reject_test_market, clear_test_data as clear_mock_slack
 
 # Configure logging
 logging.basicConfig(
