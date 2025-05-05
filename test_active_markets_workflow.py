@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
 
 """
-Test script for the active market workflow.
+Test script for active markets workflow.
 
-This script demonstrates the workflow of fetching, filtering, and selecting
-active markets across diverse categories from Polymarket API.
+This script tests the complete active market tracking and approval workflow,
+including fetching, filtering, posting to Slack, and checking approvals.
+
+It uses mock Slack implementation for testing without actual API calls.
 """
 
 import os
 import sys
-import json
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timedelta
+import time
+import json
 
+# Set testing environment flag
+os.environ["TESTING"] = "true"
+
+from models import db, Market, ProcessedMarket
 from filter_active_markets import fetch_markets, filter_active_markets
+from fetch_active_markets_with_tracker import filter_new_markets, post_new_markets
+from check_market_approvals import check_market_approvals
+from test_utils.mock_slack import approve_test_market, reject_test_market, clear_test_data as clear_mock_slack
 
 # Configure logging
 logging.basicConfig(
@@ -23,125 +33,189 @@ logging.basicConfig(
         logging.StreamHandler(sys.stdout)
     ]
 )
-
 logger = logging.getLogger("test_active_markets")
 
-def test_market_diversity():
-    """Test the diversity of markets being fetched."""
-    logger.info("Testing market diversity...")
+def clear_test_db_data():
+    """Clear all test data from the database."""
+    logger.info("Clearing test data from database...")
     
-    # Fetch markets
-    markets = fetch_markets()
-    
-    if not markets:
-        logger.error("Failed to fetch markets")
-        return False
-    
-    # Count markets by category before filtering
-    pre_categories = {}
-    for market in markets:
-        category = market.get("fetched_category", "general")
-        pre_categories[category] = pre_categories.get(category, 0) + 1
-    
-    logger.info(f"Fetched {len(markets)} total markets")
-    logger.info("Category distribution before filtering:")
-    for category, count in pre_categories.items():
-        logger.info(f"  - {category}: {count} markets")
-    
-    # Filter active markets
-    active_markets = filter_active_markets(markets)
-    
-    if not active_markets:
-        logger.error("No active markets found after filtering")
-        return False
-    
-    # Count markets by category after filtering
-    post_categories = {}
-    for market in active_markets:
-        category = market.get("fetched_category", "general")
-        post_categories[category] = post_categories.get(category, 0) + 1
-    
-    logger.info(f"Filtered to {len(active_markets)} active markets")
-    logger.info("Category distribution after filtering:")
-    for category, count in post_categories.items():
-        logger.info(f"  - {category}: {count} markets")
-    
-    # Check icon and image URLs
-    valid_image_urls = 0
-    valid_icon_urls = 0
-    
-    for market in active_markets:
-        if market.get("image") and isinstance(market.get("image"), str):
-            valid_image_urls += 1
-        if market.get("icon") and isinstance(market.get("icon"), str):
-            valid_icon_urls += 1
-    
-    logger.info(f"Image URLs: {valid_image_urls}/{len(active_markets)} markets have valid image URLs")
-    logger.info(f"Icon URLs: {valid_icon_urls}/{len(active_markets)} markets have valid icon URLs")
-    
-    # Check expiry dates
-    now = datetime.now(timezone.utc)
-    future_expiry = 0
-    
-    for market in active_markets:
-        try:
-            end_date = datetime.fromisoformat(market.get("endDate", "").replace('Z', '+00:00'))
-            if end_date > now:
-                future_expiry += 1
-        except:
-            pass
-    
-    logger.info(f"Expiry dates: {future_expiry}/{len(active_markets)} markets have future expiry dates")
-    
-    # Check diversity criterion (at least 3 different categories with at least 10 markets each)
-    categories_with_min_10 = sum(1 for count in post_categories.values() if count >= 10)
-    logger.info(f"Diversity: {categories_with_min_10} categories have at least 10 markets")
-    
-    diversity_success = categories_with_min_10 >= 3
-    image_success = valid_image_urls == len(active_markets)
-    icon_success = valid_icon_urls == len(active_markets)
-    future_success = future_expiry == len(active_markets)
-    
-    return diversity_success and image_success and icon_success and future_success
+    # Delete test records
+    try:
+        # Find test markets by looking for TEST prefix in question
+        test_processed = ProcessedMarket.query.filter(
+            ProcessedMarket.question.like("TEST:%")
+        ).all()
+        
+        for market in test_processed:
+            db.session.delete(market)
+            
+        # Find test Market entries
+        test_markets = Market.query.filter(
+            Market.question.like("TEST:%")
+        ).all()
+        
+        for market in test_markets:
+            db.session.delete(market)
+        
+        db.session.commit()
+        logger.info(f"Cleared {len(test_processed)} test processed markets and {len(test_markets)} test markets")
+        
+    except Exception as e:
+        logger.error(f"Error clearing test data: {str(e)}")
+        db.session.rollback()
 
-def display_sample_markets(markets, count=5):
-    """Display a sample of markets."""
-    if not markets or count <= 0:
-        return
+def create_test_markets(count=5):
+    """Create test market data for testing."""
+    logger.info(f"Creating {count} test markets...")
     
-    sample = markets[:count]
-    logger.info(f"\nSample of {len(sample)} active markets:")
+    test_markets = []
+    categories = ["politics", "sports", "crypto", "entertainment", "science"]
     
-    for i, market in enumerate(sample):
-        logger.info(f"\nMarket #{i+1}:")
-        logger.info(f"  Category: {market.get('fetched_category', 'general')}")
-        logger.info(f"  Question: {market.get('question', 'N/A')}")
-        logger.info(f"  End Date: {market.get('endDate', 'N/A')}")
-        logger.info(f"  Image: {market.get('image', 'N/A')}")
-        logger.info(f"  Icon: {market.get('icon', 'N/A')}")
+    for i in range(count):
+        category = categories[i % len(categories)]
+        market_id = f"test-market-{i}-{int(time.time())}"
+        condition_id = f"test-condition-{i}-{int(time.time())}"
+        
+        # Create market data
+        market = {
+            "id": market_id,
+            "conditionId": condition_id,
+            "question": f"TEST: Will this test market {i} be approved?",
+            "endDate": (datetime.utcnow() + timedelta(days=30)).isoformat() + "Z",
+            "fetched_category": category,
+            "image": "https://example.com/image.jpg",
+            "icon": "https://example.com/icon.jpg",
+            "active": True,
+            "closed": False,
+            "archived": False
+        }
+        
+        test_markets.append(market)
+    
+    logger.info(f"Created {len(test_markets)} test markets")
+    return test_markets
+
+def test_market_tracking():
+    """Test tracking markets in the database."""
+    logger.info("Testing market tracking...")
+    
+    # Create test markets
+    test_markets = create_test_markets(5)
+    
+    # Post markets to mock Slack
+    posted_markets = post_new_markets(test_markets, max_to_post=3)
+    
+    if not posted_markets:
+        logger.error("Failed to post any markets")
+        return False
+    
+    logger.info(f"Posted {len(posted_markets)} markets to Slack")
+    
+    # Check that markets were tracked in the database
+    condition_ids = [market.get("conditionId") for market in test_markets]
+    tracked_markets = ProcessedMarket.query.filter(
+        ProcessedMarket.condition_id.in_(condition_ids)
+    ).all()
+    
+    logger.info(f"Found {len(tracked_markets)} tracked markets in database")
+    
+    return len(tracked_markets) > 0
+
+def test_market_approval_workflow():
+    """Test the complete market approval workflow."""
+    logger.info("Testing market approval workflow...")
+    
+    # Create and post test markets
+    test_markets = create_test_markets(3)
+    posted_markets = post_new_markets(test_markets)
+    
+    if not posted_markets:
+        logger.error("Failed to post any markets")
+        return False
+    
+    # Get message IDs
+    message_ids = [market.message_id for market in posted_markets if market.message_id]
+    
+    if not message_ids:
+        logger.error("No message IDs found for posted markets")
+        return False
+    
+    # Approve some markets using mock Slack
+    logger.info("Approving markets in mock Slack...")
+    for i, message_id in enumerate(message_ids):
+        # Approve first market, reject second, leave third pending
+        if i == 0:
+            approve_test_market(message_id)
+            logger.info(f"Approved market with message ID {message_id}")
+        elif i == 1:
+            reject_test_market(message_id)
+            logger.info(f"Rejected market with message ID {message_id}")
+    
+    # Run approval check
+    pending, approved, rejected = check_market_approvals()
+    
+    logger.info(f"Approval check results: {pending} pending, {approved} approved, {rejected} rejected")
+    
+    # Check that approved markets were added to Market table
+    approved_in_markets = Market.query.filter(
+        Market.question.like("TEST:%")
+    ).all()
+    
+    logger.info(f"Found {len(approved_in_markets)} markets in Market table")
+    
+    # Check that approval status was updated in ProcessedMarket
+    verified_approvals = ProcessedMarket.query.filter(
+        ProcessedMarket.question.like("TEST:%"),
+        ProcessedMarket.approved == True
+    ).all()
+    
+    verified_rejections = ProcessedMarket.query.filter(
+        ProcessedMarket.question.like("TEST:%"),
+        ProcessedMarket.approved == False
+    ).all()
+    
+    logger.info(f"Found {len(verified_approvals)} approved and {len(verified_rejections)} rejected markets in ProcessedMarket")
+    
+    # Verify expected counts
+    return (
+        approved == 1 and 
+        rejected == 1 and 
+        pending == 1 and
+        len(approved_in_markets) == 1
+    )
 
 def main():
-    """Main function to run the tests."""
-    logger.info("Starting active markets workflow test")
+    """Main function to run the workflow tests."""
+    logger.info("Starting active markets workflow tests")
     
-    # Test market diversity
-    diversity_success = test_market_diversity()
+    # Import Flask app to get application context
+    from main import app
     
-    # Fetch and display a sample of markets
-    markets = fetch_markets()
-    active_markets = filter_active_markets(markets) if markets else []
-    display_sample_markets(active_markets)
+    # Use application context for database operations
+    with app.app_context():
+        # Clean up any previous test data
+        clear_test_db_data()
+        clear_mock_slack()
+        
+        # Run tests
+        tracking_success = test_market_tracking()
+        approval_success = test_market_approval_workflow()
+        
+        # Report results
+        logger.info("\n=== TEST RESULTS ===")
+        logger.info(f"Market tracking:    {'✓ PASS' if tracking_success else '✗ FAIL'}")
+        logger.info(f"Approval workflow:  {'✓ PASS' if approval_success else '✗ FAIL'}")
+        logger.info("====================\n")
+        
+        # Final cleanup
+        clear_test_db_data()
+        clear_mock_slack()
     
-    # Report results
-    logger.info("\n=== TEST RESULTS ===")
-    logger.info(f"Market diversity: {'✓ PASS' if diversity_success else '✗ FAIL'}")
-    logger.info("====================\n")
-    
-    if diversity_success:
-        logger.info("Active markets workflow test PASSED!")
+    if tracking_success and approval_success:
+        logger.info("All tests PASSED!")
         return 0
     else:
-        logger.error("Active markets workflow test FAILED!")
+        logger.error("Some tests FAILED!")
         return 1
 
 if __name__ == "__main__":

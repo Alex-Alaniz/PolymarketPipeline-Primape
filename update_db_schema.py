@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 """
-Update Database Schema
+Update database schema for the Polymarket pipeline.
 
-This script updates the database schema to match the current models.
-It adds new fields and ensures all necessary tables exist.
+This script adds new fields to the Market table for icon_url and apechain_market_id.
+Run this script once to update the database schema.
 """
 
 import os
@@ -12,91 +12,109 @@ import sys
 import logging
 from datetime import datetime
 
+from sqlalchemy import Column, String
+from sqlalchemy.exc import OperationalError
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger("db_update")
 
-logger = logging.getLogger("update_db_schema")
-
-def add_column_if_not_exists(conn, table, column, column_type):
+def add_column_if_not_exists(engine, table_name, column_name, column_type):
     """
     Add a column to a table if it doesn't already exist.
     
     Args:
-        conn: Database connection
-        table: Table name
-        column: Column name
-        column_type: Column type (e.g., 'VARCHAR(255)')
+        engine: SQLAlchemy engine
+        table_name: Name of the table to alter
+        column_name: Name of the column to add
+        column_type: SQLAlchemy column type
     
     Returns:
-        bool: True if column was added, False if it already existed
+        bool: True if column was added, False if it already existed or on error
     """
-    cursor = conn.cursor()
+    column_type_str = str(column_type.compile())
     
     # Check if column exists
-    cursor.execute(f"""
-        SELECT column_name 
-        FROM information_schema.columns 
-        WHERE table_name = %s 
-        AND column_name = %s
-    """, (table, column))
+    check_sql = f"""
+    SELECT column_name 
+    FROM information_schema.columns 
+    WHERE table_name = '{table_name}' 
+    AND column_name = '{column_name}'
+    """
     
-    if cursor.fetchone() is None:
-        # Column doesn't exist, add it
-        try:
-            cursor.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type}")
-            conn.commit()
-            logger.info(f"Added column '{column}' to table '{table}'")
-            return True
-        except Exception as e:
-            conn.rollback()
-            logger.error(f"Error adding column '{column}' to table '{table}': {str(e)}")
+    try:
+        conn = engine.connect()
+        result = conn.execute(check_sql)
+        exists = result.scalar() is not None
+        conn.close()
+        
+        if exists:
+            logger.info(f"Column {column_name} already exists in {table_name}")
             return False
-    else:
-        logger.info(f"Column '{column}' already exists in table '{table}'")
+            
+        # Add column
+        conn = engine.connect()
+        add_sql = f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_type_str}"
+        conn.execute(add_sql)
+        conn.close()
+        
+        logger.info(f"Added column {column_name} to {table_name}")
+        return True
+        
+    except Exception as e:
+        logger.error(f"Error adding column {column_name} to {table_name}: {str(e)}")
         return False
 
-def update_db_schema():
+def update_database_schema():
     """
     Update the database schema with new columns.
     """
-    logger.info("Updating database schema...")
+    # Import Flask app to get application context and database engine
+    from main import app, db
     
-    # Import Flask app to get application context
-    from main import app
-    from models import db
-    
-    # Use application context for database operations
-    with app.app_context():
-        # Get SQLAlchemy connection
-        connection = db.session.connection()
-        
-        # Get raw connection
-        conn = connection.connection
-        
-        # Add new columns to the markets table
-        add_column_if_not_exists(conn, 'markets', 'icon_url', 'VARCHAR(255)')
-        add_column_if_not_exists(conn, 'markets', 'apechain_market_id', 'VARCHAR(255)')
-        
-        # Commit the changes
-        db.session.commit()
-        
-        logger.info("Database schema update complete")
-        
-def main():
-    """
-    Main function to run the database schema update.
-    """
     try:
-        update_db_schema()
-        return 0
+        # Use application context
+        with app.app_context():
+            engine = db.engine
+            
+            # Add icon_url column to markets table
+            add_column_if_not_exists(
+                engine, 
+                "markets", 
+                "icon_url", 
+                Column(String(255))
+            )
+            
+            # Add apechain_market_id column to markets table
+            add_column_if_not_exists(
+                engine, 
+                "markets", 
+                "apechain_market_id", 
+                Column(String(255))
+            )
+            
+            logger.info("Database schema update complete")
+            return True
+            
     except Exception as e:
         logger.error(f"Error updating database schema: {str(e)}")
+        return False
+
+def main():
+    """
+    Main function to update the database schema.
+    """
+    logger.info("Starting database schema update")
+    success = update_database_schema()
+    
+    if success:
+        logger.info("Database schema update completed successfully")
+        return 0
+    else:
+        logger.error("Database schema update failed")
         return 1
 
 if __name__ == "__main__":

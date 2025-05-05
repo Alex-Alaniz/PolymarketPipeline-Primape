@@ -32,7 +32,7 @@ else:
     logger.info("Running in test mode, Slack client not initialized")
 
 
-def post_message(channel_id: str, text: str, blocks: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+def post_message(channel_id: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     Post a message to a Slack channel.
     

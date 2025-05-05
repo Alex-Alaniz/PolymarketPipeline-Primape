@@ -7,24 +7,30 @@ This module provides functions to filter Polymarket markets to only include
 those that are currently active, non-expired, and have valid image assets.
 """
 
-import requests
+import os
+import sys
 import json
 import logging
-import sys
-from datetime import datetime, timezone
-from typing import Dict, Any, List, Optional, Union
-import re
+import requests
+from datetime import datetime
+from typing import Dict, List, Any, Optional
+from urllib.parse import urlparse
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
+logger = logging.getLogger("filter_markets")
 
-logger = logging.getLogger("filter_active_markets")
+# Categories to fetch markets from
+CATEGORIES = {
+    "politics": 50,
+    "sports": 50,
+    "crypto": 30,
+    "entertainment": 40,
+    "science": 30
+}
 
 def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     """
@@ -37,137 +43,69 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     Returns:
         List of market data dictionaries
     """
-    all_markets = []
+    # Base API URL
+    base_url = "https://gamma-api.polymarket.com/markets"
     
-    # Categories to explicitly target for diversity
-    # These match Polymarket's allowed category values
-    categories = [
-        {"query": "politics", "count": 50},
-        {"query": "sports", "count": 50},
-        {"query": "crypto", "count": 30},
-        {"query": "entertainment", "count": 40},
-        {"query": "science", "count": 30}
-    ]
-    
-    # Base parameters for all requests
-    base_params = {
+    # Base parameters
+    params = {
         "closed": "false",
         "archived": "false",
-        "active": "true"
+        "active": "true",
+        "limit": str(limit)
     }
     
-    headers = {
-        "User-Agent": "Mozilla/5.0",
-        "Accept": "application/json"
-    }
+    all_markets = []
     
-    # First get general markets
-    general_url = "https://gamma-api.polymarket.com/markets"
-    params = base_params.copy()
-    params["limit"] = str(limit)  # Convert to string to avoid type error
-    
-    logger.info(f"Fetching general markets from: {general_url}")
-    
-    try:
-        response = requests.get(general_url, params=params, headers=headers, timeout=15)
-        
-        if response.status_code == 200:
-            data = response.json()
-            
-            if isinstance(data, list):
-                # Create a copy of each market with the category explicitly set
-                enriched_markets = []
-                for market in data:
-                    # Make a deep copy to avoid reference issues
-                    market_copy = market.copy()
-                    # Explicitly set the category for tracking
-                    market_copy["fetched_category"] = "general"
-                    enriched_markets.append(market_copy)
-                
-                all_markets.extend(enriched_markets)
-                logger.info(f"Fetched {len(data)} general markets from API")
-            else:
-                logger.error(f"Unexpected response format for general markets: {type(data)}")
-        else:
-            logger.error(f"Failed to fetch general markets: HTTP {response.status_code}")
-    
-    except Exception as e:
-        logger.error(f"Error fetching general markets: {str(e)}")
-    
-    # Now fetch category-specific markets
-    for category in categories:
-        # Use main markets endpoint with category filter
-        category_url = "https://gamma-api.polymarket.com/markets"
-        params = base_params.copy()
-        params["limit"] = str(category["count"])  # Convert to string to avoid type error
-        params["category"] = category["query"]
-        
-        logger.info(f"Fetching {category['query']} markets from: {category_url}")
-        
+    # Fetch markets for each category
+    for category, count in CATEGORIES.items():
         try:
-            response = requests.get(category_url, params=params, headers=headers, timeout=15)
+            category_params = params.copy()
+            category_params["category"] = category
+            category_params["limit"] = str(count)
+            
+            logger.info(f"Fetching {count} {category} markets from Polymarket API")
+            
+            response = requests.get(base_url, params=category_params)
             
             if response.status_code == 200:
-                data = response.json()
+                category_markets = response.json()
                 
-                if isinstance(data, list):
-                    # Create a copy of each market with the category explicitly set
-                    enriched_markets = []
-                    for market in data:
-                        # Make a deep copy to avoid reference issues
-                        market_copy = market.copy()
-                        # Explicitly set the category for tracking
-                        market_copy["fetched_category"] = category["query"]
-                        enriched_markets.append(market_copy)
-                    
-                    all_markets.extend(enriched_markets)
-                    logger.info(f"Fetched {len(data)} {category['query']} markets from API")
-                else:
-                    logger.error(f"Unexpected response format for {category['query']} markets: {type(data)}")
+                # Add category tag to raw data for tracking
+                for market in category_markets:
+                    market["fetched_category"] = category
+                
+                all_markets.extend(category_markets)
+                
+                logger.info(f"Successfully fetched {len(category_markets)} {category} markets")
             else:
-                logger.error(f"Failed to fetch {category['query']} markets: HTTP {response.status_code}")
-        
+                logger.error(f"Failed to fetch {category} markets: Status {response.status_code}")
+                logger.error(f"Response: {response.text}")
+                
         except Exception as e:
-            logger.error(f"Error fetching {category['query']} markets: {str(e)}")
+            logger.error(f"Error fetching {category} markets: {str(e)}")
     
-    # Process markets to prioritize category-specific ones
-    # First, separate general and category-specific markets
-    general_markets = [m for m in all_markets if m.get("fetched_category") == "general"]
-    category_markets = [m for m in all_markets if m.get("fetched_category") != "general"]
+    logger.info(f"Fetched a total of {len(all_markets)} markets across all categories")
     
-    # Group by category
-    category_groups = {}
-    for market in category_markets:
-        category = market.get("fetched_category", "unknown")
-        if category not in category_groups:
-            category_groups[category] = []
-        category_groups[category].append(market)
+    # Generate simplified market representation for debugging
+    simplified = [
+        {
+            "id": market.get("id"),
+            "conditionId": market.get("conditionId"),
+            "question": market.get("question"),
+            "endDate": market.get("endDate"),
+            "category": market.get("fetched_category"),
+            "closed": market.get("closed"),
+            "archived": market.get("archived"),
+            "active": market.get("active")
+        }
+        for market in all_markets
+    ]
     
-    # Log category distribution
-    logger.info("Category distribution of fetched markets:")
-    for category, markets in category_groups.items():
-        logger.info(f"  - {category}: {len(markets)} markets")
-    logger.info(f"  - general: {len(general_markets)} markets")
+    # Save to JSON for debugging if needed
+    # with open("fetched_markets.json", "w") as f:
+    #    json.dump(simplified, f, indent=2)
     
-    # Remove duplicates by ID, prioritizing category-specific markets
-    unique_markets = {}
-    
-    # First add all category-specific markets
-    for market in category_markets:
-        market_id = market.get("id")
-        if market_id:
-            unique_markets[market_id] = market
-    
-    # Then add general markets if they don't already exist
-    for market in general_markets:
-        market_id = market.get("id")
-        if market_id and market_id not in unique_markets:
-            unique_markets[market_id] = market
-    
-    result = list(unique_markets.values())
-    logger.info(f"Combined total of {len(result)} unique markets after removing duplicates")
-    
-    return result
+    return all_markets
 
 def is_valid_url(url: Any) -> bool:
     """
@@ -179,21 +117,14 @@ def is_valid_url(url: Any) -> bool:
     Returns:
         Boolean indicating if the value is a valid URL string
     """
-    # First check if the value is a string and not empty
-    if not url or not isinstance(url, str):
+    if not isinstance(url, str) or not url:
         return False
         
-    # Basic URL validation pattern
-    pattern = re.compile(
-        r'^(?:http|https)://'
-        r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'
-        r'(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'
-        r'localhost|'
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})'
-        r'(?::\d+)?'
-        r'(?:/?|[/?]\S+)$', re.IGNORECASE)
-    
-    return bool(pattern.match(url))
+    try:
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
 
 def filter_active_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -213,80 +144,87 @@ def filter_active_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     Returns:
         Filtered list of markets meeting all criteria
     """
-    now = datetime.now(timezone.utc)
+    if not markets:
+        return []
+        
+    now = datetime.now()
     filtered_markets = []
     
-    # Track filtering stats
-    total_count = len(markets)
-    closed_count = 0
-    archived_count = 0
-    inactive_count = 0
-    expired_count = 0
-    missing_image_count = 0
-    missing_icon_count = 0
-    valid_count = 0
+    # Tracking for debugging
+    filter_reasons = {
+        "closed": 0,
+        "archived": 0,
+        "inactive": 0,
+        "expired": 0,
+        "invalid_image": 0,
+        "invalid_icon": 0,
+        "passed": 0
+    }
     
     for market in markets:
-        # Check if market is closed
-        if market.get("closed", True):
-            closed_count += 1
+        # Check closed
+        if market.get("closed") == True:
+            filter_reasons["closed"] += 1
             continue
             
-        # Check if market is archived
-        if market.get("archived", True):
-            archived_count += 1
+        # Check archived
+        if market.get("archived") == True:
+            filter_reasons["archived"] += 1
             continue
             
-        # Check if market is active
-        if not market.get("active", False):
-            inactive_count += 1
+        # Check active
+        if market.get("active") != True:
+            filter_reasons["inactive"] += 1
             continue
-        
-        # Check if endDate is valid and in the future
+            
+        # Check end date
         end_date_str = market.get("endDate")
         if not end_date_str:
-            expired_count += 1
+            filter_reasons["expired"] += 1
             continue
             
         try:
-            # Parse ISO timestamp, ensuring it's in UTC
-            end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+            # Parse ISO format timestamp (strip Z for compatibility)
+            end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
             
-            # Compare with current time
+            # Check if end date is in the future
             if end_date <= now:
-                expired_count += 1
+                filter_reasons["expired"] += 1
                 continue
-        except (ValueError, TypeError):
-            # Invalid date format
-            expired_count += 1
-            continue
-        
-        # Check if image is valid
-        image_url = market.get("image", "")
-        if not image_url or not is_valid_url(image_url):
-            missing_image_count += 1
+                
+        except Exception as e:
+            logger.warning(f"Error parsing end date {end_date_str}: {str(e)}")
+            filter_reasons["expired"] += 1
             continue
             
-        # Check if icon is valid
-        icon_url = market.get("icon", "")
-        if not icon_url or not is_valid_url(icon_url):
-            missing_icon_count += 1
+        # Check image URL
+        if not is_valid_url(market.get("image")):
+            filter_reasons["invalid_image"] += 1
             continue
-        
-        # Market passes all filters
+            
+        # Check icon URL
+        if not is_valid_url(market.get("icon")):
+            filter_reasons["invalid_icon"] += 1
+            continue
+            
+        # Market passed all filters
         filtered_markets.append(market)
-        valid_count += 1
+        filter_reasons["passed"] += 1
     
-    # Log filtering results
-    logger.info(f"Filtering results:")
-    logger.info(f"  - Total markets: {total_count}")
-    logger.info(f"  - Closed markets filtered out: {closed_count}")
-    logger.info(f"  - Archived markets filtered out: {archived_count}")
-    logger.info(f"  - Inactive markets filtered out: {inactive_count}")
-    logger.info(f"  - Expired markets filtered out: {expired_count}")
-    logger.info(f"  - Markets with missing/invalid image: {missing_image_count}")
-    logger.info(f"  - Markets with missing/invalid icon: {missing_icon_count}")
-    logger.info(f"  - Valid active markets: {valid_count}")
+    # Log filter statistics
+    logger.info(f"Market filtering results:")
+    for reason, count in filter_reasons.items():
+        logger.info(f"  - {reason}: {count}")
+    
+    # Check category distribution
+    categories = {}
+    for market in filtered_markets:
+        category = market.get("fetched_category", "general")
+        categories[category] = categories.get(category, 0) + 1
+    
+    logger.info("Category distribution after filtering:")
+    for category, count in categories.items():
+        logger.info(f"  - {category}: {count} markets")
     
     return filtered_markets
 
@@ -298,21 +236,27 @@ def save_filtered_markets(markets: List[Dict[str, Any]], filename: str = "active
         markets: List of filtered market data dictionaries
         filename: Name of the file to save to
     """
-    if not markets:
-        logger.warning("No valid markets to save.")
-        return
+    # Create a simplified representation for saving
+    simplified = [
+        {
+            "id": market.get("id"),
+            "conditionId": market.get("conditionId"),
+            "question": market.get("question"),
+            "endDate": market.get("endDate"),
+            "category": market.get("fetched_category"),
+            "image": market.get("image"),
+            "icon": market.get("icon")
+        }
+        for market in markets
+    ]
     
     try:
         with open(filename, "w") as f:
-            json.dump({
-                "timestamp": datetime.now().isoformat(),
-                "count": len(markets),
-                "markets": markets
-            }, f, indent=2)
-        
-        logger.info(f"Saved {len(markets)} active markets to {filename}")
+            json.dump(simplified, f, indent=2)
+            
+        logger.info(f"Saved {len(markets)} filtered markets to {filename}")
     except Exception as e:
-        logger.error(f"Error saving markets to file: {str(e)}")
+        logger.error(f"Error saving filtered markets: {str(e)}")
 
 def display_active_markets(markets: List[Dict[str, Any]], max_display: int = 5):
     """
@@ -323,58 +267,51 @@ def display_active_markets(markets: List[Dict[str, Any]], max_display: int = 5):
         max_display: Maximum number of markets to display
     """
     if not markets:
-        logger.info("No active markets to display.")
+        print("No active markets found.")
         return
+        
+    print(f"\nFound {len(markets)} active markets. Displaying first {min(max_display, len(markets))}:\n")
     
-    count = min(len(markets), max_display)
-    
-    logger.info(f"\nSample of {count} active markets:")
-    
-    for i, market in enumerate(markets[:count]):
-        logger.info(f"\nMarket #{i+1}:")
-        logger.info(f"  Question: {market.get('question', 'N/A')}")
-        logger.info(f"  ID: {market.get('id', 'N/A')}")
-        logger.info(f"  Condition ID: {market.get('conditionId', 'N/A')}")
-        logger.info(f"  End Date: {market.get('endDate', 'N/A')}")
-        logger.info(f"  Outcomes: {market.get('outcomes', 'N/A')}")
-        logger.info(f"  Current Prices: {market.get('outcomePrices', 'N/A')}")
-        logger.info(f"  Image URL: {market.get('image', 'N/A')}")
-        logger.info(f"  Volume: {market.get('volume', 'N/A')}")
-        logger.info(f"  Description: {market.get('description', 'N/A')[:100]}..." if market.get('description') else "N/A")
+    for i, market in enumerate(markets[:max_display]):
+        print(f"Market {i+1}:")
+        print(f"  Question: {market.get('question', 'Unknown')}")
+        print(f"  Category: {market.get('fetched_category', 'general')}")
+        print(f"  End Date: {market.get('endDate', 'Unknown')}")
+        print(f"  Image: {market.get('image', 'None')}")
+        print(f"  Icon: {market.get('icon', 'None')}")
+        print()
 
 def main():
     """
     Main function to run the market filtering.
     """
-    logger.info("Starting active market filter")
-    
-    # Fetch markets from Polymarket API - using the default limit
+    # Fetch markets from Polymarket API
+    logger.info("Fetching markets from Polymarket API")
     markets = fetch_markets()
     
     if not markets:
-        logger.error("No markets fetched. Exiting.")
-        return
+        logger.error("Failed to fetch any markets from API")
+        return 1
+        
+    logger.info(f"Successfully fetched {len(markets)} markets from API")
     
-    # Filter markets based on criteria
+    # Filter active markets
+    logger.info("Filtering active markets")
     active_markets = filter_active_markets(markets)
     
-    # Save filtered markets to file
-    save_filtered_markets(active_markets, "data/active_markets.json")
+    if not active_markets:
+        logger.error("No active markets found after filtering")
+        return 1
+        
+    logger.info(f"Successfully filtered to {len(active_markets)} active markets")
     
-    # Display sample of active markets with category breakdown
-    logger.info("\nMarket category breakdown:")
-    categories = {}
-    for market in active_markets:
-        category = market.get("fetched_category", "general")
-        categories[category] = categories.get(category, 0) + 1
+    # Save filtered markets
+    save_filtered_markets(active_markets)
     
-    for category, count in categories.items():
-        logger.info(f"  - {category.capitalize()}: {count} markets")
-    
-    # Display sample of active markets
+    # Display results
     display_active_markets(active_markets)
     
-    logger.info("\nActive market filtering complete")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

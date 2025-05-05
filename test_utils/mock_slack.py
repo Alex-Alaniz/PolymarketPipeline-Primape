@@ -23,7 +23,7 @@ def is_test_environment():
     """Check if we're in test environment."""
     return os.environ.get("TESTING") == "true"
 
-def post_message(channel_id: str, text: str, blocks: List[Dict[str, Any]] = None) -> Dict[str, Any]:
+def post_message(channel_id: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     Mock implementation of posting a message to Slack.
     
@@ -136,23 +136,25 @@ def get_channel_messages(limit: int = 10) -> List[Dict[str, Any]]:
     messages.sort(key=lambda m: m["ts"], reverse=True)
     return messages[:limit]
 
-def approve_test_market(message_id: str):
+def approve_test_market(message_id: Optional[str]):
     """
     Helper function to add an approval reaction to a test message.
     
     Args:
         message_id: The message timestamp (ts)
     """
-    add_reaction(message_id, "white_check_mark", "mock_approver")
+    if message_id:
+        add_reaction(message_id, "white_check_mark", "mock_approver")
 
-def reject_test_market(message_id: str):
+def reject_test_market(message_id: Optional[str]):
     """
     Helper function to add a rejection reaction to a test message.
     
     Args:
         message_id: The message timestamp (ts)
     """
-    add_reaction(message_id, "x", "mock_rejector")
+    if message_id:
+        add_reaction(message_id, "x", "mock_rejector")
 
 def clear_test_data():
     """Clear all mock data."""
