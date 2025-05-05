@@ -42,13 +42,13 @@ class MarketTransformer:
     def get_patterns(self) -> Dict[str, str]:
         """Define patterns for different types of related markets"""
         return {
-            "top_goalscorer": r"Will (.*) be the top goalscorer in the EPL\?",
-            "league_winner": r"Will (.*) win (La Liga|the Premier League|Serie A|Bundesliga|Ligue 1)\?",
-            "president": r"Will (.*) be (elected|the next) president of (.*)\?",
-            "company_market_cap": r"Will (.*) be the largest company in the world by market cap",
-            "oscar_winner": r"Will (.*) win the Oscar for (Best Picture|Best Director|Best Actor|Best Actress)",
-            "election_winner": r"Will (.*) win the (.*) election\?",
-            "premier_league_top_scorer": r"Will (.*) be the English Premier League top scorer\?",
+            "top_goalscorer": r"(?i)will\s+(.*?)\s+be\s+the\s+top\s+goalscorer\s+in\s+the\s+epl\s*\?",
+            "league_winner": r"(?i)will\s+(.*?)\s+win\s+(la\s+liga|the\s+premier\s+league|serie\s+a|bundesliga|ligue\s+1)\s*\?",
+            "president": r"(?i)will\s+(.*?)\s+be\s+(elected|the\s+next)\s+president\s+of\s+(.*?)\s*\?",
+            "company_market_cap": r"(?i)will\s+(.*?)\s+be\s+the\s+largest\s+company\s+in\s+the\s+world\s+by\s+market\s+cap",
+            "oscar_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+oscar\s+for\s+(best\s+picture|best\s+director|best\s+actor|best\s+actress)",
+            "election_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+(.*?)\s+election\s*\?",
+            "premier_league_top_scorer": r"(?i)will\s+(.*?)\s+be\s+the\s+(english\s+premier\s+league|epl)\s+top\s+scorer\s*\?",
         }
     
     def group_related_markets(self, markets: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], str, str]]:
@@ -80,6 +80,7 @@ class MarketTransformer:
                     # Store original question for capitalization preservation
                     grouped_markets[base_question].append((market, question, entity))
                     matched = True
+                    logger.info(f"Matched pattern '{pattern_name}': {question} -> entity: {entity}")
                     break
             
             # If no pattern matched, treat as individual market
@@ -90,6 +91,12 @@ class MarketTransformer:
         # Second pass: determine which groups are actually multiple-option markets
         result = []
         for base_question, market_group in grouped_markets.items():
+            # Log the groups we've found
+            if len(market_group) > 1:
+                logger.info(f"Found potential market group with {len(market_group)} markets: {base_question}")
+                for i, (m, q, e) in enumerate(market_group):
+                    logger.info(f"  Market {i+1}: {q} -> entity: {e}")
+                    
             # If only one market in the group, it's a regular market
             if len(market_group) == 1:
                 market, original_question, _ = market_group[0]
