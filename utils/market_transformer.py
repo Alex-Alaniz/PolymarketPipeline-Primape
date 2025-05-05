@@ -48,13 +48,24 @@ class MarketTransformer:
     def get_patterns(self) -> Dict[str, str]:
         """Define patterns for different types of related markets"""
         return {
-            "top_goalscorer": r"(?i)will\s+(.*?)\s+be\s+the\s+top\s+goalscorer\s+in\s+the\s+epl\s*\?",
-            "league_winner": r"(?i)will\s+(.*?)\s+win\s+(la\s+liga|the\s+premier\s+league|serie\s+a|bundesliga|ligue\s+1)\s*\?",
-            "president": r"(?i)will\s+(.*?)\s+be\s+(elected|the\s+next)\s+president\s+of\s+(.*?)\s*\?",
+            # EPL Top Goalscorer pattern - matches both "top goalscorer in the EPL" and variants
+            "epl_top_goalscorer": r"(?i)will\s+(.*?)\s+be\s+the\s+(?:top\s+goalscorer|top\s+scorer)\s+in\s+the\s+(?:EPL|English\s+Premier\s+League)\s*\?",
+            
+            # Champions League Winner pattern
+            "champions_league_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+UEFA\s+Champions\s+League\s*\?",
+            
+            # League winner patterns for various leagues
+            "la_liga_winner": r"(?i)will\s+(.*?)\s+win\s+(?:La\s+Liga|the\s+La\s+Liga)\s*\?",
+            "premier_league_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+Premier\s+League\s*\?",
+            "serie_a_winner": r"(?i)will\s+(.*?)\s+win\s+Serie\s+A\s*\?",
+            "bundesliga_winner": r"(?i)will\s+(.*?)\s+win\s+(?:the\s+)?Bundesliga\s*\?",
+            "ligue_1_winner": r"(?i)will\s+(.*?)\s+win\s+Ligue\s+1\s*\?",
+            
+            # Other common patterns
+            "president": r"(?i)will\s+(.*?)\s+be\s+(?:elected|the\s+next)\s+president\s+of\s+(.*?)\s*\?",
             "company_market_cap": r"(?i)will\s+(.*?)\s+be\s+the\s+largest\s+company\s+in\s+the\s+world\s+by\s+market\s+cap",
-            "oscar_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+oscar\s+for\s+(best\s+picture|best\s+director|best\s+actor|best\s+actress)",
+            "oscar_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+Oscar\s+for\s+(Best\s+Picture|Best\s+Director|Best\s+Actor|Best\s+Actress)",
             "election_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+(.*?)\s+election\s*\?",
-            "premier_league_top_scorer": r"(?i)will\s+(.*?)\s+be\s+the\s+(english\s+premier\s+league|epl)\s+top\s+scorer\s*\?",
         }
     
     def group_related_markets(self, markets: List[Dict[str, Any]]) -> List[Tuple[Dict[str, Any], str, str]]:
@@ -129,17 +140,19 @@ class MarketTransformer:
                     _, original_question, _ = market_group[0]
                     
                     # For specific patterns, create a better title
-                    if "goalscorer" in base_question or "english premier league top scorer" in base_question.lower():
+                    if "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
                         group_title = "English Premier League Top Scorer"
-                    elif "win la liga" in base_question:
+                    elif "uefa champions league" in base_question.lower():
+                        group_title = "Champions League Winner"
+                    elif "win la liga" in base_question.lower():
                         group_title = "La Liga Winner"
-                    elif "win the premier league" in base_question:
+                    elif "win the premier league" in base_question.lower():
                         group_title = "Premier League Winner"
-                    elif "win serie a" in base_question:
+                    elif "win serie a" in base_question.lower():
                         group_title = "Serie A Winner"
-                    elif "win bundesliga" in base_question:
+                    elif "win bundesliga" in base_question.lower():
                         group_title = "Bundesliga Winner"
-                    elif "win ligue 1" in base_question:
+                    elif "win ligue 1" in base_question.lower():
                         group_title = "Ligue 1 Winner"
                     elif "president of" in base_question:
                         country = re.search(r"president of (.*)\?", original_question, re.IGNORECASE)
