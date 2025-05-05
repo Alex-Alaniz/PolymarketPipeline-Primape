@@ -9,24 +9,19 @@ Market table for processing by the pipeline.
 """
 
 import os
-import sys
-import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
 from datetime import datetime
+from typing import Dict, List, Any, Optional, Tuple
+import json
 
-from models import db, ProcessedMarket, Market
-from utils.messaging import check_message_reactions
+from models import db, Market, ProcessedMarket, ApprovalEvent
+from utils.messaging import get_channel_messages, get_message_reactions
 
-# Set up logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-
 logger = logging.getLogger("market_approvals")
 
 def check_market_approvals() -> Tuple[int, int, int]:
@@ -36,75 +31,99 @@ def check_market_approvals() -> Tuple[int, int, int]:
     Returns:
         Tuple[int, int, int]: Count of (pending, approved, rejected) markets
     """
-    # Initialize counters
-    pending_count = 0
-    approved_count = 0
-    rejected_count = 0
-    
-    # Get all markets that have been posted to Slack but don't have approval status yet
+    # Get markets that have been posted to Slack but not yet approved/rejected
     pending_markets = ProcessedMarket.query.filter(
         ProcessedMarket.posted == True,
-        ProcessedMarket.message_id.isnot(None),
-        ProcessedMarket.approved.is_(None)
+        ProcessedMarket.approved == None
     ).all()
     
-    logger.info(f"Checking approval status for {len(pending_markets)} pending markets")
+    logger.info(f"Checking approvals for {len(pending_markets)} pending markets")
+    
+    # Track counts
+    still_pending = 0
+    approved = 0
+    rejected = 0
     
     for market in pending_markets:
+        # Skip if no message ID (shouldn't happen)
         if not market.message_id:
+            logger.warning(f"Market {market.condition_id} has no message ID")
+            still_pending += 1
             continue
             
-        # Check the reaction status on the Slack message
-        status, user_id = check_message_reactions(market.message_id)
+        # Get reactions for this message
+        reactions = get_message_reactions(market.message_id)
         
-        # Update the market based on the reaction status
-        if status == "approved":
+        # Check for approval (white_check_mark) or rejection (x) reactions
+        has_approval = False
+        has_rejection = False
+        approver = None
+        
+        for reaction in reactions:
+            if reaction.get("name") == "white_check_mark":
+                has_approval = True
+                # Get first user who reacted as approver
+                approver = reaction.get("users", ["unknown"])[0]
+            elif reaction.get("name") == "x":
+                has_rejection = True
+                # Get first user who reacted as rejector
+                approver = reaction.get("users", ["unknown"])[0]
+        
+        # Process based on reactions
+        if has_approval and not has_rejection:
+            # Market is approved
             market.approved = True
             market.approval_date = datetime.utcnow()
-            market.approver = user_id
-            approved_count += 1
+            market.approver = approver
             
-            # Create entry in the main Market table with both image and icon URLs
-            if market.raw_data and create_market_entry(market.raw_data):
-                logger.info(f"Created Market entry for approved market {market.condition_id}")
+            # Create entry in main Market table
+            success = create_market_entry(market.raw_data)
+            
+            # Create approval event
+            event = ApprovalEvent(
+                market_id=market.condition_id,
+                stage="initial",
+                status="approved",
+                message_id=market.message_id
+            )
+            db.session.add(event)
+            
+            # Log result
+            if success:
+                logger.info(f"Market {market.condition_id} approved by {approver}")
+                approved += 1
             else:
-                logger.warning(f"Failed to create Market entry for {market.condition_id}")
+                logger.error(f"Failed to create Market entry for {market.condition_id}")
+                still_pending += 1
                 
-        elif status == "rejected":
+        elif has_rejection:
+            # Market is rejected
             market.approved = False
             market.approval_date = datetime.utcnow()
-            market.approver = user_id
-            rejected_count += 1
+            market.approver = approver
             
-        elif status == "timeout":
-            # Handle timeout as rejection
-            market.approved = False
-            market.approval_date = datetime.utcnow()
-            market.approver = "TIMEOUT"
-            rejected_count += 1
+            # Create rejection event
+            event = ApprovalEvent(
+                market_id=market.condition_id,
+                stage="initial",
+                status="rejected",
+                message_id=market.message_id
+            )
+            db.session.add(event)
             
-        else:  # still pending
-            pending_count += 1
+            logger.info(f"Market {market.condition_id} rejected by {approver}")
+            rejected += 1
+            
+        else:
+            # Still pending
+            still_pending += 1
     
-    # Now check for any previously approved markets that need to be marked as ready for deployment
-    newly_approved_markets = Market.query.filter_by(status="approved").all()
-    for market in newly_approved_markets:
-        market.status = "new"  # Mark as new to be picked up by the deployment process
-        logger.info(f"Marked market {market.id} as ready for deployment")
-        
-    # Commit all changes to the database
+    # Save all changes
     db.session.commit()
     
-    # Also count markets that have been approved previously but not counted yet
-    already_approved = ProcessedMarket.query.filter(
-        ProcessedMarket.approved == True,
-        ProcessedMarket.approval_date.isnot(None)
-    ).count()
-    
-    logger.info(f"Market approval status: {approved_count} new approvals, {rejected_count} new rejections, {pending_count} still pending")
-    logger.info(f"Total approved markets to date: {already_approved}")
-    
-    return pending_count, approved_count, rejected_count
+    logger.info(f"Approval results: {still_pending} still pending, {approved} approved, {rejected} rejected")
+    return (still_pending, approved, rejected)
+
 
 def create_market_entry(raw_data: Dict[str, Any]) -> bool:
     """
@@ -117,67 +136,60 @@ def create_market_entry(raw_data: Dict[str, Any]) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Check if this market already exists
-        existing = Market.query.filter_by(id=raw_data.get("id")).first()
+        # Extract relevant fields from raw data
+        market_id = raw_data.get("conditionId")
+        
+        if not market_id:
+            logger.error("Raw data missing conditionId")
+            return False
+            
+        # Check if market already exists
+        existing = Market.query.get(market_id)
         if existing:
-            logger.info(f"Market {raw_data.get('id')} already exists in Market table")
+            logger.info(f"Market {market_id} already exists in Markets table")
             return True
             
-        # Parse options from string representation to list
-        options_str = raw_data.get("outcomes", "[]")
-        try:
-            options = json.loads(options_str)
-        except:
-            # Default to binary Yes/No if cannot parse
-            options = ["Yes", "No"]
-            
-        # Create a new Market entry
+        # Create new market entry
         market = Market(
-            id=raw_data.get("id"),
+            id=market_id,
             question=raw_data.get("question"),
-            type="binary" if options == ["Yes", "No"] else "multiple",
-            category=raw_data.get("events", [{}])[0].get("slug") if raw_data.get("events") else None,
-            sub_category=None,  # No subcategory in the API data
-            expiry=int(datetime.fromisoformat(raw_data.get("endDate", "").replace('Z', '+00:00')).timestamp()) if raw_data.get("endDate") else None,
-            original_market_id=raw_data.get("conditionId"),
-            options=options_str,
+            type="binary", # Default to binary for now
+            category=raw_data.get("fetched_category", "general"),
+            sub_category=raw_data.get("subCategory"),
+            expiry=int(datetime.fromisoformat(raw_data.get("endDate", "").replace("Z", "+00:00")).timestamp()),
+            original_market_id=raw_data.get("id"),
+            options=json.dumps(raw_data.get("outcomes", ["Yes", "No"])),
             status="new",
-            banner_path=raw_data.get("image"),  # Store the original Polymarket image URL
-            banner_uri=raw_data.get("image"),  # Store the same URL as URI for frontend use
-            icon_url=raw_data.get("icon"),  # Store the icon URL for frontend use
+            icon_url=raw_data.get("icon")
         )
         
         db.session.add(market)
         db.session.commit()
-        logger.info(f"Created new market in Market table: {market.id}")
+        
+        logger.info(f"Created market entry for {market_id}")
         return True
         
     except Exception as e:
         logger.error(f"Error creating market entry: {str(e)}")
-        db.session.rollback()
         return False
+
 
 def main():
     """
     Main function to check market approvals.
     """
-    logger.info("Starting market approval check")
-    
     # Import Flask app to get application context
     from main import app
     
-    try:
-        # Use application context for database operations
-        with app.app_context():
-            # Check for approvals/rejections
-            pending, approved, rejected = check_market_approvals()
+    # Use application context for database operations
+    with app.app_context():
+        pending, approved, rejected = check_market_approvals()
         
-        logger.info(f"Completed market approval check: {approved} approved, {rejected} rejected, {pending} pending")
-        return 0
-        
-    except Exception as e:
-        logger.error(f"Error checking market approvals: {str(e)}")
-        return 1
+        # Log results
+        print(f"Market approval results: {pending} pending, {approved} approved, {rejected} rejected")
+    
+    return 0
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

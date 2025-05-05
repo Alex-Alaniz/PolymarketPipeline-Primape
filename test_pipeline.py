@@ -92,12 +92,23 @@ def simulate_market_approval(processed_market):
     """Simulate the approval of a market in Slack."""
     logger.info(f"Simulating approval for market: {processed_market.question}")
     
-    # Mark as posted to slack
-    processed_market.posted = True
-    processed_market.message_id = f"test-message-{int(time.time())}"
-    db.session.commit()
+    # Post to mock Slack
+    from utils.messaging import post_market_for_approval
     
-    # Simulate approval
+    # Check if market is already posted
+    if not processed_market.posted or not processed_market.message_id:
+        # Use the raw data to post the market
+        message_id = post_market_for_approval(processed_market.raw_data)
+        
+        # Mark as posted to slack
+        processed_market.posted = True
+        processed_market.message_id = message_id
+        db.session.commit()
+    
+    # Add the approval reaction
+    approve_test_market(processed_market.message_id)
+    
+    # Update the database record
     processed_market.approved = True
     processed_market.approval_date = datetime.utcnow()
     processed_market.approver = "TEST_USER"

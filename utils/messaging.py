@@ -1,203 +1,145 @@
-#!/usr/bin/env python3
-
 """
-Messaging utilities for Polymarket pipeline.
+Slack messaging utilities.
 
-This module provides functions for posting messages to messaging platforms 
-(Slack/Discord) and checking for reactions.
+This module provides functions for posting messages to Slack and handling reactions.
 """
 
 import os
+import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
+from typing import Dict, List, Any, Optional, Tuple
+from datetime import datetime
+
 from slack_sdk import WebClient
 from slack_sdk.errors import SlackApiError
 
-logger = logging.getLogger("messaging")
+logger = logging.getLogger(__name__)
 
-# Initialize the Slack client using the bot token
-SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")
-SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
+# Check if we're in test mode
+def is_test_environment():
+    """Check if we're in test environment."""
+    return os.environ.get("TESTING") == "true"
 
-slack_client = WebClient(token=SLACK_BOT_TOKEN) if SLACK_BOT_TOKEN else None
+# Initialize Slack client
+slack_token = os.environ.get("SLACK_BOT_TOKEN")
+slack_channel_id = os.environ.get("SLACK_CHANNEL_ID")
 
-# Reaction emojis for approval/rejection
-APPROVE_EMOJI = "white_check_mark"
-REJECT_EMOJI = "x"
+if slack_token and not is_test_environment():
+    slack_client = WebClient(token=slack_token)
+else:
+    # In test mode, we'll use mock functions
+    slack_client = None
+    logger.info("Running in test mode, Slack client not initialized")
 
-def post_market_for_approval(market: Dict[str, Any]) -> Tuple[bool, Optional[str]]:
+
+def post_message(channel_id: str, text: str, blocks: List[Dict[str, Any]] = None) -> Dict[str, Any]:
     """
-    Post a market to Slack for approval.
+    Post a message to a Slack channel.
     
     Args:
-        market: Market data dictionary
+        channel_id: The Slack channel ID to post to
+        text: Plain text message content
+        blocks: Rich layout blocks (optional)
         
     Returns:
-        Tuple of (success, message_id) where message_id is the Slack timestamp
+        Dict with response containing the message timestamp (ts)
     """
-    if not slack_client or not SLACK_CHANNEL_ID:
-        logger.error("Slack client or channel ID not configured.")
-        return False, None
+    # If in test mode, use mock implementation
+    if is_test_environment():
+        from test_utils.mock_slack import post_message as mock_post_message
+        return mock_post_message(channel_id, text, blocks)
     
     try:
-        # Format the message blocks
-        blocks = [
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": "🏦 New Market for Approval",
-                    "emoji": True
-                }
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Question:* {market.get('question', 'N/A')}"
-                }
-            },
-            {
-                "type": "section",
-                "fields": [
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*ID:* {market.get('id', 'N/A')}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Condition ID:* {market.get('conditionId', 'N/A')}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*End Date:* {market.get('endDate', 'N/A')}"
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": f"*Outcomes:* {market.get('outcomes', 'N/A')}"
-                    }
-                ]
-            },
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*Description:* {market.get('description', 'N/A')[:200]}..."
-                }
-            }
-        ]
-        
-        # Add image if available
-        image_url = market.get("image")
-        if image_url and isinstance(image_url, str):
-            blocks.append({
-                "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Market Image",
-                    "emoji": True
-                },
-                "image_url": image_url,
-                "alt_text": "Market image"
-            })
-        
-        # Add instructions for approval/rejection
-        blocks.append({
-            "type": "context",
-            "elements": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"React with :{APPROVE_EMOJI}: to approve or :{REJECT_EMOJI}: to reject this market."
-                }
-            ]
-        })
-        
-        # Post the message to Slack
+        # Default to configured channel if none provided
+        if not channel_id and slack_channel_id:
+            channel_id = slack_channel_id
+            
+        if not channel_id:
+            logger.error("No Slack channel ID provided")
+            return {"ok": False, "error": "No channel ID provided"}
+            
+        # Post message to Slack
         response = slack_client.chat_postMessage(
-            channel=SLACK_CHANNEL_ID,
-            blocks=blocks,
-            text=f"New market for approval: {market.get('question', 'N/A')}"
+            channel=channel_id,
+            text=text,
+            blocks=blocks if blocks else None
         )
         
-        # Return the timestamp (used as message ID in Slack)
-        message_id = response.get("ts")
-        logger.info(f"Posted market {market.get('id')} to Slack, message ID: {message_id}")
-        return True, message_id
+        logger.info(f"Posted message to Slack channel {channel_id}, ts: {response.get('ts')}")
+        return response.data
         
     except SlackApiError as e:
-        logger.error(f"Error posting to Slack: {e}")
-        return False, None
-    except Exception as e:
-        logger.error(f"Unexpected error posting to Slack: {e}")
-        return False, None
+        logger.error(f"Error posting message to Slack: {str(e)}")
+        return {"ok": False, "error": str(e)}
 
-def check_message_reactions(message_id: str, timeout_minutes: int = 30) -> Tuple[str, Optional[str]]:
+
+def get_message_reactions(message_id: str) -> List[Dict[str, Any]]:
     """
-    Check for approval/rejection reactions on a Slack message.
+    Get reactions for a message.
     
     Args:
-        message_id: Slack message timestamp ID
-        timeout_minutes: Minutes after which the approval times out
+        message_id: The message timestamp (ts)
         
     Returns:
-        Tuple of (status, user_id) where:
-            status is one of: "approved", "rejected", "pending", "timeout"
-            user_id is the ID of the user who approved/rejected (or None)
+        List of reaction objects with name and users
     """
-    if not slack_client or not SLACK_CHANNEL_ID:
-        logger.error("Slack client or channel ID not configured.")
-        return "pending", None
+    # If in test mode, use mock implementation
+    if is_test_environment():
+        from test_utils.mock_slack import get_message_reactions as mock_get_reactions
+        return mock_get_reactions(message_id)
     
     try:
-        # Check if message has timed out
-        message_response = slack_client.conversations_history(
-            channel=SLACK_CHANNEL_ID,
-            latest=message_id,
-            limit=1,
-            inclusive=True
+        # Get reactions
+        response = slack_client.reactions_get(
+            channel=slack_channel_id,
+            timestamp=message_id
         )
         
-        if not message_response.get("messages"):
-            logger.warning(f"Message {message_id} not found in channel.")
-            return "pending", None
+        if response.get("ok") and response.get("message"):
+            return response.get("message", {}).get("reactions", [])
+        else:
+            logger.warning(f"No reactions found for message {message_id}")
+            return []
             
-        message = message_response["messages"][0]
-        message_time = float(message_id)
-        current_time = datetime.now().timestamp()
-        
-        # Check if the message has timed out
-        if current_time - message_time > timeout_minutes * 60:
-            logger.info(f"Message {message_id} has timed out after {timeout_minutes} minutes.")
-            return "timeout", None
-        
-        # Check for reactions
-        reactions = message.get("reactions", [])
-        
-        for reaction in reactions:
-            # Check for approval emoji
-            if reaction.get("name") == APPROVE_EMOJI:
-                # Get the first user who reacted with approval
-                approver = reaction.get("users", [])[0] if reaction.get("users") else None
-                return "approved", approver
-            
-            # Check for rejection emoji
-            if reaction.get("name") == REJECT_EMOJI:
-                # Get the first user who reacted with rejection
-                rejecter = reaction.get("users", [])[0] if reaction.get("users") else None
-                return "rejected", rejecter
-        
-        # No approval/rejection reactions found
-        return "pending", None
-        
     except SlackApiError as e:
-        logger.error(f"Error checking reactions in Slack: {e}")
-        return "pending", None
-    except Exception as e:
-        logger.error(f"Unexpected error checking reactions: {e}")
-        return "pending", None
+        logger.error(f"Error checking reactions in Slack: {str(e)}")
+        return []
 
-def post_markets_to_slack(markets: List[Dict[str, Any]], max_to_post: int = 5) -> List[Dict[str, Any]]:
+
+def get_channel_messages(limit: int = 10) -> List[Dict[str, Any]]:
+    """
+    Get recent messages from the configured channel.
+    
+    Args:
+        limit: Maximum number of messages to return
+        
+    Returns:
+        List of message objects
+    """
+    # If in test mode, use mock implementation
+    if is_test_environment():
+        from test_utils.mock_slack import get_channel_messages as mock_get_messages
+        return mock_get_messages(limit)
+    
+    try:
+        # Get channel history
+        response = slack_client.conversations_history(
+            channel=slack_channel_id,
+            limit=limit
+        )
+        
+        if response.get("ok") and response.get("messages"):
+            return response.get("messages", [])
+        else:
+            logger.warning("No messages found in channel history")
+            return []
+            
+    except SlackApiError as e:
+        logger.error(f"Error checking reactions in Slack: {str(e)}")
+        return []
+
+
+def post_markets_to_slack(markets: List[Dict[str, Any]], max_to_post: int = 5) -> List[Tuple[Dict[str, Any], Optional[str]]]:
     """
     Post multiple markets to Slack for approval.
     
@@ -206,27 +148,121 @@ def post_markets_to_slack(markets: List[Dict[str, Any]], max_to_post: int = 5) -
         max_to_post: Maximum number of markets to post
         
     Returns:
-        List of posted markets with message IDs
+        List of tuples with (market_data, message_id) pairs
     """
-    posted_markets = []
+    if not markets:
+        logger.warning("No markets to post")
+        return []
+        
+    posted = []
     count = 0
     
     for market in markets:
         if count >= max_to_post:
             break
             
-        success, message_id = post_market_for_approval(market)
+        message_id = post_market_for_approval(market)
         
-        if success and message_id:
-            # Add message ID to market data
-            market_with_msg = market.copy()
-            market_with_msg["message_id"] = message_id
-            posted_markets.append(market_with_msg)
+        if message_id:
+            posted.append((market, message_id))
             count += 1
             
-            # Add a small delay between posts to avoid rate limiting
-            import time
-            time.sleep(1)
+    logger.info(f"Posted {len(posted)} markets to Slack for approval")
+    return posted
+
+
+def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
+    """
+    Post a market to Slack for approval.
     
-    logger.info(f"Posted {count} markets to Slack for approval.")
-    return posted_markets
+    Args:
+        market_data: The market data dictionary
+        
+    Returns:
+        Message timestamp (ts) if successful, None otherwise
+    """
+    if not market_data:
+        logger.error("No market data provided")
+        return None
+        
+    # Format message text
+    text = f"*New Market for Approval*\n\n*Question:* {market_data.get('question', 'N/A')}"
+    
+    # Create rich message blocks
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "New Market for Approval"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Question:* {market_data.get('question', 'N/A')}"
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Category:* {market_data.get('fetched_category', 'general')}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*End Date:* {market_data.get('endDate', 'N/A')}"
+                }
+            ]
+        }
+    ]
+    
+    # Add image if available
+    if market_data.get("image"):
+        blocks.append(
+            {
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Market Image"
+                },
+                "image_url": market_data.get("image"),
+                "alt_text": "Market Image"
+            }
+        )
+    
+    # Add icon if available and different from image
+    if market_data.get("icon") and market_data.get("icon") != market_data.get("image"):
+        blocks.append(
+            {
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Market Icon"
+                },
+                "image_url": market_data.get("icon"),
+                "alt_text": "Market Icon"
+            }
+        )
+    
+    # Add approval instructions
+    blocks.append(
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "React with :white_check_mark: to approve or :x: to reject."
+            }
+        }
+    )
+    
+    # Post message to Slack
+    response = post_message(slack_channel_id, text, blocks)
+    
+    if response.get("ok"):
+        return response.get("ts")
+    else:
+        logger.error(f"Failed to post market for approval: {response.get('error')}")
+        return None

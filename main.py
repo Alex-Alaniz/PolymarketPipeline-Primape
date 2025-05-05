@@ -277,6 +277,9 @@ class LogCapture:
 
 def run_pipeline():
     """Run the pipeline in a separate thread"""
+    # Skip if we're in testing mode
+    if os.environ.get("TESTING") == "true":
+        return
     # Redirect stdout and stderr to our log capture
     log_capture = LogCapture()
     old_stdout = sys.stdout
