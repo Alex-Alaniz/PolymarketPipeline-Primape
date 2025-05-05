@@ -16,6 +16,7 @@ The pipeline follows these steps:
 
 import os
 import sys
+import json
 import logging
 import time
 from typing import Dict, Any, List, Optional, Tuple
@@ -26,6 +27,7 @@ from models import db, Market, PipelineRun, ProcessedMarket
 from filter_active_markets import fetch_markets, filter_active_markets
 from fetch_active_markets_with_tracker import filter_new_markets, post_new_markets
 from check_market_approvals import check_market_approvals
+from utils.apechain import deploy_market_to_apechain
 
 # Configure logging
 logging.basicConfig(
@@ -108,10 +110,17 @@ class PolymarketPipeline:
                 self.stats["markets_rejected"] = rejected
                 logger.info(f"Approval status: {approved} approved, {rejected} rejected, {pending} pending")
                 
+                # Step 4: Deploy approved markets to Apechain
+                if approved > 0:
+                    logger.info("Step 4: Deploying approved markets to Apechain")
+                    self._deploy_markets_to_apechain()
+                else:
+                    logger.info("Step 4: No markets to deploy")
+                
                 # Update database run record if available
                 self._update_db_run()
             
-            # Step 4: Post summary report
+            # Step 5: Post summary report
             self._post_summary()
             
             logger.info("Pipeline completed successfully")
@@ -140,6 +149,68 @@ class PolymarketPipeline:
                 logger.info(f"Updated pipeline run record #{self.db_run_id}")
         except Exception as e:
             logger.error(f"Failed to update pipeline run record: {str(e)}")
+    
+    def _deploy_markets_to_apechain(self):
+        """
+        Deploy approved markets to Apechain smart contract.
+        """
+        # Query for markets that are approved but not yet deployed to Apechain
+        approved_markets = Market.query.filter(
+            Market.status == "new",
+            Market.apechain_market_id.is_(None)
+        ).all()
+        
+        logger.info(f"Found {len(approved_markets)} approved markets ready for deployment")
+        
+        deployed_count = 0
+        failed_count = 0
+        
+        for market in approved_markets:
+            logger.info(f"Deploying market: {market.id} - {market.question}")
+            
+            # Parse options from JSON string
+            try:
+                options = json.loads(market.options) if isinstance(market.options, str) else market.options
+            except:
+                options = ["Yes", "No"]  # Default to binary market if options can't be parsed
+                
+            # Calculate duration based on expiry
+            if market.expiry:
+                now = int(datetime.utcnow().timestamp())
+                duration_seconds = max(1, market.expiry - now)  # Ensure at least 1 second
+                duration_days = int(duration_seconds / (24 * 60 * 60)) + 1  # Round up to days
+            else:
+                duration_days = 30  # Default 30 days if no expiry
+                
+            # Deploy to Apechain
+            success, market_id, error = deploy_market_to_apechain(
+                question=market.question,
+                options=options,
+                duration_days=duration_days
+            )
+            
+            if success and market_id:
+                # Update market with Apechain ID and status
+                market.apechain_market_id = market_id
+                market.status = "deployed"
+                market.updated_at = datetime.utcnow()
+                deployed_count += 1
+                logger.info(f"Successfully deployed market to Apechain: {market_id}")
+            else:
+                # Update market with failure status
+                market.status = "failed"
+                market.updated_at = datetime.utcnow()
+                failed_count += 1
+                logger.error(f"Failed to deploy market: {error}")
+                
+        # Commit all updates
+        db.session.commit()
+        
+        # Update stats
+        self.stats["markets_deployed"] = deployed_count
+        self.stats["markets_failed"] = failed_count
+        
+        logger.info(f"Deployment results: {deployed_count} successful, {failed_count} failed")
     
     def _post_summary(self):
         """

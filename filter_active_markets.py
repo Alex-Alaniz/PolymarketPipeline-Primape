@@ -63,7 +63,7 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     # First get general markets
     general_url = "https://gamma-api.polymarket.com/markets"
     params = base_params.copy()
-    params["limit"] = limit
+    params["limit"] = str(limit)  # Convert to string to avoid type error
     
     logger.info(f"Fetching general markets from: {general_url}")
     
@@ -88,7 +88,7 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     for category in categories:
         category_url = "https://gamma-api.polymarket.com/markets/search"
         params = base_params.copy()
-        params["limit"] = category["count"]
+        params["limit"] = str(category["count"])  # Convert to string to avoid type error
         params["q"] = category["query"]
         
         logger.info(f"Fetching {category['query']} markets from: {category_url}")

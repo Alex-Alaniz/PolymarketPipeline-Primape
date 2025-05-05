@@ -64,7 +64,7 @@ def check_market_approvals() -> Tuple[int, int, int]:
             market.approver = user_id
             approved_count += 1
             
-            # Create entry in the main Market table
+            # Create entry in the main Market table with both image and icon URLs
             if market.raw_data and create_market_entry(market.raw_data):
                 logger.info(f"Created Market entry for approved market {market.condition_id}")
             else:
@@ -86,10 +86,24 @@ def check_market_approvals() -> Tuple[int, int, int]:
         else:  # still pending
             pending_count += 1
     
+    # Now check for any previously approved markets that need to be marked as ready for deployment
+    newly_approved_markets = Market.query.filter_by(status="approved").all()
+    for market in newly_approved_markets:
+        market.status = "new"  # Mark as new to be picked up by the deployment process
+        logger.info(f"Marked market {market.id} as ready for deployment")
+        
     # Commit all changes to the database
     db.session.commit()
     
-    logger.info(f"Market approval status: {approved_count} approved, {rejected_count} rejected, {pending_count} still pending")
+    # Also count markets that have been approved previously but not counted yet
+    already_approved = ProcessedMarket.query.filter(
+        ProcessedMarket.approved == True,
+        ProcessedMarket.approval_date.isnot(None)
+    ).count()
+    
+    logger.info(f"Market approval status: {approved_count} new approvals, {rejected_count} new rejections, {pending_count} still pending")
+    logger.info(f"Total approved markets to date: {already_approved}")
+    
     return pending_count, approved_count, rejected_count
 
 def create_market_entry(raw_data: Dict[str, Any]) -> bool:
