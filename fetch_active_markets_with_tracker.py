@@ -57,14 +57,19 @@ def filter_new_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     # Get condition IDs of markets already in database
     existing_ids = set()
     
-    try:
-        existing_markets = ProcessedMarket.query.all()
-        existing_ids = {market.condition_id for market in existing_markets}
-        
-        logger.info(f"Found {len(existing_ids)} existing markets in database")
-        
-    except Exception as e:
-        logger.error(f"Error fetching existing markets: {str(e)}")
+    # Import Flask app here to avoid circular imports
+    from main import app
+    
+    # Use application context for database operations
+    with app.app_context():
+        try:
+            existing_markets = ProcessedMarket.query.all()
+            existing_ids = {market.condition_id for market in existing_markets}
+            
+            logger.info(f"Found {len(existing_ids)} existing markets in database")
+            
+        except Exception as e:
+            logger.error(f"Error fetching existing markets: {str(e)}")
     
     # Filter out markets that already exist in database
     new_markets = [
@@ -87,47 +92,52 @@ def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:
     """
     if not markets:
         return []
-        
-    tracked_markets = []
     
-    for market_data in markets:
-        condition_id = market_data.get("conditionId")
+    # Import Flask app here to avoid circular imports
+    from main import app
+    
+    # Use application context for database operations
+    with app.app_context():
+        tracked_markets = []
         
-        if not condition_id:
-            logger.warning(f"Market missing conditionId: {market_data.get('question', 'Unknown')}")
-            continue
+        for market_data in markets:
+            condition_id = market_data.get("conditionId")
             
-        # Check if market already exists
-        existing = ProcessedMarket.query.get(condition_id)
-        
-        if existing:
-            # Update existing record
-            existing.last_processed = datetime.utcnow()
-            existing.process_count += 1
-            
-            if existing.raw_data != market_data:
-                existing.raw_data = market_data
+            if not condition_id:
+                logger.warning(f"Market missing conditionId: {market_data.get('question', 'Unknown')}")
+                continue
                 
-            tracked_markets.append(existing)
-            logger.debug(f"Updated existing market: {condition_id}")
+            # Check if market already exists
+            existing = ProcessedMarket.query.get(condition_id)
             
-        else:
-            # Create new record
-            market = ProcessedMarket(
-                condition_id=condition_id,
-                question=market_data.get("question", "Unknown"),
-                raw_data=market_data
-            )
-            
-            db.session.add(market)
-            tracked_markets.append(market)
-            logger.debug(f"Added new market: {condition_id}")
-    
-    # Save changes
-    db.session.commit()
-    
-    logger.info(f"Tracked {len(tracked_markets)} markets in database")
-    return tracked_markets
+            if existing:
+                # Update existing record
+                existing.last_processed = datetime.utcnow()
+                existing.process_count += 1
+                
+                if existing.raw_data != market_data:
+                    existing.raw_data = market_data
+                    
+                tracked_markets.append(existing)
+                logger.debug(f"Updated existing market: {condition_id}")
+                
+            else:
+                # Create new record
+                market = ProcessedMarket(
+                    condition_id=condition_id,
+                    question=market_data.get("question", "Unknown"),
+                    raw_data=market_data
+                )
+                
+                db.session.add(market)
+                tracked_markets.append(market)
+                logger.debug(f"Added new market: {condition_id}")
+        
+        # Save changes
+        db.session.commit()
+        
+        logger.info(f"Tracked {len(tracked_markets)} markets in database")
+        return tracked_markets
 
 def format_market_message(market: Dict[str, Any]) -> str:
     """
@@ -174,50 +184,55 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 5) -> Lis
     # Track markets in database
     tracked_markets = track_markets_in_db(markets)
     
-    # Only process markets that haven't been posted yet
-    to_post = [
-        market for market in tracked_markets 
-        if not market.posted and market.raw_data is not None
-    ]
+    # Import Flask app here to avoid circular imports
+    from main import app
     
-    if not to_post:
-        logger.info("No new markets to post")
-        return []
+    # Use application context for database operations
+    with app.app_context():
+        # Only process markets that haven't been posted yet
+        to_post = [
+            market for market in tracked_markets 
+            if not market.posted and market.raw_data is not None
+        ]
         
-    # Limit number of markets to post
-    to_post = to_post[:max_to_post]
-    
-    # Post to Slack
-    logger.info(f"Posting {len(to_post)} new markets to Slack")
-    
-    # Extract raw data for posting
-    market_data_list = [market.raw_data for market in to_post]
-    
-    # Post to Slack
-    posted_results = post_markets_to_slack(market_data_list, max_to_post)
-    
-    # Update database records with message IDs
-    posted_markets = []
-    
-    for i, (raw_data, message_id) in enumerate(posted_results):
-        if i >= len(to_post):
-            break
+        if not to_post:
+            logger.info("No new markets to post")
+            return []
             
-        market = to_post[i]
+        # Limit number of markets to post
+        to_post = to_post[:max_to_post]
         
-        if message_id:
-            market.posted = True
-            market.message_id = message_id
-            posted_markets.append(market)
-            logger.info(f"Posted market {market.condition_id} to Slack")
-        else:
-            logger.warning(f"Failed to post market {market.condition_id} to Slack")
-    
-    # Save changes
-    db.session.commit()
-    
-    logger.info(f"Posted {len(posted_markets)} markets to Slack")
-    return posted_markets
+        # Post to Slack
+        logger.info(f"Posting {len(to_post)} new markets to Slack")
+        
+        # Extract raw data for posting
+        market_data_list = [market.raw_data for market in to_post]
+        
+        # Post to Slack
+        posted_results = post_markets_to_slack(market_data_list, max_to_post)
+        
+        # Update database records with message IDs
+        posted_markets = []
+        
+        for i, (raw_data, message_id) in enumerate(posted_results):
+            if i >= len(to_post):
+                break
+                
+            market = to_post[i]
+            
+            if message_id:
+                market.posted = True
+                market.message_id = message_id
+                posted_markets.append(market)
+                logger.info(f"Posted market {market.condition_id} to Slack")
+            else:
+                logger.warning(f"Failed to post market {market.condition_id} to Slack")
+        
+        # Save changes
+        db.session.commit()
+        
+        logger.info(f"Posted {len(posted_markets)} markets to Slack")
+        return posted_markets
 
 def main():
     """

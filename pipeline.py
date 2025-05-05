@@ -212,48 +212,53 @@ class PolymarketPipeline:
         """
         logger.info("Starting Polymarket pipeline")
         
-        try:
-            # Fetch and filter markets
-            markets = self.fetch_and_filter_markets()
-            
-            if not markets:
-                logger.error("No markets to process")
-                self.update_run_record(status="completed", error="No markets to process")
+        # Import Flask app here to avoid circular imports
+        from main import app
+        
+        # Use application context for database operations
+        with app.app_context():
+            try:
+                # Fetch and filter markets
+                markets = self.fetch_and_filter_markets()
+                
+                if not markets:
+                    logger.error("No markets to process")
+                    self.update_run_record(status="completed", error="No markets to process")
+                    return 1
+                
+                # Post markets for approval
+                posted = self.post_markets_for_approval(markets)
+                
+                # Check for approvals
+                self.check_approvals()
+                
+                # TODO: Generate banner images
+                
+                # TODO: Post banners for approval
+                
+                # TODO: Check for banner approvals
+                
+                # TODO: Deploy approved markets
+                
+                # Update final statistics
+                self.update_run_record(status="completed")
+                
+                # Log completion time
+                end_time = datetime.now()
+                duration = (end_time - self.start_time).total_seconds()
+                logger.info(f"Pipeline completed in {duration:.2f} seconds")
+                
+                # Log final stats
+                logger.info("Final pipeline statistics:")
+                for key, value in self.stats.items():
+                    logger.info(f"  - {key}: {value}")
+                
+                return 0
+                
+            except Exception as e:
+                logger.error(f"Pipeline failed with exception: {str(e)}")
+                self.update_run_record(status="failed", error=str(e))
                 return 1
-            
-            # Post markets for approval
-            posted = self.post_markets_for_approval(markets)
-            
-            # Check for approvals
-            self.check_approvals()
-            
-            # TODO: Generate banner images
-            
-            # TODO: Post banners for approval
-            
-            # TODO: Check for banner approvals
-            
-            # TODO: Deploy approved markets
-            
-            # Update final statistics
-            self.update_run_record(status="completed")
-            
-            # Log completion time
-            end_time = datetime.now()
-            duration = (end_time - self.start_time).total_seconds()
-            logger.info(f"Pipeline completed in {duration:.2f} seconds")
-            
-            # Log final stats
-            logger.info("Final pipeline statistics:")
-            for key, value in self.stats.items():
-                logger.info(f"  - {key}: {value}")
-            
-            return 0
-            
-        except Exception as e:
-            logger.error(f"Pipeline failed with exception: {str(e)}")
-            self.update_run_record(status="failed", error=str(e))
-            return 1
 
 
 def main():
