@@ -10,7 +10,7 @@ Market table for processing by the pipeline.
 
 import os
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List, Any, Optional, Tuple
 import json
 
@@ -36,6 +36,10 @@ def check_market_approvals() -> Tuple[int, int, int]:
         ProcessedMarket.posted == True,
         ProcessedMarket.approved == None
     ).all()
+    
+    # Define timeout period (7 days)
+    timeout_days = 7
+    timeout_date = datetime.utcnow() - timedelta(days=timeout_days)
     
     logger.info(f"Checking approvals for {len(pending_markets)} pending markets")
     
@@ -138,8 +142,50 @@ def check_market_approvals() -> Tuple[int, int, int]:
             rejected += 1
             
         else:
-            # Still pending
-            still_pending += 1
+            # Check if market has timed out (posted more than 7 days ago)
+            if market.last_processed and market.last_processed < timeout_date:
+                # Market has timed out, auto-reject
+                market.approved = False
+                market.approval_date = datetime.utcnow()
+                market.approver = "SYSTEM_TIMEOUT"
+                
+                # Create a placeholder Market entry for the rejected market
+                if not Market.query.get(market.condition_id):
+                    end_date_timestamp = None
+                    if market.raw_data and 'endDate' in market.raw_data:
+                        try:
+                            end_date_str = market.raw_data.get('endDate')
+                            end_date = datetime.fromisoformat(end_date_str.replace('Z', '+00:00'))
+                            end_date_timestamp = int(end_date.timestamp())
+                        except:
+                            pass
+                    
+                    placeholder = Market(
+                        id=market.condition_id,
+                        question=market.question,
+                        expiry=end_date_timestamp,
+                        status="rejected",
+                        category=market.raw_data.get('fetched_category', 'general') if market.raw_data else 'general',
+                        icon_url=market.raw_data.get('icon') if market.raw_data else None
+                    )
+                    db.session.add(placeholder)
+                    db.session.flush()  # Flush to generate ID
+                
+                # Create timeout rejection event
+                event = ApprovalEvent(
+                    market_id=market.condition_id,
+                    stage="initial",
+                    status="timeout",
+                    message_id=market.message_id,
+                    reason=f"Auto-rejected after {timeout_days} days"
+                )
+                db.session.add(event)
+                
+                logger.info(f"Market {market.condition_id} auto-rejected due to {timeout_days}-day timeout")
+                rejected += 1
+            else:
+                # Still pending and within timeout period
+                still_pending += 1
     
     # Save all changes
     db.session.commit()
