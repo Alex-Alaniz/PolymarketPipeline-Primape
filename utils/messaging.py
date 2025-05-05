@@ -220,7 +220,19 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     ]
     
     # Add options if available
-    outcomes = market_data.get("outcomes", [])
+    outcomes_raw = market_data.get("outcomes", "[]")
+    outcomes = []
+    
+    # Parse outcomes which come as a JSON string
+    try:
+        if isinstance(outcomes_raw, str):
+            import json
+            outcomes = json.loads(outcomes_raw)
+        else:
+            outcomes = outcomes_raw
+    except Exception as e:
+        logger.error(f"Error parsing outcomes: {str(e)}")
+    
     if outcomes:
         options_text = "*Options:*\n"
         for i, option in enumerate(outcomes):
