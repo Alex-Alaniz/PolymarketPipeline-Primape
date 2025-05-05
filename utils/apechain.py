@@ -84,16 +84,34 @@ def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
         logger.error("Invalid market: missing required data")
         return None, None
     
-    # Parse market options
+    # Parse market options with better error handling
     try:
+        logger.info(f"Parsing options from market {market.id}: {repr(market.options)}")
+        
         if isinstance(market.options, str):
-            options = json.loads(market.options)
+            try:
+                options = json.loads(market.options)
+                logger.info(f"Successfully parsed JSON options: {options}")
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON decode error for options string: {e}, using default options")
+                options = ["Yes", "No"]
         else:
             options = market.options
-            
-        if not options or not isinstance(options, list):
-            options = ["Yes", "No"]  # Default binary options
-    except:
+            logger.info(f"Using non-string options directly: {options}")
+        
+        # Validate the options are in the correct format for the smart contract
+        if not options:
+            logger.warning("Empty options, using default")
+            options = ["Yes", "No"]
+        elif not isinstance(options, list):
+            logger.warning(f"Options not a list ({type(options)}), using default")
+            options = ["Yes", "No"]
+        else:
+            # Ensure all options are strings
+            options = [str(option) for option in options]
+            logger.info(f"Final validated options: {options}")
+    except Exception as e:
+        logger.error(f"Unexpected error parsing options: {str(e)}")
         options = ["Yes", "No"]  # Default if parsing fails
     
     # Calculate duration from expiry

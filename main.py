@@ -195,6 +195,7 @@ HTML_TEMPLATE = """
         
         <div>
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
+            <button id="run-deployment" class="button" style="background-color: var(--bs-warning); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="runDeploymentApprovals()">Check Deployment Approvals</button>
             <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
         </div>
         
@@ -203,14 +204,21 @@ HTML_TEMPLATE = """
             <ol>
                 <li>Fetching diverse markets from Polymarket API across multiple categories</li>
                 <li>Filtering to active, non-expired markets with valid image assets</li>
-                <li>Posting new markets to Slack for approval (with ✅ to approve, ❌ to reject)</li>
-                <li>Tracking market approvals/rejections in the database</li>
-                <li>Deploying approved markets to ApeChain with frontend mappings</li>
+                <li>Posting new markets to Slack for initial approval (with ✅ to approve, ❌ to reject)</li>
+                <li>Tracking market approvals/rejections in the database (with auto-reject after 7 days)</li>
+                <li>Processing approved markets through a separate deployment approval flow</li>
+                <li>Deploying fully approved markets to ApeChain with frontend mappings</li>
             </ol>
             
             <p class="alert alert-info mt-3">
-                <strong>Note:</strong> The pipeline will only process <strong>active markets</strong> from Polymarket.
-                If no active markets are found, the pipeline will fail with an appropriate message.
+                <strong>Note:</strong> The main pipeline handles initial market approvals, while the 
+                <strong>Check Deployment Approvals</strong> button runs a separate process for final QA
+                and deployment to ApeChain. This two-step approval process ensures quality control.
+            </p>
+            
+            <p class="alert alert-warning">
+                <strong>Important:</strong> Markets that remain in pending status for more than 7 days
+                will be automatically rejected to prevent accumulation of stale data.
             </p>
         </div>
         
@@ -243,6 +251,30 @@ HTML_TEMPLATE = """
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while starting the pipeline');
+            });
+        }
+        
+        function runDeploymentApprovals() {
+            fetch('/run-deployment-approvals', {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('status').textContent = 'running';
+                    document.getElementById('run-pipeline').disabled = true;
+                    document.getElementById('run-deployment').disabled = true;
+                    // Refresh page after 2 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to start deployment approval process: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the deployment approval process');
             });
         }
         
@@ -377,6 +409,79 @@ def start_pipeline():
     return jsonify({
         "success": True,
         "message": "Pipeline started"
+    })
+
+@app.route('/run-deployment-approvals', methods=['POST'])
+def start_deployment_approvals():
+    """API endpoint to start the deployment approval process"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Pipeline is already running"
+        })
+    
+    # Define a function to run the deployment approvals
+    def run_deployment_approvals():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting Deployment Approval Process...")
+            
+            # Import the deployment approval module
+            import check_deployment_approvals
+            
+            # Run the deployment approval process
+            with app.app_context():
+                # First post markets for deployment approval
+                posted = check_deployment_approvals.post_markets_for_deployment_approval()
+                print(f"Posted {len(posted)} markets for deployment approval")
+                
+                # Then check for approvals
+                pending, approved, rejected = check_deployment_approvals.check_deployment_approvals()
+                print(f"Deployment approval results: {pending} pending, {approved} approved, {rejected} rejected")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed"
+            
+            # Log process end
+            print("Deployment approval process completed successfully")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Deployment approval process failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the deployment approval process in a separate thread
+    thread = threading.Thread(target=run_deployment_approvals)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Deployment approval process started"
     })
 
 @app.route('/status')
@@ -536,6 +641,8 @@ def pipeline_flow():
                         <li><span class="text-warning">Check Market Approvals</span> from Slack reactions (✅/❌)</li>
                         <li><span class="text-info">Update Database</span> with approval status</li>
                         <li><span class="text-success">Create Market Records</span> for approved markets</li>
+                        <li><span class="text-warning">Post Markets for Deployment Approval</span> - final QA check</li>
+                        <li><span class="text-warning">Check Deployment Approvals</span> from Slack reactions</li>
                         <li><span class="text-success">Deploy to ApeChain</span> smart contract with frontend mapping</li>
                     </ol>
                 </div>

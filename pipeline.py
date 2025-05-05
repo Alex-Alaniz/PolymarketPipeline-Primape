@@ -238,7 +238,9 @@ class PolymarketPipeline:
                 
                 # TODO: Check for banner approvals
                 
-                # TODO: Deploy approved markets
+                # Note: Deployment to Apechain is now a separate step
+                # It's not part of the main pipeline to allow for final QA
+                # Run check_deployment_approvals.py manually to process deployments
                 
                 # Update final statistics
                 self.update_run_record(status="completed")

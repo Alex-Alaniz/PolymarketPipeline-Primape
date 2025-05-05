@@ -102,10 +102,41 @@ def format_deployment_message(market: Market) -> str:
     # Add options if available
     if market.options:
         try:
-            options = json.loads(market.options) if isinstance(market.options, str) else market.options
-            message += f"*Options:* {', '.join(options)}\n"
-        except:
-            pass
+            # Handle the specific multi-level escaped format
+            option_text = "Unknown"
+            
+            # First, get the raw string representation
+            raw_options = str(market.options)
+            logger.info(f"Raw options for market {market.id}: {raw_options}")
+            
+            # Get a clean, readable format for the options
+            try:
+                # This cleans up the escape sequences
+                clean_str = raw_options.replace('\\"', '"').replace('\\\\', '\\')
+                # Remove any surrounding quotes
+                while clean_str.startswith('"') and clean_str.endswith('"'):
+                    clean_str = clean_str[1:-1]
+                    
+                # Try standard JSON parsing on the cleaned string
+                try:
+                    options_parsed = json.loads(clean_str)
+                    if isinstance(options_parsed, list):
+                        option_text = ", ".join(options_parsed)
+                    else:
+                        option_text = str(options_parsed)
+                except json.JSONDecodeError:
+                    # If still not valid JSON after cleaning, display as is
+                    option_text = clean_str
+            except Exception as e:
+                logger.warning(f"Error cleaning options: {str(e)}")
+                option_text = raw_options
+                
+            message += f"*Options:* {option_text}\n"
+            
+        except Exception as e:
+            logger.error(f"Error formatting options for market {market.id}: {str(e)}")
+            # Add raw format for debugging
+            message += f"*Options (raw):* {repr(market.options)}\n"
     
     # Add links to banner and icon if available
     if market.banner_uri:
