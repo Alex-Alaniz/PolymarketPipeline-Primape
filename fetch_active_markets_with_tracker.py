@@ -290,6 +290,27 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
     if not markets:
         return []
     
+    # First, check how many multi-option markets we have to process
+    multi_option_count = sum(1 for m in markets if m.get('is_multiple_option', False))
+    logger.info(f"Found {multi_option_count} multi-option markets to process")
+    
+    # Log the first few multi-option markets for debugging
+    for i, market in enumerate(markets):
+        if market.get('is_multiple_option', False):
+            logger.info(f"Multi-option market {i+1} before DB tracking:")
+            logger.info(f"  - ID: {market.get('id')}")
+            logger.info(f"  - Question: {market.get('question', 'Unknown')}")
+            # Log the options
+            outcomes_raw = market.get("outcomes", "[]")
+            try:
+                if isinstance(outcomes_raw, str):
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                logger.info(f"  - Options ({len(outcomes)}): {list(set(outcomes))}")
+            except Exception as e:
+                logger.error(f"Error parsing outcomes: {str(e)}")
+    
     # Import Flask app here to avoid circular imports
     from main import app
     
@@ -298,8 +319,17 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
         # Track markets in database within the app context
         tracked_markets = track_markets_in_db(markets)
         
+        # Track how many multi-option markets were successfully tracked
+        multi_option_tracked = sum(1 for m in tracked_markets 
+                                  if m.raw_data and m.raw_data.get('is_multiple_option', False))
+        logger.info(f"Successfully tracked {multi_option_tracked} multi-option markets in database")
+        
         # Query directly from the database to ensure we have attached session objects
         condition_ids = [market.condition_id for market in tracked_markets]
+        if not condition_ids:
+            logger.warning("No condition IDs found after tracking markets")
+            return []
+            
         tracked_markets = ProcessedMarket.query.filter(
             ProcessedMarket.condition_id.in_(condition_ids)
         ).all()
@@ -313,24 +343,32 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
         if not to_post:
             logger.info("No new markets to post")
             return []
-            
+        
+        # Check how many multi-option markets we have to post    
+        multi_option_to_post = sum(1 for m in to_post 
+                                  if m.raw_data and m.raw_data.get('is_multiple_option', False))
+        logger.info(f"Found {multi_option_to_post} multi-option markets to post to Slack")
+        
         # Limit number of markets to post
         to_post = to_post[:max_to_post]
         
         # Post to Slack
         logger.info(f"Posting {len(to_post)} new markets to Slack")
         
-        # Extract raw data for posting
+        # Extract raw data for posting - this is crucial to preserve the multi-option structure
         market_data_list = []
         for market in to_post:
             raw_data = market.raw_data
             if raw_data:
+                is_multiple = raw_data.get('is_multiple_option', False)
+                
                 # Log details of the raw data for debugging
                 logger.info(f"Preparing to post market: {raw_data.get('question', 'Unknown')}")
-                logger.info(f"  - Type: {('Multiple-choice' if raw_data.get('is_multiple_option', False) else 'Binary')}")
-                if raw_data.get('is_multiple_option', False):
-                    logger.info(f"  - ID: {raw_data.get('id')}")
-                    # Parse outcomes which come as a JSON string
+                logger.info(f"  - Type: {('Multiple-choice' if is_multiple else 'Binary')}")
+                logger.info(f"  - ID: {raw_data.get('id') if is_multiple else raw_data.get('conditionId')}")
+                
+                # Clean up duplicate options for multi-option markets
+                if is_multiple:
                     outcomes_raw = raw_data.get("outcomes", "[]")
                     outcomes = []
                     try:
@@ -338,12 +376,25 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                             outcomes = json.loads(outcomes_raw)
                         else:
                             outcomes = outcomes_raw
-                        logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+                            
+                        # Remove duplicates while preserving order
+                        unique_outcomes = []
+                        seen = set()
+                        for outcome in outcomes:
+                            if outcome not in seen:
+                                seen.add(outcome)
+                                unique_outcomes.append(outcome)
+                                
+                        # Save back to raw_data
+                        raw_data["outcomes"] = json.dumps(unique_outcomes)
+                        logger.info(f"  - Options ({len(unique_outcomes)}): {unique_outcomes}")
                     except Exception as e:
                         logger.error(f"Error parsing outcomes: {str(e)}")
+                
+                # Add to list
                 market_data_list.append(raw_data)
         
-        # Post to Slack
+        # Post directly to Slack, preserving the structure of multi-option markets
         posted_results = post_markets_to_slack(market_data_list, max_to_post)
         
         # Update database records with message IDs
@@ -362,6 +413,11 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 logger.info(f"Posted market {market.condition_id} to Slack")
             else:
                 logger.warning(f"Failed to post market {market.condition_id} to Slack")
+        
+        # Count how many multi-option markets were successfully posted
+        multi_option_posted = sum(1 for m in posted_markets 
+                                if m.raw_data and m.raw_data.get('is_multiple_option', False))
+        logger.info(f"Successfully posted {multi_option_posted} multi-option markets to Slack")
         
         # Save changes
         db.session.commit()
