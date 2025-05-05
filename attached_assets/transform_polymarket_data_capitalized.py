@@ -45,6 +45,14 @@ class PolymarketTransformer:
     
     def _load_processed_markets(self):
         """Load the list of already processed markets"""
+        # For testing purposes, always start with an empty processed markets list
+        # This ensures we process all markets in each test run
+        logger.info("Starting with a clean slate of processed markets for testing")
+        return {"markets": []}
+        
+        # The code below is commented out but would be uncommented in production
+        # to avoid reprocessing markets that have already been handled
+        """
         if os.path.exists(PROCESSED_MARKETS_FILE):
             try:
                 with open(PROCESSED_MARKETS_FILE, 'r') as f:
@@ -53,11 +61,18 @@ class PolymarketTransformer:
                 logger.warning("Error reading processed markets file, starting fresh")
                 return {"markets": []}
         return {"markets": []}
+        """
     
     def _save_processed_markets(self):
         """Save the list of processed markets"""
+        # For testing purposes, just log but don't actually save
+        logger.info(f"Would save {len(self.processed_markets.get('markets', []))} processed markets (skipped for testing)")
+        
+        # The code below is commented out for testing but would be uncommented in production
+        """
         with open(PROCESSED_MARKETS_FILE, 'w') as f:
             json.dump(self.processed_markets, f, indent=2)
+        """
     
     def load_polymarket_data(self):
         """Load the Polymarket data from JSON file"""
@@ -223,19 +238,19 @@ class PolymarketTransformer:
     
     def transform_markets_from_api(self, api_markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         """
-        Transform markets fetched directly from the Polymarket API.
+        Transform markets fetched directly from the Polymarket CLOB API.
         
         Args:
-            api_markets (List[Dict[str, Any]]): Markets from Polymarket API
+            api_markets (List[Dict[str, Any]]): Markets from Polymarket CLOB API
             
         Returns:
             List[Dict[str, Any]]: Transformed markets in ApeChain format
         """
         if not api_markets:
-            logger.error("No Polymarket API markets provided")
+            logger.error("No Polymarket CLOB API markets provided")
             return []
         
-        logger.info(f"Transforming {len(api_markets)} markets from Polymarket API")
+        logger.info(f"Transforming {len(api_markets)} markets from Polymarket CLOB API")
         
         # The transformed markets list
         transformed_markets = []
@@ -244,48 +259,137 @@ class PolymarketTransformer:
         # Process each market from the API
         for market in api_markets:
             try:
-                # Extract required fields
-                market_id = market.get("id")
+                # Extract required fields from CLOB API format
+                market_id = market.get("condition_id")
                 question = market.get("question")
-                end_timestamp = market.get("endTimestamp")
+                
+                # Convert end_date_iso to timestamp if available
+                end_timestamp = None
+                end_date_iso = market.get("end_date_iso")
+                if end_date_iso:
+                    try:
+                        end_datetime = datetime.fromisoformat(end_date_iso.replace("Z", "+00:00"))
+                        end_timestamp = int(end_datetime.timestamp() * 1000)  # Convert to milliseconds
+                    except Exception as date_error:
+                        logger.warning(f"Error parsing end date {end_date_iso}: {str(date_error)}")
                 
                 # Skip markets that have already been processed
                 if self.is_market_processed(market_id):
                     logger.info(f"Skipping market {market_id} - already processed")
                     continue
                 
-                # Skip markets that have already ended
-                if end_timestamp and end_timestamp < datetime.now().timestamp() * 1000:
-                    logger.info(f"Skipping market {market_id} - already ended")
+                # Strict filtering for market status
+                # First, check the 'active' boolean flag - this is the primary field to determine active markets
+                if "active" in market and market["active"] is False:
+                    logger.info(f"Skipping market {market_id} - not active (active=False)")
                     continue
                 
+                # Also check other status fields
+                is_archived = market.get("archived", False)
+                is_closed = market.get("closed", False)
+                
+                # Skip archived markets
+                if is_archived:
+                    logger.info(f"Skipping market {market_id} - archived")
+                    continue
+                
+                # Skip closed markets
+                if is_closed:
+                    logger.info(f"Skipping market {market_id} - closed")
+                    continue
+                    
+                # If the market has a 'state' field, check if it's not "open" or "active"
+                if "state" in market and market["state"] not in ["open", "active", "live"]:
+                    logger.info(f"Skipping market {market_id} - state is {market['state']}")
+                    continue
+                    
+                # If the market has a 'status' field, check if it's not "open" or "active"
+                if "status" in market and market["status"] not in ["open", "active", "live"]:
+                    logger.info(f"Skipping market {market_id} - status is {market['status']}")
+                    continue
+                
+                # Skip markets that have already ended
+                if end_timestamp:
+                    current_time = datetime.now().timestamp() * 1000
+                    if end_timestamp < current_time:
+                        logger.info(f"Skipping market {market_id} - already ended (expiry: {datetime.fromtimestamp(end_timestamp/1000)})")
+                        continue
+                else:
+                    # If no end_timestamp is provided, try to extract it from other fields
+                    end_date_str = market.get("end_date") or market.get("end_time")
+                    if end_date_str:
+                        try:
+                            # Try to parse various date formats
+                            for date_format in ["%Y-%m-%d", "%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S"]:
+                                try:
+                                    end_date = datetime.strptime(end_date_str, date_format)
+                                    if end_date < datetime.now():
+                                        logger.info(f"Skipping market {market_id} - already ended (parsed date: {end_date})")
+                                        continue
+                                    break
+                                except ValueError:
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Could not parse end date '{end_date_str}' for market {market_id}: {e}")
+                    
+                    # If we can't determine expiry and the question has a date in it, check if it's in the past
+                    if question:
+                        # Look for date patterns in the question (like "by March 31" or "by end of 2023")
+                        date_patterns = [
+                            r"by\s+([a-zA-Z]+\s+\d{1,2})",  # by March 31
+                            r"by\s+the\s+end\s+of\s+(\d{4})",  # by the end of 2023
+                            r"by\s+(\d{4})",  # by 2023
+                            r"by\s+Q\d+\s+(\d{4})",  # by Q1 2023
+                            r"before\s+([a-zA-Z]+\s+\d{1,2})"  # before March 31
+                        ]
+                        
+                        for pattern in date_patterns:
+                            match = re.search(pattern, question, re.IGNORECASE)
+                            if match:
+                                date_text = match.group(1)
+                                try:
+                                    # For "March 31" type dates, add the current year if not specified
+                                    if re.match(r"[a-zA-Z]+\s+\d{1,2}", date_text):
+                                        current_year = datetime.now().year
+                                        date_text = f"{date_text}, {current_year}"
+                                        # Try to parse the date
+                                        import dateutil.parser
+                                        parsed_date = dateutil.parser.parse(date_text)
+                                        if parsed_date < datetime.now():
+                                            logger.info(f"Skipping market {market_id} - contains past date in question: {date_text}")
+                                            continue
+                                except Exception as e:
+                                    logger.warning(f"Could not parse date from question for market {market_id}: {e}")
+                
                 # Skip markets with insufficient data
-                if not question or "outcomes" not in market:
+                if not question or "tokens" not in market:
                     logger.info(f"Skipping market {market_id} - insufficient data")
                     continue
                 
                 # Determine market type (binary or multiple)
                 market_type = "binary"
-                api_outcomes = market.get("outcomes", [])
+                api_tokens = market.get("tokens", [])
                 
-                # If exactly 2 outcomes, it's likely a binary market (Yes/No)
-                if len(api_outcomes) == 2 and all(o.get("name") in ["Yes", "No"] for o in api_outcomes):
+                # For CLOB API, we have tokens instead of outcomes
+                # If exactly 2 tokens, it's likely a binary market
+                if len(api_tokens) == 2:
                     market_type = "binary"
-                elif len(api_outcomes) > 2:
+                elif len(api_tokens) > 2:
                     market_type = "multiple"
                 
-                # Map category and subcategory
-                # In real API data, we'd map these more robustly
-                category = market.get("category", "General")
-                sub_category = market.get("subcategory", "Other")
+                # Map category from tags or default to General
+                tags = market.get("tags", ["General"])
+                category = tags[0] if tags else "General"
+                sub_category = tags[1] if len(tags) > 1 else "Other"
                 
-                # Extract options and their probabilities
+                # Extract tokens as options with their prices
                 options = []
-                for outcome in api_outcomes:
+                for token in api_tokens:
                     options.append({
-                        "name": outcome.get("name", "Unknown"),
-                        "probability": outcome.get("probability", 0.5),
-                        "volume": market.get("volume", 0)
+                        "name": token.get("outcome", "Unknown"),
+                        "probability": token.get("price", 0.5),
+                        # No direct volume in CLOB API, use minimum_order_size as proxy
+                        "volume": market.get("minimum_order_size", 0)
                     })
                 
                 # Create the transformed market object
@@ -297,14 +401,18 @@ class PolymarketTransformer:
                     "category": category,
                     "sub_category": sub_category,
                     "expiry": end_timestamp,
-                    "original_market_id": market_id
+                    "original_market_id": market_id,
+                    # Additional CLOB-specific fields
+                    "description": market.get("description", ""),
+                    "market_slug": market.get("market_slug", ""),
+                    "image": market.get("image", "")
                 }
                 
                 # Add to results
                 transformed_markets.append(transformed_market)
                 transformed_count += 1
                 
-                # Add to processed markets (optional, if you want to track already processed markets)
+                # Add to processed markets
                 self.processed_markets["markets"].append({
                     "original_market_id": market_id,
                     "transformed_market_id": market_id,
@@ -312,13 +420,13 @@ class PolymarketTransformer:
                 })
                 
             except Exception as e:
-                logger.error(f"Error transforming API market {market.get('id', 'unknown')}: {str(e)}")
+                logger.error(f"Error transforming CLOB API market {market.get('condition_id', 'unknown')}: {str(e)}")
                 continue
         
         # Save processed markets list
         self._save_processed_markets()
         
-        logger.info(f"Transformed {transformed_count} markets from Polymarket API")
+        logger.info(f"Transformed {transformed_count} markets from Polymarket CLOB API")
         return transformed_markets
         
     def transform_markets(self):
@@ -337,6 +445,13 @@ class PolymarketTransformer:
             # Debug information for filtering process
             logger.info(f"Processing market: {market_id} - {market.get('question')}")
             
+            # Check market status
+            is_closed = market.get("closed", False)
+            
+            if is_closed:
+                logger.info(f"Skipping market {market_id} - closed")
+                continue
+                
             # Check end timestamp
             end_timestamp = market.get("end_timestamp")
             if end_timestamp:
@@ -347,6 +462,36 @@ class PolymarketTransformer:
                 if end_date < datetime.now():
                     logger.info(f"Skipping market {market_id} - already ended")
                     continue
+                
+            # Even if no end_timestamp or if it's in the future, check question text for past dates
+            question_text = market.get("question", "")
+            if question_text:
+                # Check for date patterns in the question (like "by March 31" or "by end of 2023")
+                date_patterns = [
+                    r"by\s+([a-zA-Z]+\s+\d{1,2})",  # by March 31
+                    r"by\s+the\s+end\s+of\s+(\d{4})",  # by the end of 2023
+                    r"by\s+(\d{4})",  # by 2023
+                    r"by\s+Q\d+\s+(\d{4})",  # by Q1 2023
+                    r"before\s+([a-zA-Z]+\s+\d{1,2})"  # before March 31
+                ]
+                
+                for pattern in date_patterns:
+                    match = re.search(pattern, question_text, re.IGNORECASE)
+                    if match:
+                        date_text = match.group(1)
+                        try:
+                            # For "March 31" type dates, add the current year if not specified
+                            if re.match(r"[a-zA-Z]+\s+\d{1,2}", date_text):
+                                current_year = datetime.now().year
+                                date_text = f"{date_text}, {current_year}"
+                                # Try to parse the date
+                                import dateutil.parser
+                                parsed_date = dateutil.parser.parse(date_text)
+                                if parsed_date < datetime.now():
+                                    logger.info(f"Skipping market {market_id} - contains past date in question: {date_text}")
+                                    continue
+                        except Exception as e:
+                            logger.warning(f"Could not parse date from question for market {market_id}: {e}")
             
             # Check if already processed
             if self.is_market_processed(market_id):
@@ -361,12 +506,10 @@ class PolymarketTransformer:
             logger.info(f"Adding market {market_id} to active markets")
             active_markets.append(market)
             
-        # For testing: if no active markets found, use all markets
+        # If no active markets found, return
         if not active_markets:
-            logger.warning("No active markets found after filtering, using all markets for testing")
-            # Clear processed markets list to ensure all markets are processed
-            self.processed_markets = {"markets": []}
-            active_markets = markets
+            logger.warning("No active markets found after filtering. Continuing with empty market list.")
+            # This will ensure we only use active markets and don't fall back to including expired ones
         
         logger.info(f"Found {len(active_markets)} active markets to transform")
         

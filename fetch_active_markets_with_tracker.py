@@ -18,7 +18,7 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
 from models import db, ProcessedMarket
-from filter_active_markets import fetch_markets, filter_active_markets
+from filter_active_markets import fetch_markets, transform_markets, filter_active_markets
 from utils.messaging import post_markets_to_slack
 
 # Configure logging

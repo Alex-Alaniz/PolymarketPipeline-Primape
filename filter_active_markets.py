@@ -15,6 +15,7 @@ import requests
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 from urllib.parse import urlparse
+from utils.market_transformer import MarketTransformer
 
 # Configure logging
 logging.basicConfig(
@@ -282,6 +283,27 @@ def display_active_markets(markets: List[Dict[str, Any]], max_display: int = 5):
         print(f"  Icon: {market.get('icon', 'None')}")
         print()
 
+def transform_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Transform markets to consolidate multi-option markets.
+    
+    Args:
+        markets: List of market data dictionaries
+        
+    Returns:
+        List of transformed market dictionaries
+    """
+    transformer = MarketTransformer()
+    transformed = transformer.transform_markets(markets)
+    
+    # Check if we have any multiple-option markets
+    multiple_count = sum(1 for m in transformed if m.get("is_multiple_option"))
+    
+    logger.info(f"Transformed {len(markets)} markets into {len(transformed)} markets")
+    logger.info(f"Found {multiple_count} multiple-option markets")
+    
+    return transformed
+
 def main():
     """
     Main function to run the market filtering.
@@ -306,11 +328,15 @@ def main():
         
     logger.info(f"Successfully filtered to {len(active_markets)} active markets")
     
+    # Transform markets to consolidate multi-option markets
+    logger.info("Transforming markets")
+    transformed_markets = transform_markets(active_markets)
+    
     # Save filtered markets
-    save_filtered_markets(active_markets)
+    save_filtered_markets(transformed_markets)
     
     # Display results
-    display_active_markets(active_markets)
+    display_active_markets(transformed_markets)
     
     return 0
 
