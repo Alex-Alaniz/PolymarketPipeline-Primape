@@ -205,37 +205,93 @@ def create_market_entry(raw_data: Dict[str, Any]) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Extract relevant fields from raw data
-        market_id = raw_data.get("conditionId")
+        # Check if this is a multi-option market
+        is_multiple = raw_data.get('is_multiple_option', False)
         
-        if not market_id:
-            logger.error("Raw data missing conditionId")
-            return False
+        # For multiple-option markets, use the group ID (id field)
+        # For binary markets, use the conditionId
+        if is_multiple:
+            market_id = raw_data.get("id")
+            if not market_id:
+                logger.error("Multi-option market missing id field")
+                return False
+                
+            logger.info(f"Processing multi-option market with ID: {market_id}")
+        else:
+            market_id = raw_data.get("conditionId")
+            if not market_id:
+                logger.error("Binary market missing conditionId")
+                return False
+                
+            logger.info(f"Processing binary market with ID: {market_id}")
             
         # Check if market already exists
         existing = Market.query.get(market_id)
         if existing:
             logger.info(f"Market {market_id} already exists in Markets table")
             return True
+        
+        # Extract options for the market
+        options = []
+        outcomes_raw = raw_data.get("outcomes", "[]")
+        
+        # Parse outcomes which come as a JSON string
+        try:
+            if isinstance(outcomes_raw, str):
+                outcomes = json.loads(outcomes_raw)
+            else:
+                outcomes = outcomes_raw
+                
+            # For multiple-option markets, remove duplicates
+            if is_multiple and outcomes:
+                outcomes = list(dict.fromkeys(outcomes))
+                options = outcomes
+            else:
+                # Binary market defaults to Yes/No
+                options = outcomes if outcomes else ["Yes", "No"]
+        except Exception as e:
+            logger.error(f"Error parsing outcomes: {str(e)}")
+            options = ["Yes", "No"]  # Default fallback
+            
+        # Get the expiry timestamp
+        expiry_timestamp = None
+        try:
+            if raw_data.get("endDate"):
+                expiry_timestamp = int(datetime.fromisoformat(
+                    raw_data.get("endDate", "").replace("Z", "+00:00")
+                ).timestamp())
+        except Exception as e:
+            logger.error(f"Error parsing endDate: {str(e)}")
             
         # Create new market entry
         market = Market(
             id=market_id,
             question=raw_data.get("question"),
-            type="binary", # Default to binary for now
+            type="multiple" if is_multiple else "binary",
             category=raw_data.get("fetched_category", "general"),
             sub_category=raw_data.get("subCategory"),
-            expiry=int(datetime.fromisoformat(raw_data.get("endDate", "").replace("Z", "+00:00")).timestamp()),
-            original_market_id=raw_data.get("id"),
-            options=json.dumps(raw_data.get("outcomes", ["Yes", "No"])),
+            expiry=expiry_timestamp,
+            original_market_id=raw_data.get("id") if not is_multiple else json.dumps(raw_data.get("original_market_ids", [])),
+            options=json.dumps(options),
             status="new",
-            icon_url=raw_data.get("icon")
+            icon_url=raw_data.get("icon"),
+            # For debugging/tracing
+            banner_path=json.dumps({
+                "is_multiple": is_multiple,
+                "source": "polymarket", 
+                "options_count": len(options)
+            })
         )
         
         db.session.add(market)
         db.session.commit()
         
-        logger.info(f"Created market entry for {market_id}")
+        # Log details about the market we created
+        if is_multiple:
+            logger.info(f"Created multi-option market entry for {market_id} with {len(options)} options")
+        else:
+            logger.info(f"Created binary market entry for {market_id}")
+            
         return True
         
     except Exception as e:
