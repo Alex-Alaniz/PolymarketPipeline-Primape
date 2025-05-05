@@ -94,10 +94,25 @@ class MarketTransformer:
                 entity = self.extract_entity_from_question(question, pattern)
                 if entity:
                     base_question = self.extract_base_question(question, entity)
-                    # Store original question for capitalization preservation
-                    grouped_markets[base_question].append((market, question, entity))
+                    # We'll use a standardized key for specific patterns to ensure grouping works
+                    if pattern_name == "epl_top_goalscorer":
+                        standard_key = "will_entity_be_the_top_goalscorer_in_the_epl"
+                        logger.info(f"Using standard key for EPL top goalscorer: {standard_key}")
+                        grouped_markets[standard_key].append((market, question, entity))
+                    elif pattern_name == "champions_league_winner":
+                        standard_key = "will_entity_win_the_uefa_champions_league"
+                        logger.info(f"Using standard key for Champions League Winner: {standard_key}")
+                        grouped_markets[standard_key].append((market, question, entity))
+                    elif pattern_name == "la_liga_winner":
+                        standard_key = "will_entity_win_la_liga"
+                        logger.info(f"Using standard key for La Liga Winner: {standard_key}")
+                        grouped_markets[standard_key].append((market, question, entity))
+                    else:
+                        # Store original question for capitalization preservation using base_question
+                        grouped_markets[base_question].append((market, question, entity))
+                    
                     matched = True
-                    logger.info(f"Matched pattern '{pattern_name}': {question} -> entity: {entity}")
+                    logger.info(f"Matched pattern '{pattern_name}': {question} -> entity: {entity} -> base: {base_question}")
                     break
             
             # If no pattern matched, treat as individual market
@@ -140,11 +155,11 @@ class MarketTransformer:
                     _, original_question, _ = market_group[0]
                     
                     # For specific patterns, create a better title
-                    if "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
+                    if base_question == "will_entity_be_the_top_goalscorer_in_the_epl" or "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
                         group_title = "English Premier League Top Scorer"
-                    elif "uefa champions league" in base_question.lower():
+                    elif base_question == "will_entity_win_the_uefa_champions_league" or "uefa champions league" in base_question.lower():
                         group_title = "Champions League Winner"
-                    elif "win la liga" in base_question.lower():
+                    elif base_question == "will_entity_win_la_liga" or "win la liga" in base_question.lower():
                         group_title = "La Liga Winner"
                     elif "win the premier league" in base_question.lower():
                         group_title = "Premier League Winner"
