@@ -298,9 +298,36 @@ def transform_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     
     # Check if we have any multiple-option markets
     multiple_count = sum(1 for m in transformed if m.get("is_multiple_option"))
+    multiple_markets = [m for m in transformed if m.get("is_multiple_option")]
     
     logger.info(f"Transformed {len(markets)} markets into {len(transformed)} markets")
     logger.info(f"Found {multiple_count} multiple-option markets")
+    
+    # Debug the multiple-option markets
+    if multiple_count > 0:
+        logger.info("DEBUGGING MULTIPLE-OPTION MARKETS:")
+        for i, market in enumerate(multiple_markets):
+            logger.info(f"Multiple-option market {i+1}:")
+            logger.info(f"  - ID: {market.get('id')}")
+            logger.info(f"  - Question: {market.get('question')}")
+            
+            # Parse outcomes which come as a JSON string
+            outcomes_raw = market.get("outcomes", "[]")
+            outcomes = []
+            try:
+                if isinstance(outcomes_raw, str):
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+            except Exception as e:
+                logger.error(f"Error parsing outcomes: {str(e)}")
+                
+            if outcomes:
+                logger.info(f"  - Options ({len(outcomes)}):")
+                for j, option in enumerate(outcomes):
+                    logger.info(f"    {j+1}. {option}")
+            
+            logger.info(f"  - Original Market IDs: {market.get('original_market_ids', [])}")
     
     return transformed
 

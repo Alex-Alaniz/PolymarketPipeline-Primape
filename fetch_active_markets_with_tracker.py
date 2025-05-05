@@ -285,7 +285,27 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
         logger.info(f"Posting {len(to_post)} new markets to Slack")
         
         # Extract raw data for posting
-        market_data_list = [market.raw_data for market in to_post]
+        market_data_list = []
+        for market in to_post:
+            raw_data = market.raw_data
+            if raw_data:
+                # Log details of the raw data for debugging
+                logger.info(f"Preparing to post market: {raw_data.get('question', 'Unknown')}")
+                logger.info(f"  - Type: {('Multiple-choice' if raw_data.get('is_multiple_option', False) else 'Binary')}")
+                if raw_data.get('is_multiple_option', False):
+                    logger.info(f"  - ID: {raw_data.get('id')}")
+                    # Parse outcomes which come as a JSON string
+                    outcomes_raw = raw_data.get("outcomes", "[]")
+                    outcomes = []
+                    try:
+                        if isinstance(outcomes_raw, str):
+                            outcomes = json.loads(outcomes_raw)
+                        else:
+                            outcomes = outcomes_raw
+                        logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+                    except Exception as e:
+                        logger.error(f"Error parsing outcomes: {str(e)}")
+                market_data_list.append(raw_data)
         
         # Post to Slack
         posted_results = post_markets_to_slack(market_data_list, max_to_post)
