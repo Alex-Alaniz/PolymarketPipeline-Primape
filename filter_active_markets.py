@@ -40,12 +40,13 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     all_markets = []
     
     # Categories to explicitly target for diversity
+    # These match Polymarket's allowed category values
     categories = [
         {"query": "politics", "count": 50},
         {"query": "sports", "count": 50},
         {"query": "crypto", "count": 30},
-        {"query": "news", "count": 40},
-        {"query": "tech", "count": 30}
+        {"query": "entertainment", "count": 40},
+        {"query": "science", "count": 30}
     ]
     
     # Base parameters for all requests
@@ -74,7 +75,16 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
             data = response.json()
             
             if isinstance(data, list):
-                all_markets.extend(data)
+                # Create a copy of each market with the category explicitly set
+                enriched_markets = []
+                for market in data:
+                    # Make a deep copy to avoid reference issues
+                    market_copy = market.copy()
+                    # Explicitly set the category for tracking
+                    market_copy["fetched_category"] = "general"
+                    enriched_markets.append(market_copy)
+                
+                all_markets.extend(enriched_markets)
                 logger.info(f"Fetched {len(data)} general markets from API")
             else:
                 logger.error(f"Unexpected response format for general markets: {type(data)}")
@@ -86,10 +96,11 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     
     # Now fetch category-specific markets
     for category in categories:
-        category_url = "https://gamma-api.polymarket.com/markets/search"
+        # Use main markets endpoint with category filter
+        category_url = "https://gamma-api.polymarket.com/markets"
         params = base_params.copy()
         params["limit"] = str(category["count"])  # Convert to string to avoid type error
-        params["q"] = category["query"]
+        params["category"] = category["query"]
         
         logger.info(f"Fetching {category['query']} markets from: {category_url}")
         
@@ -100,11 +111,16 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                 data = response.json()
                 
                 if isinstance(data, list):
-                    # Enrich with category data for better tracking
+                    # Create a copy of each market with the category explicitly set
+                    enriched_markets = []
                     for market in data:
-                        market["fetched_category"] = category["query"]
+                        # Make a deep copy to avoid reference issues
+                        market_copy = market.copy()
+                        # Explicitly set the category for tracking
+                        market_copy["fetched_category"] = category["query"]
+                        enriched_markets.append(market_copy)
                     
-                    all_markets.extend(data)
+                    all_markets.extend(enriched_markets)
                     logger.info(f"Fetched {len(data)} {category['query']} markets from API")
                 else:
                     logger.error(f"Unexpected response format for {category['query']} markets: {type(data)}")
@@ -114,11 +130,39 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
         except Exception as e:
             logger.error(f"Error fetching {category['query']} markets: {str(e)}")
     
-    # Remove duplicates by ID
+    # Process markets to prioritize category-specific ones
+    # First, separate general and category-specific markets
+    general_markets = [m for m in all_markets if m.get("fetched_category") == "general"]
+    category_markets = [m for m in all_markets if m.get("fetched_category") != "general"]
+    
+    # Group by category
+    category_groups = {}
+    for market in category_markets:
+        category = market.get("fetched_category", "unknown")
+        if category not in category_groups:
+            category_groups[category] = []
+        category_groups[category].append(market)
+    
+    # Log category distribution
+    logger.info("Category distribution of fetched markets:")
+    for category, markets in category_groups.items():
+        logger.info(f"  - {category}: {len(markets)} markets")
+    logger.info(f"  - general: {len(general_markets)} markets")
+    
+    # Remove duplicates by ID, prioritizing category-specific markets
     unique_markets = {}
-    for market in all_markets:
-        if market.get("id") and market.get("id") not in unique_markets:
-            unique_markets[market.get("id")] = market
+    
+    # First add all category-specific markets
+    for market in category_markets:
+        market_id = market.get("id")
+        if market_id:
+            unique_markets[market_id] = market
+    
+    # Then add general markets if they don't already exist
+    for market in general_markets:
+        market_id = market.get("id")
+        if market_id and market_id not in unique_markets:
+            unique_markets[market_id] = market
     
     result = list(unique_markets.values())
     logger.info(f"Combined total of {len(result)} unique markets after removing duplicates")

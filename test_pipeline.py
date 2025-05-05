@@ -1,16 +1,24 @@
 #!/usr/bin/env python3
 
 """
-Test script for the full Polymarket pipeline.
+Test script for the Polymarket pipeline.
 
-This script tests the entire pipeline flow, from fetching markets to processing approvals.
+This script tests the end-to-end functionality of the Polymarket pipeline,
+including fetching markets, filtering them, and simulating the approval process.
 """
 
 import os
 import sys
+import json
 import logging
+from datetime import datetime, timedelta
 import time
-from datetime import datetime
+
+from models import db, Market, ProcessedMarket
+from filter_active_markets import fetch_markets, filter_active_markets
+from check_market_approvals import check_market_approvals
+from pipeline import PolymarketPipeline
+from utils.messaging import post_market_for_approval
 
 # Configure logging
 logging.basicConfig(
@@ -23,85 +31,204 @@ logging.basicConfig(
 
 logger = logging.getLogger("test_pipeline")
 
-def main():
-    """
-    Test the full pipeline flow.
-    """
-    logger.info("=== Starting Pipeline Test ===")
+def clear_test_data():
+    """Clear any existing test data."""
+    logger.info("Clearing test data...")
     
-    # Step 1: Test fetching markets
-    logger.info("\nStep 1: Testing market fetching")
-    logger.info("-" * 40)
+    # Delete test markets from the Market table
+    test_markets = Market.query.filter(Market.question.like("TEST:%")).all()
+    for market in test_markets:
+        db.session.delete(market)
     
-    # Run filter_active_markets.py
-    logger.info("Running filter_active_markets.py...")
+    # Delete test markets from the ProcessedMarket table
+    test_processed = ProcessedMarket.query.filter(ProcessedMarket.question.like("TEST:%")).all()
+    for processed in test_processed:
+        db.session.delete(processed)
+    
+    db.session.commit()
+    logger.info(f"Cleared {len(test_markets)} test markets and {len(test_processed)} test processed markets")
+
+def create_test_market(index=1):
+    """Create a test market record."""
+    market_id = f"test-market-{index}-{int(time.time())}"
+    question = f"TEST: Will this test market {index} pass all checks?"
+    expiry = datetime.utcnow() + timedelta(days=30)
+    
+    # Create a raw market object similar to what we'd get from the API
+    raw_market = {
+        "id": market_id,
+        "conditionId": f"test-condition-{index}",
+        "question": question,
+        "outcomes": '["Yes", "No"]',
+        "outcomePrices": '[0.5, 0.5]',
+        "endDate": expiry.isoformat() + "Z",
+        "description": "This is a test market for pipeline testing",
+        "image": "https://example.com/image.jpg",
+        "icon": "https://example.com/icon.png",
+        "active": True,
+        "closed": False,
+        "archived": False,
+        "volume": "1000",
+        "fetched_category": "test"
+    }
+    
+    # Create a ProcessedMarket record
+    processed = ProcessedMarket(
+        condition_id=raw_market["conditionId"],
+        question=raw_market["question"],
+        raw_data=raw_market
+    )
+    
+    db.session.add(processed)
+    db.session.commit()
+    
+    logger.info(f"Created test ProcessedMarket: {market_id}")
+    return processed
+
+def simulate_market_approval(processed_market):
+    """Simulate the approval of a market in Slack."""
+    logger.info(f"Simulating approval for market: {processed_market.question}")
+    
+    # Mark as posted to slack
+    processed_market.posted = True
+    processed_market.message_id = f"test-message-{int(time.time())}"
+    db.session.commit()
+    
+    # Simulate approval
+    processed_market.approved = True
+    processed_market.approval_date = datetime.utcnow()
+    processed_market.approver = "TEST_USER"
+    db.session.commit()
+    
+    logger.info(f"Market {processed_market.condition_id} marked as approved")
+    return processed_market
+
+def test_market_fetching():
+    """Test the market fetching and filtering functionality."""
+    logger.info("Testing market fetching...")
+    
+    # Fetch markets from Polymarket API
+    markets = fetch_markets()
+    
+    if not markets:
+        logger.error("Failed to fetch any markets from API")
+        return False
+    
+    logger.info(f"Successfully fetched {len(markets)} markets from API")
+    
+    # Filter active markets
+    active_markets = filter_active_markets(markets)
+    
+    if not active_markets:
+        logger.error("No active markets found after filtering")
+        return False
+    
+    logger.info(f"Successfully filtered to {len(active_markets)} active markets")
+    
+    # Check category distribution
+    categories = {}
+    for market in active_markets:
+        category = market.get("fetched_category", "general")
+        categories[category] = categories.get(category, 0) + 1
+    
+    logger.info("Market category distribution:")
+    for category, count in categories.items():
+        logger.info(f"  - {category}: {count} markets")
+    
+    return True
+
+def test_approval_workflow():
+    """Test the market approval workflow."""
+    logger.info("Testing approval workflow...")
+    
+    # Create some test markets
+    test_markets = [create_test_market(i) for i in range(1, 4)]
+    
+    # Simulate approval for some of them
+    approved_markets = [simulate_market_approval(market) for market in test_markets[:2]]
+    
+    # Run the approval check
     try:
-        import filter_active_markets
-        filter_active_markets.main()
-        logger.info("✅ Successfully fetched and filtered active markets")
+        pending, approved, rejected = check_market_approvals()
+        logger.info(f"Approval check results: {pending} pending, {approved} approved, {rejected} rejected")
+        
+        # Check if our test markets were detected correctly
+        approved_in_db = Market.query.filter(
+            Market.question.like("TEST:%"),
+            Market.status.in_(["new", "deployed"])
+        ).all()
+        
+        logger.info(f"Found {len(approved_in_db)} test markets in the Market table")
+        for market in approved_in_db:
+            logger.info(f"  - {market.id}: {market.question} (Status: {market.status})")
+        
+        return len(approved_in_db) >= len(approved_markets)
+    
     except Exception as e:
-        logger.error(f"❌ Failed to fetch active markets: {e}")
-        return 1
+        logger.error(f"Error testing approval workflow: {str(e)}")
+        return False
+
+def test_pipeline_execution():
+    """Test the complete pipeline execution."""
+    logger.info("Testing pipeline execution...")
     
-    # Step 2: Test posting markets to Slack
-    logger.info("\nStep 2: Testing market posting to Slack")
-    logger.info("-" * 40)
-    
-    # Check if Slack environment variables are set
-    if not os.environ.get("SLACK_BOT_TOKEN") or not os.environ.get("SLACK_CHANNEL_ID"):
-        logger.warning("⚠️ Skipping Slack tests as environment variables are not set")
-        logger.warning("To test Slack integration, set SLACK_BOT_TOKEN and SLACK_CHANNEL_ID")
-    else:
-        # Run fetch_active_markets_with_tracker.py
-        logger.info("Running fetch_active_markets_with_tracker.py...")
-        try:
-            import fetch_active_markets_with_tracker
-            fetch_active_markets_with_tracker.main()
-            logger.info("✅ Successfully posted markets to Slack")
-        except Exception as e:
-            logger.error(f"❌ Failed to post markets to Slack: {e}")
-            return 1
-    
-    # Step 3: Test checking approvals
-    logger.info("\nStep 3: Testing checking market approvals")
-    logger.info("-" * 40)
-    
-    if not os.environ.get("SLACK_BOT_TOKEN") or not os.environ.get("SLACK_CHANNEL_ID"):
-        logger.warning("⚠️ Skipping approval checks as environment variables are not set")
-    else:
-        # Run check_market_approvals.py
-        logger.info("Running check_market_approvals.py...")
-        try:
-            import check_market_approvals
-            check_market_approvals.main()
-            logger.info("✅ Successfully checked market approvals")
-        except Exception as e:
-            logger.error(f"❌ Failed to check market approvals: {e}")
-            return 1
-    
-    # Step 4: Test full pipeline
-    logger.info("\nStep 4: Testing full pipeline")
-    logger.info("-" * 40)
-    
-    # Run pipeline.py
-    logger.info("Running pipeline.py...")
     try:
-        from pipeline import PolymarketPipeline
+        # Create a pipeline instance
         pipeline = PolymarketPipeline()
+        
+        # Run the pipeline
         exit_code = pipeline.run()
         
         if exit_code == 0:
-            logger.info("✅ Full pipeline executed successfully")
+            logger.info("Pipeline executed successfully")
+            
+            # Check stats
+            logger.info("Pipeline stats:")
+            for key, value in pipeline.stats.items():
+                logger.info(f"  - {key}: {value}")
+            
+            return True
         else:
-            logger.error(f"❌ Pipeline failed with exit code: {exit_code}")
-            return exit_code
+            logger.error(f"Pipeline execution failed with exit code {exit_code}")
+            return False
             
     except Exception as e:
-        logger.error(f"❌ Exception running full pipeline: {e}")
-        return 1
+        logger.error(f"Error executing pipeline: {str(e)}")
+        return False
+
+def main():
+    """Main function to run the tests."""
+    logger.info("Starting pipeline tests")
     
-    logger.info("\n=== Pipeline Test Completed Successfully ===")
-    return 0
+    # Import Flask app to get application context
+    from main import app
+    
+    # Use application context for database operations
+    with app.app_context():
+        # Clean up any previous test data
+        clear_test_data()
+        
+        # Run the tests
+        fetching_success = test_market_fetching()
+        approval_success = test_approval_workflow()
+        pipeline_success = test_pipeline_execution()
+        
+        # Report results
+        logger.info("\n=== TEST RESULTS ===")
+        logger.info(f"Market fetching:    {'✓ PASS' if fetching_success else '✗ FAIL'}")
+        logger.info(f"Approval workflow:  {'✓ PASS' if approval_success else '✗ FAIL'}")
+        logger.info(f"Pipeline execution: {'✓ PASS' if pipeline_success else '✗ FAIL'}")
+        logger.info("====================\n")
+        
+        # Final cleanup
+        clear_test_data()
+    
+    if fetching_success and approval_success and pipeline_success:
+        logger.info("All tests PASSED!")
+        return 0
+    else:
+        logger.error("Some tests FAILED!")
+        return 1
 
 if __name__ == "__main__":
     sys.exit(main())
