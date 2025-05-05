@@ -185,6 +185,9 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
         logger.error("No market data provided")
         return None
     
+    # Deep debugging of market data to understand the structure
+    logger.info(f"DEBUG: Full market data keys: {list(market_data.keys())}")
+    
     # Check if this is a multi-option market
     is_multiple = market_data.get('is_multiple_option', False)
     
@@ -192,29 +195,47 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     logger.info(f"Posting market for approval: {market_data.get('question', 'Unknown')}")
     logger.info(f"  - Type: {('Multiple-choice' if is_multiple else 'Binary')}")
     
+    # Output debug info for multi-option market
     if is_multiple:
         logger.info(f"  - ID: {market_data.get('id')}")
-        # Parse outcomes
+        logger.info(f"  - Is multiple? {is_multiple}")
+        logger.info(f"  - Original market IDs: {market_data.get('original_market_ids', [])}")
+        
+        # Parse outcomes to ensure we're handling them correctly
         outcomes_raw = market_data.get("outcomes", "[]")
+        logger.info(f"  - Raw outcomes type: {type(outcomes_raw)}")
+        logger.info(f"  - Raw outcomes value: {outcomes_raw}")
+        
         outcomes = []
         try:
             if isinstance(outcomes_raw, str):
                 import json
                 outcomes = json.loads(outcomes_raw)
+                logger.info(f"  - Parsed outcomes from JSON string: {outcomes}")
             else:
                 outcomes = outcomes_raw
-            logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+                logger.info(f"  - Using outcomes directly: {outcomes}")
+            
+            # Verify unique outcomes
+            unique_outcomes = list(dict.fromkeys(outcomes))
+            logger.info(f"  - Options after deduplication ({len(unique_outcomes)}): {unique_outcomes}")
         except Exception as e:
             logger.error(f"Error parsing outcomes: {str(e)}")
     else:
         logger.info(f"  - Condition ID: {market_data.get('conditionId')}")
     
-    # Market ID to track in the message
-    market_id = market_data.get('id') if is_multiple else market_data.get('conditionId', 'unknown')
-    logger.info(f"  - Using ID for tracking: {market_id}")
-        
-    # Format message text
-    text = f"*New Market for Approval*\n\n*Question:* {market_data.get('question', 'N/A')}"
+    # Market ID to track in the message - CRITICAL PART
+    market_id = ""
+    if is_multiple:
+        market_id = market_data.get('id', 'unknown-multiple')
+        logger.info(f"  - Using ID for multi-option market: {market_id}")
+    else:
+        market_id = market_data.get('conditionId', 'unknown-binary')
+        logger.info(f"  - Using conditionId for binary market: {market_id}")
+
+    # Format message text - include market type in the header for clarity
+    market_type_text = "Multiple-Choice Market" if is_multiple else "Binary Market (Yes/No)"
+    text = f"*New {market_type_text} for Approval*\n\n*Question:* {market_data.get('question', 'N/A')}"
     
     # Create rich message blocks
     blocks = [
@@ -222,7 +243,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "New Market for Approval"
+                "text": f"New {market_type_text} for Approval"
             }
         },
         {
@@ -250,7 +271,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             "fields": [
                 {
                     "type": "mrkdwn",
-                    "text": f"*Type:* {('Multiple-choice Market' if is_multiple else 'Binary Market (Yes/No)')}"
+                    "text": f"*Type:* {market_type_text}"
                 },
                 {
                     "type": "mrkdwn",
@@ -260,29 +281,48 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
         }
     ]
     
-    # Add options if available
+    # Add options section - CRITICAL PART
     outcomes_raw = market_data.get("outcomes", "[]")
     outcomes = []
     
     # Parse outcomes which come as a JSON string
     try:
         if isinstance(outcomes_raw, str):
-            import json
             outcomes = json.loads(outcomes_raw)
+            logger.info(f"Parsed {len(outcomes)} outcomes from JSON string")
         else:
             outcomes = outcomes_raw
+            logger.info(f"Using {len(outcomes)} outcomes directly")
             
-        # For multiple-option markets, remove duplicates
+        # For multiple-option markets, ensure we have unique options
         if is_multiple and outcomes:
-            outcomes = list(dict.fromkeys(outcomes))
+            # Remove duplicates while preserving order
+            unique_outcomes = []
+            seen = set()
+            for outcome in outcomes:
+                if outcome not in seen:
+                    seen.add(outcome)
+                    unique_outcomes.append(outcome)
+            
+            outcomes = unique_outcomes
+            logger.info(f"Deduplicated to {len(outcomes)} unique outcomes")
+            
+            # Update the market data for downstream processing
+            market_data["outcomes"] = json.dumps(outcomes)
     except Exception as e:
         logger.error(f"Error parsing outcomes: {str(e)}")
+        # Default to Yes/No for binary markets if we can't parse outcomes
+        if not is_multiple:
+            outcomes = ["Yes", "No"]
+            logger.info("Defaulting to Yes/No options for binary market")
     
+    # Add options to blocks
     if outcomes:
         options_text = "*Options:*\n"
         for i, option in enumerate(outcomes):
             options_text += f"  {i+1}. {option}\n"
-            
+        
+        logger.info(f"Adding options section with {len(outcomes)} options")
         blocks.append({
             "type": "section",
             "text": {
@@ -290,11 +330,14 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
                 "text": options_text
             }
         })
+    else:
+        logger.warning("No options found for market")
     
     # Add note about original market IDs for multiple-option markets
     original_ids = market_data.get('original_market_ids', [])
     if is_multiple and original_ids:
         unique_ids = list(dict.fromkeys(original_ids))
+        logger.info(f"Adding section for {len(unique_ids)} original market IDs")
         blocks.append({
             "type": "section",
             "text": {
@@ -305,6 +348,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     
     # Add image if available
     if market_data.get("image"):
+        logger.info(f"Adding image URL: {market_data.get('image')}")
         blocks.append(
             {
                 "type": "image",
@@ -319,6 +363,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     
     # Add icon if available and different from image
     if market_data.get("icon") and market_data.get("icon") != market_data.get("image"):
+        logger.info(f"Adding icon URL: {market_data.get('icon')}")
         blocks.append(
             {
                 "type": "image",
@@ -343,9 +388,11 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     )
     
     # Post message to Slack
+    logger.info(f"Posting {market_type_text} to Slack channel: {slack_channel_id}")
     response = post_message(slack_channel_id, text, blocks)
     
     if response.get("ok"):
+        logger.info(f"Successfully posted {market_type_text} to Slack, ts: {response.get('ts')}")
         return response.get("ts")
     else:
         logger.error(f"Failed to post market for approval: {response.get('error')}")
