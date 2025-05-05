@@ -219,6 +219,21 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
         }
     ]
     
+    # Add options if available
+    outcomes = market_data.get("outcomes", [])
+    if outcomes:
+        options_text = "*Options:*\n"
+        for i, option in enumerate(outcomes):
+            options_text += f"  {i+1}. {option}\n"
+            
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": options_text
+            }
+        })
+    
     # Add image if available
     if market_data.get("image"):
         blocks.append(

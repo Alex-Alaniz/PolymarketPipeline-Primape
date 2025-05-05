@@ -171,6 +171,14 @@ def format_market_message(market: Dict[str, Any]) -> str:
     end_date = market.get("endDate", "Unknown")
     category = market.get("fetched_category", "general")
     
+    # Extract options
+    options_text = ""
+    outcomes = market.get("outcomes", [])
+    if outcomes:
+        options_text = "*Options:*\n"
+        for i, option in enumerate(outcomes):
+            options_text += f"  {i+1}. {option}\n"
+    
     # Format message
     message = f"""
 *New Market for Approval*
@@ -178,7 +186,7 @@ def format_market_message(market: Dict[str, Any]) -> str:
 *Question:* {question}
 *Category:* {category}
 *End Date:* {end_date}
-
+{options_text}
 React with :white_check_mark: to approve or :x: to reject.
 """
     
