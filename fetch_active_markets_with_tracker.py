@@ -93,51 +93,68 @@ def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:
     if not markets:
         return []
     
-    # Import Flask app here to avoid circular imports
-    from main import app
+    # Create a list to track condition IDs
+    condition_ids = []
+    condition_id_to_data = {}
     
-    # Use application context for database operations
-    with app.app_context():
-        tracked_markets = []
+    # Extract condition IDs and prepare data mapping
+    for market_data in markets:
+        condition_id = market_data.get("conditionId")
         
-        for market_data in markets:
-            condition_id = market_data.get("conditionId")
+        if not condition_id:
+            logger.warning(f"Market missing conditionId: {market_data.get('question', 'Unknown')}")
+            continue
             
-            if not condition_id:
-                logger.warning(f"Market missing conditionId: {market_data.get('question', 'Unknown')}")
-                continue
-                
-            # Check if market already exists
-            existing = ProcessedMarket.query.get(condition_id)
+        condition_ids.append(condition_id)
+        condition_id_to_data[condition_id] = market_data
+    
+    if not condition_ids:
+        logger.warning("No valid condition IDs found in market data")
+        return []
+    
+    # The function should be called within an app context
+    # Get existing markets in a single query
+    existing_markets = {
+        market.condition_id: market for market in 
+        ProcessedMarket.query.filter(ProcessedMarket.condition_id.in_(condition_ids)).all()
+    }
+    
+    logger.info(f"Found {len(existing_markets)} existing markets in database")
+    
+    tracked_markets = []
+    now = datetime.utcnow()
+    
+    # Process each market
+    for condition_id, market_data in condition_id_to_data.items():
+        if condition_id in existing_markets:
+            # Update existing record
+            market = existing_markets[condition_id]
+            market.last_processed = now
+            market.process_count += 1
             
-            if existing:
-                # Update existing record
-                existing.last_processed = datetime.utcnow()
-                existing.process_count += 1
+            if market.raw_data != market_data:
+                market.raw_data = market_data
                 
-                if existing.raw_data != market_data:
-                    existing.raw_data = market_data
-                    
-                tracked_markets.append(existing)
-                logger.debug(f"Updated existing market: {condition_id}")
-                
-            else:
-                # Create new record
-                market = ProcessedMarket(
-                    condition_id=condition_id,
-                    question=market_data.get("question", "Unknown"),
-                    raw_data=market_data
-                )
-                
-                db.session.add(market)
-                tracked_markets.append(market)
-                logger.debug(f"Added new market: {condition_id}")
-        
-        # Save changes
-        db.session.commit()
-        
-        logger.info(f"Tracked {len(tracked_markets)} markets in database")
-        return tracked_markets
+            tracked_markets.append(market)
+            logger.debug(f"Updated existing market: {condition_id}")
+            
+        else:
+            # Create new record
+            market = ProcessedMarket(
+                condition_id=condition_id,
+                question=market_data.get("question", "Unknown"),
+                raw_data=market_data
+            )
+            
+            db.session.add(market)
+            tracked_markets.append(market)
+            logger.debug(f"Added new market: {condition_id}")
+    
+    # Save changes
+    db.session.commit()
+    
+    logger.info(f"Tracked {len(tracked_markets)} markets in database")
+    return tracked_markets
 
 def format_market_message(market: Dict[str, Any]) -> str:
     """
@@ -180,15 +197,21 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 5) -> Lis
     """
     if not markets:
         return []
-        
-    # Track markets in database
-    tracked_markets = track_markets_in_db(markets)
     
     # Import Flask app here to avoid circular imports
     from main import app
     
     # Use application context for database operations
     with app.app_context():
+        # Track markets in database within the app context
+        tracked_markets = track_markets_in_db(markets)
+        
+        # Query directly from the database to ensure we have attached session objects
+        condition_ids = [market.condition_id for market in tracked_markets]
+        tracked_markets = ProcessedMarket.query.filter(
+            ProcessedMarket.condition_id.in_(condition_ids)
+        ).all()
+        
         # Only process markets that haven't been posted yet
         to_post = [
             market for market in tracked_markets 
