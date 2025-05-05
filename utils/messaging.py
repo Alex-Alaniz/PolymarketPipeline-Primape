@@ -266,3 +266,22 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     else:
         logger.error(f"Failed to post market for approval: {response.get('error')}")
         return None
+
+
+def post_message_to_slack(message: str) -> Optional[str]:
+    """
+    Post a simple text message to Slack.
+    
+    Args:
+        message: Message text to post
+        
+    Returns:
+        Message timestamp (ts) if successful, None otherwise
+    """
+    response = post_message(slack_channel_id, message)
+    
+    if response.get("ok"):
+        return response.get("ts")
+    else:
+        logger.error(f"Failed to post message to Slack: {response.get('error')}")
+        return None

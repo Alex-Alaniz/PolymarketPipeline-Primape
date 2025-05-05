@@ -68,50 +68,70 @@ def get_contract():
         logger.error(f"Error creating contract instance: {str(e)}")
         return None
 
-def deploy_market_to_apechain(
-    question: str,
-    options: List[str],
-    duration_days: int = 30
-) -> Tuple[bool, Optional[str], Optional[str]]:
+def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
     """
     Deploy a market to Apechain smart contract.
     
     Args:
-        question: The market question
-        options: List of market options (e.g., ["Yes", "No"])
-        duration_days: Duration of the market in days
+        market: Market model instance
         
     Returns:
         Tuple containing:
-        - Success status (bool)
         - Apechain market ID (str) or None if failed
-        - Error message (str) or None if successful
+        - Transaction hash (str) or None if failed
     """
-    if not question or not options:
-        return False, None, "Invalid market data: question or options missing"
+    if not market or not market.question:
+        logger.error("Invalid market: missing required data")
+        return None, None
     
-    # Convert duration to seconds
-    duration_seconds = duration_days * 24 * 60 * 60
+    # Parse market options
+    try:
+        if isinstance(market.options, str):
+            options = json.loads(market.options)
+        else:
+            options = market.options
+            
+        if not options or not isinstance(options, list):
+            options = ["Yes", "No"]  # Default binary options
+    except:
+        options = ["Yes", "No"]  # Default if parsing fails
+    
+    # Calculate duration from expiry
+    if market.expiry:
+        # Calculate duration from now until expiry
+        now = datetime.utcnow()
+        expiry = datetime.fromtimestamp(market.expiry)
+        duration = expiry - now
+        duration_seconds = max(int(duration.total_seconds()), 86400)  # At least 1 day
+    else:
+        # Default to 30 days if no expiry provided
+        duration_seconds = 30 * 24 * 60 * 60
     
     # Get contract instance
     contract = get_contract()
     if not contract:
-        return False, None, "Failed to get contract instance"
+        logger.error("Failed to get contract instance")
+        return None, None
     
     # Get account details for the transaction
     private_key = os.environ.get("WALLET_PRIVATE_KEY")
     account_address = os.environ.get("WALLET_ADDRESS")
     
     if not private_key or not account_address:
-        return False, None, "Wallet credentials not configured"
+        logger.error("Wallet credentials not configured")
+        return None, None
     
     w3 = get_web3()
+    if not w3:
+        logger.error("Failed to connect to blockchain")
+        return None, None
+        
     account_address = Web3.to_checksum_address(account_address)
     
     try:
         # Build transaction
         tx = contract.functions.createMarket(
-            question,
+            market.question,
             options,
             duration_seconds
         ).build_transaction({
@@ -125,9 +145,10 @@ def deploy_market_to_apechain(
         # Sign and send transaction
         signed_tx = w3.eth.account.sign_transaction(tx, private_key)
         tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+        tx_hash_hex = tx_hash.hex()
         
         # Wait for transaction receipt
-        logger.info(f"Waiting for transaction receipt: {tx_hash.hex()}")
+        logger.info(f"Waiting for transaction receipt: {tx_hash_hex}")
         receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
         
         # Check transaction status
@@ -139,27 +160,27 @@ def deploy_market_to_apechain(
                 if logs and len(logs) > 0:
                     market_id = logs[0]['args']['marketId']
                     logger.info(f"Market deployed to Apechain. Market ID: {market_id}")
-                    return True, str(market_id), None
+                    return str(market_id), tx_hash_hex
                 else:
-                    # If we can't parse logs, return success but no ID
+                    # If we can't parse logs, use transaction hash as ID
                     logger.warning("Market created but couldn't extract market ID from logs")
-                    return True, receipt.transactionHash.hex(), None
+                    return tx_hash_hex, tx_hash_hex
             except Exception as e:
                 logger.warning(f"Error parsing transaction logs: {str(e)}")
                 # Return transaction hash as identifier if we can't get the market ID
-                return True, receipt.transactionHash.hex(), None
+                return tx_hash_hex, tx_hash_hex
         else:
             logger.error(f"Transaction failed: {receipt}")
-            return False, None, f"Transaction failed with status: {receipt.status}"
+            return None, None
             
     except ContractLogicError as e:
         error_msg = str(e)
         logger.error(f"Contract logic error: {error_msg}")
-        return False, None, f"Contract error: {error_msg}"
+        return None, None
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Error deploying market: {error_msg}")
-        return False, None, f"Error: {error_msg}"
+        return None, None
 
 def get_market_status(market_id: str) -> Dict[str, Any]:
     """
