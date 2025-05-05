@@ -27,16 +27,22 @@ class MarketTransformer:
         """Extract the entity from a question based on a pattern"""
         match = re.search(pattern, question, re.IGNORECASE)
         if match:
-            return match.group(1).strip()
+            entity = match.group(1).strip()
+            logger.debug(f"Extracted entity '{entity}' from question: '{question}'")
+            return entity
+        logger.debug(f"No entity extracted from question: '{question}' using pattern: {pattern}")
         return None
     
     def extract_base_question(self, question: str, entity: Optional[str] = None) -> str:
         """Extract the base question without the specific entity"""
         if entity:
-            # Replace the entity with a placeholder
-            base_question = question.replace(entity, "ENTITY")
+            # Use regex to replace the entity with a placeholder
+            # This handles case-insensitive matching and special characters
+            base_question = re.sub(re.escape(entity), "ENTITY", question, flags=re.IGNORECASE)
+            logger.debug(f"Extracted base question: '{base_question}' from '{question}' with entity '{entity}'")
             # Convert to lowercase for comparison purposes only
             return base_question.lower()
+        logger.debug(f"No entity provided, using question as is: '{question}'")
         return question.lower()
     
     def get_patterns(self) -> Dict[str, str]:
