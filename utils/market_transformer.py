@@ -27,9 +27,13 @@ class MarketTransformer:
         """Extract the entity from a question based on a pattern"""
         match = re.search(pattern, question, re.IGNORECASE)
         if match:
-            entity = match.group(1).strip()
-            logger.debug(f"Extracted entity '{entity}' from question: '{question}'")
-            return entity
+            # Get the first captured group (the entity)
+            if len(match.groups()) > 0:
+                entity = match.group(1).strip()
+                logger.info(f"Extracted entity '{entity}' from question: '{question}'")
+                return entity
+            logger.warning(f"Pattern matched but no capture group: '{question}' using pattern: {pattern}")
+            return None
         logger.debug(f"No entity extracted from question: '{question}' using pattern: {pattern}")
         return None
     
@@ -38,18 +42,26 @@ class MarketTransformer:
         if entity:
             # Use regex to replace the entity with a placeholder
             # This handles case-insensitive matching and special characters
-            base_question = re.sub(re.escape(entity), "ENTITY", question, flags=re.IGNORECASE)
-            logger.debug(f"Extracted base question: '{base_question}' from '{question}' with entity '{entity}'")
-            # Convert to lowercase for comparison purposes only
-            return base_question.lower()
+            base_question = re.sub(re.escape(entity), "entity", question, flags=re.IGNORECASE)
+            
+            # Standardize by removing extra spaces and making lowercase
+            base_question = re.sub(r'\s+', ' ', base_question.lower().strip())
+            
+            # Further normalize to create consistent grouping keys
+            base_question = re.sub(r'(top\s+goalscorer|top\s+scorer)\s+in\s+the\s+(epl|english\s+premier\s+league)', 
+                                 'top_goalscorer_in_the_epl', base_question, flags=re.IGNORECASE)
+            
+            logger.info(f"Extracted base question: '{base_question}' from '{question}' with entity '{entity}'")
+            return base_question
+            
         logger.debug(f"No entity provided, using question as is: '{question}'")
         return question.lower()
     
     def get_patterns(self) -> Dict[str, str]:
         """Define patterns for different types of related markets"""
         return {
-            # EPL Top Goalscorer pattern - matches both "top goalscorer in the EPL" and variants
-            "epl_top_goalscorer": r"(?i)will\s+(.*?)\s+be\s+the\s+(?:top\s+goalscorer|top\s+scorer)\s+in\s+the\s+(?:EPL|English\s+Premier\s+League)\s*\?",
+            # EPL Top Goalscorer pattern - matches both "top goalscorer in the EPL" and variants with a more specific capture
+            "epl_top_goalscorer": r"(?i)will\s+([A-Za-z\s\-]+?)\s+be\s+the\s+(?:top\s+goalscorer|top\s+scorer)\s+in\s+the\s+(?:EPL|English\s+Premier\s+League)\s*\?",
             
             # Champions League Winner pattern
             "champions_league_winner": r"(?i)will\s+(.*?)\s+win\s+the\s+UEFA\s+Champions\s+League\s*\?",
@@ -90,7 +102,27 @@ class MarketTransformer:
             
             # Check if market matches any pattern
             matched = False
+            
+            # Special debug for EPL top goalscorer
+            epl_pattern = patterns.get("epl_top_goalscorer", "")
+            if epl_pattern and re.search(epl_pattern, question, re.IGNORECASE):
+                logger.info(f"POTENTIAL EPL MATCH: '{question}' matches EPL pattern!")
+                
+                # Force it to the EPL goalscorer pattern first
+                pattern_name = "epl_top_goalscorer"
+                pattern = patterns.get(pattern_name)
+                entity = self.extract_entity_from_question(question, pattern)
+                if entity:
+                    standard_key = "will_entity_be_the_top_goalscorer_in_the_epl"
+                    logger.info(f"Using standard key for EPL top goalscorer: {standard_key}")
+                    grouped_markets[standard_key].append((market, question, entity))
+                    matched = True
+                    logger.info(f"Matched EPL pattern: {question} -> entity: {entity}")
+                    continue  # Skip further pattern matching
+            
+            # Try other patterns
             for pattern_name, pattern in patterns.items():
+                logger.info(f"Trying pattern '{pattern_name}' on question: '{question}'")
                 entity = self.extract_entity_from_question(question, pattern)
                 if entity:
                     base_question = self.extract_base_question(question, entity)
@@ -119,6 +151,15 @@ class MarketTransformer:
             if not matched:
                 base_question = question.lower()  # For grouping purposes only
                 grouped_markets[base_question].append((market, question, None))
+        
+        # Debug log to see what groups we identified
+        logger.info("DEBUGGING MARKET GROUPS")
+        for base_key, market_list in grouped_markets.items():
+            logger.info(f"Group key: {base_key}, Number of markets: {len(market_list)}")
+            if "goalscorer" in base_key or "top_scorer" in base_key or "epl" in base_key.lower() or base_key == "will_entity_be_the_top_goalscorer_in_the_epl":
+                logger.info(f"FOUND EPL SCORER GROUP: {base_key} with {len(market_list)} markets")
+                for i, (m, q, e) in enumerate(market_list):
+                    logger.info(f"  Market {i+1}: {q} -> entity: {e}")
         
         # Second pass: determine which groups are actually multiple-option markets
         result = []
@@ -155,8 +196,15 @@ class MarketTransformer:
                     _, original_question, _ = market_group[0]
                     
                     # For specific patterns, create a better title
-                    if base_question == "will_entity_be_the_top_goalscorer_in_the_epl" or "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
+                    logger.info(f"Creating title for group with base_question: {base_question}")
+                    
+                    # Special handling for EPL top goalscorer
+                    if base_question == "will_entity_be_the_top_goalscorer_in_the_epl" or "top_goalscorer_in_the_epl" in base_question:
                         group_title = "English Premier League Top Scorer"
+                        logger.info(f"Creating EPL Top Scorer group with {len(market_group)} markets")
+                    elif "goalscorer" in base_question or "top scorer" in base_question.lower() or "epl" in base_question.lower():
+                        group_title = "English Premier League Top Scorer"
+                        logger.info(f"Creating EPL Top Scorer group (secondary match) with {len(market_group)} markets")
                     elif base_question == "will_entity_win_the_uefa_champions_league" or "uefa champions league" in base_question.lower():
                         group_title = "Champions League Winner"
                     elif base_question == "will_entity_win_la_liga" or "win la liga" in base_question.lower():
