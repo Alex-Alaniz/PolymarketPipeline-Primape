@@ -1,0 +1,506 @@
+{
+  "timestamp": "2025-05-05T17:38:52.766662",
+  "count": 10,
+  "markets": [
+    {
+      "enable_order_book": false,
+      "active": false,
+      "closed": false,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "",
+      "question_id": "",
+      "question": "Will Google publicly launch a ChatGPT competitor by March 31?",
+      "description": "This market will resolve to \"Yes\" if Google publicly launches an LLM-based chatbot (including any beta or test versions) by March 31, 2023, 11:59:59 PM ET. Otherwise, this market will resolve to \"No\".\n\nThe primary resolution source for this market will be official information from Alphabet or Google, including accessing the actual chatbot service, however a consensus of credible reporting may also be used. \n",
+      "market_slug": "will-google-publicly-launch-a-chatgpt-competitor-by-march-31",
+      "end_date_iso": null,
+      "game_start_time": null,
+      "seconds_delay": 0,
+      "fpmm": "",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/google.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/google.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": false,
+      "closed": false,
+      "archived": true,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "",
+      "question_id": "",
+      "question": "Will OpenSea launch their token by April 1?",
+      "description": "If OpenSea has a live token by April 1st, 2023, 11:59:59 PM ET, this market will resolve to \"Yes\". Otherwise, the market will resolve to \"No\".\n\nHaving a live token in this context can be defined as a deployed-to-mainnet, actively transferrable and/or tradable token that is in some way native to the OpenSea product or protocol, and substantiated by OpenSea via official website or social media channels. Empirically speaking, having a live token will be considered fulfilled if official project channels announce the introduction of the token and it is live on mainnet, and swappable and acquirable (i.e. via Uniswap). In the case of a token being announced but not yet transferrable or \u201clive\u201d, that will not satisfy market conditions. If the token is deployed to mainnet (in any form, including some sort of voucher), but is not transferrable, that will also not satisfy market conditions. In the case of ERC20 tokens, if the token is deployed, but there is no existing Uniswap pool for the token, it will be considered not \u201clive\u201d and thus will not satisfy market conditions. For clarity, this market is about fungible tokens, and not NFTs related to a platform.",
+      "market_slug": "will-opensea-launch-their-token-by-april-1",
+      "end_date_iso": null,
+      "game_start_time": null,
+      "seconds_delay": 0,
+      "fpmm": "",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/opensea.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/opensea.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": false,
+      "closed": false,
+      "archived": true,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.04,
+      "condition_id": "",
+      "question_id": "",
+      "question": "Will Coinbase staking be available in the US through March 31?",
+      "description": "This market will resolve to \"Yes\" if Coinbase permits US users to stake $ETH without interruption from February 16 to March 31, 2023, 11:59:59 PM ET. Otherwise, this market will resolve to \"No\".\n\nIf US users of Coinbase are forbidden from staking $ETH at any point within this market's timeframe, this market will immediately resolve to \"No\". Restoration of staking ability within this market's timeframe after it has been forbidden will have no bearing on the resolution of this market.\n\nThe primary resolution source for this market will be official information from Coinbase (e.g. https://www.coinbase.com/blog), however a consensus of credible reporting may also be used.",
+      "market_slug": "will-coinbase-staking-be-available-in-the-us-through-march-31",
+      "end_date_iso": null,
+      "game_start_time": null,
+      "seconds_delay": 0,
+      "fpmm": "",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/coinbase2.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/coinbase2.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0x10f348d6ad73199a1efe44575c968d8b5607efdafed160063f55c44323a6447f",
+      "question_id": "0x5758329b7057c1589b7a8d95776bb0e6a6ac9c234620b88ae77d86f2fc719352",
+      "question": "Will Newcastle beat Liverpool? (2/18/2023)",
+      "description": "In the upcoming Premier League soccer match scheduled for February 18, 2023:\n\nIf Newcastle wins, this market will resolve to \"Yes\". Otherwise, this market will resolve to \"No\".\n\nIf the game results in a draw, the market resolves to \"No.\"\n\nIf the game is not completed by March 5, 2023, the market will resolve to 50-50.",
+      "market_slug": "will-newcastle-beat-liverpool-2182023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-18T18:30:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0x43E7E9EE9b24cD894f8729eE87633bF4BA089669",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/newcastle.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/newcastle.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "69780454012463187823535820084522830812885656025605618935844468793563244422936",
+          "outcome": "Yes",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "37230767173752368075543989740782917654461206599451875406015609391617715140406",
+          "outcome": "No",
+          "price": 1,
+          "winner": true
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0xb62bd4dfc19d30b1f4b6610001232a4f2bf3242de3bcdc37ac982b625dcad7de",
+      "question_id": "0xe556bae09fb3ef7c64b1a1b405810610d0d96f2b76f8ac4d3d1fc582116ec877",
+      "question": "Will Wolverhampton beat Bournemouth? (2/18/2023)",
+      "description": "In the upcoming Premier League soccer match scheduled for February 18, 2023:\n\nIf the Wolverhampton Wanderers win, this market will resolve to \"Yes\". Otherwise, this market will resolve to \"No\".\n\nIf the game results in a draw, the market resolves to \"No.\"\n\nIf the game is not completed by March 5, 2023, the market will resolve to 50-50.",
+      "market_slug": "will-wolverhampton-beat-bournemouth-2182023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-18T16:00:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0x08E879511f71c60492928980Ac9dbb512BE03711",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/wolverhampton.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/wolverhampton.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "60193719572540979232953359805150876110595103099587082822572761696517191154359",
+          "outcome": "Yes",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "24188608803800222501254943605387143369466838536639416049740736566964670654928",
+          "outcome": "No",
+          "price": 0,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0x7bc9c1311924e8dc2907dc00591b3d9528683f75924b99c436cca16dca39a28d",
+      "question_id": "0x5fa8c9de05107cc3c1463024628496d3510d6a95fe8cca6a8178f1b858ab06e2",
+      "question": "NBA: Bulls vs. Grizzlies (02/07/2023)",
+      "description": "In the upcoming NBA game, scheduled for February 7:\n\nIf the Chicago Bulls win, the market will resolve to \u201cBulls\u201d.\n\nIf the Memphis Grizzlies win, the market will resolve to \u201cGrizzlies\u201d.\n\nIf this game is not completed by April 7, 2023 (11:59:59 PM ET), or is definitively cancelled before that date, this market will resolve 50-50.",
+      "market_slug": "nba-bulls-vs-grizzlies-02072023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-08T01:00:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0x8D09eD64266dbdA30B6c27E199aC1464120fCddf",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "18701906317507298752028556213680793592795050346143743596744388137594776057836",
+          "outcome": "Bulls",
+          "price": 0.0002,
+          "winner": false
+        },
+        {
+          "token_id": "34749407249115988099461158639261123799269751012656013247968288048709628939505",
+          "outcome": "Grizzlies",
+          "price": 0.9998,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0x8d03ffacb39e355413dfbed8c8888a28a26f2305f04edfde521d95fa9bd3cc2d",
+      "question_id": "0x1336c2f1f0c1373a4ab19167dbbcb68cb3bb93107cceaa4664fed8801837cbb2",
+      "question": "NBA: Timberwolves vs. Nuggets (02/07/2023)",
+      "description": "In the upcoming NBA game, scheduled for February 7:\n\nIf the Minnesota Timberwolves win, the market will resolve to \u201cTimberwolves\u201d.\n\nIf the Denver Nuggets win, the market will resolve to \u201cNuggets\u201d.\n\nIf this game is not completed by April 7, 2023 (11:59:59 PM ET), or is definitively cancelled before that date, this market will resolve 50-50.",
+      "market_slug": "nba-timberwolves-vs-nuggets-02072023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-08T02:00:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0xd6115db2E32e8C74Afb3dE456236Ea7710e75e2B",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "46967172738902909641601404906246691839081964942588780959343564654102695926147",
+          "outcome": "Timberwolves",
+          "price": 0.0002,
+          "winner": false
+        },
+        {
+          "token_id": "11357436618126631667921773724292180758888259272485223378839947729932376663962",
+          "outcome": "Nuggets",
+          "price": 0.9998,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0xb05e7b55ac377e52a1e747e2da419c56654de8531b28111f9d81ace4cb9df391",
+      "question_id": "0xa6c309a57c0bf98a635726df06d706b5544a27d74d1a388781de0c0eb9195db7",
+      "question": "NBA: Thunder vs. Lakers (02/07/2023)",
+      "description": "In the upcoming NBA game, scheduled for February 7:\n\nIf the Oklahoma City Thunder win, the market will resolve to \u201cThunder\u201d.\n\nIf the Los Angeles Lakers win, the market will resolve to \u201cLakers\u201d.\n\nIf this game is not completed by April 7, 2023 (11:59:59 PM ET), or is definitively cancelled before that date, this market will resolve 50-50.",
+      "market_slug": "nba-thunder-vs-lakers-02072023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-08T03:00:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0xC7796C1a0aEB23bE612B5621ecCee8b3ad82049D",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "33499095174186646193975386388219995375836830660824271389211031761096030542930",
+          "outcome": "Thunder",
+          "price": 0.9998,
+          "winner": false
+        },
+        {
+          "token_id": "97790483421715085963645937569104518028766922802322376276494517447415575988350",
+          "outcome": "Lakers",
+          "price": 0.0002,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": true,
+      "closed": true,
+      "archived": false,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "0xf22ab1d1058164acf061e4fd7f36afa1dfa7bd652c5006cbd6d70b042d803e10",
+      "question_id": "0x597a14b510ebf209ee56899dc2dfda8599a3344b2f07cb8ef6a58f89c224b7a5",
+      "question": "NBA: Hawks vs. Pelicans (02/07/2023)",
+      "description": "In the upcoming NBA game, scheduled for February 7:\n\nIf the Atlanta Hawks win, the market will resolve to \u201cHawks\u201d.\n\nIf the New Orleans Pelicans win, the market will resolve to \u201cPelicans\u201d.\n\nIf this game is not completed by April 7, 2023 (11:59:59 PM ET), or is definitively cancelled before that date, this market will resolve 50-50.",
+      "market_slug": "nba-hawks-vs-pelicans-02072023",
+      "end_date_iso": null,
+      "game_start_time": "2023-02-08T00:30:00Z",
+      "seconds_delay": 3,
+      "fpmm": "0x6B0823753B8daAeb6503F5e9Eae4666231934878",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba.png",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "64012629658464665168634318626152443730146687393673531564676482111598343540749",
+          "outcome": "Hawks",
+          "price": 0.0001,
+          "winner": false
+        },
+        {
+          "token_id": "106273085684407062601471163797611807792014271907455670857186985135437530323501",
+          "outcome": "Pelicans",
+          "price": 0.9999,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    },
+    {
+      "enable_order_book": false,
+      "active": false,
+      "closed": false,
+      "archived": true,
+      "accepting_orders": false,
+      "accepting_order_timestamp": null,
+      "minimum_order_size": 15,
+      "minimum_tick_size": 0.01,
+      "condition_id": "",
+      "question_id": "",
+      "question": "Will Trump drop out before the 2024 Iowa Caucus?",
+      "description": "This market will resolve to \"Yes\" if former president Donald J. Trump withdraws from or is otherwise no longer in contention for the 2024 US Presidential Election before the day of the 2024 Iowa Caucus. Otherwise, this market will resolve to \"No\".\n\nIf no 2024 Republican Iowa caucuses take place by November 4, 2024, 11:59:59 PM ET, this market will resolve to \"No\".\n\nThis market will resolve according to official information from the Republican Party, however a consensus of credible reporting may be used.\n",
+      "market_slug": "will-trump-drop-out-before-the-2024-iowa-caucus",
+      "end_date_iso": null,
+      "game_start_time": null,
+      "seconds_delay": 0,
+      "fpmm": "",
+      "maker_base_fee": 0,
+      "taker_base_fee": 0,
+      "notifications_enabled": true,
+      "neg_risk": false,
+      "neg_risk_market_id": "",
+      "neg_risk_request_id": "",
+      "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/trump2.jpeg",
+      "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/trump2.jpeg",
+      "rewards": {
+        "rates": null,
+        "min_size": 0,
+        "max_spread": 0
+      },
+      "is_50_50_outcome": false,
+      "tokens": [
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        },
+        {
+          "token_id": "",
+          "outcome": "",
+          "price": 0,
+          "winner": false
+        }
+      ],
+      "tags": [
+        "All"
+      ]
+    }
+  ]
+}
