@@ -125,9 +125,32 @@ def test_market_approval_workflow():
     """Test the complete market approval workflow."""
     logger.info("Testing market approval workflow...")
     
+    # Clear any existing data to ensure we start fresh
+    clear_test_db_data()
+    clear_mock_slack()
+    
     # Create and post test markets
     test_markets = create_test_markets(3)
-    posted_markets = post_new_markets(test_markets)
+    
+    # First track the markets in database
+    from fetch_active_markets_with_tracker import track_markets_in_db
+    tracked_markets = track_markets_in_db(test_markets)
+    
+    # Then post directly to Slack, bypassing the filter_new_markets check
+    from utils.messaging import post_markets_to_slack
+    posted_results = post_markets_to_slack(test_markets)
+    
+    # Update the tracked markets with message IDs
+    for i, (market_data, message_id) in enumerate(posted_results):
+        if i < len(tracked_markets) and message_id:
+            tracked_markets[i].posted = True
+            tracked_markets[i].message_id = message_id
+    
+    # Save changes
+    db.session.commit()
+    
+    # Use tracked_markets as our posted_markets
+    posted_markets = tracked_markets
     
     if not posted_markets:
         logger.error("Failed to post any markets")

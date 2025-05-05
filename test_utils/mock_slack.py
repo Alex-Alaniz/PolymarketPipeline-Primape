@@ -23,7 +23,7 @@ def is_test_environment():
     """Check if we're in test environment."""
     return os.environ.get("TESTING") == "true"
 
-def post_message(channel_id: str, text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
+def post_message(channel_id: Optional[str], text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
     """
     Mock implementation of posting a message to Slack.
     

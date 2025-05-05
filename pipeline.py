@@ -82,7 +82,7 @@ class PolymarketPipeline:
             if key in self.stats:
                 self.stats[key] = value
     
-    def update_run_record(self, status: str = None, error: str = None):
+    def update_run_record(self, status: Optional[str] = None, error: Optional[str] = None):
         """
         Update the PipelineRun database record.
         
