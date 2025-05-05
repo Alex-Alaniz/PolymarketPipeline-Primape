@@ -72,10 +72,19 @@ def filter_new_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             logger.error(f"Error fetching existing markets: {str(e)}")
     
     # Filter out markets that already exist in database
-    new_markets = [
-        market for market in markets 
-        if market.get("conditionId") not in existing_ids
-    ]
+    new_markets = []
+    for market in markets:
+        # For multiple-option markets, use the group ID
+        if market.get("is_multiple_option"):
+            # Use the group ID as the unique identifier
+            market_id = market.get("id")
+            if market_id not in existing_ids:
+                new_markets.append(market)
+        else:
+            # For binary markets, use the condition ID
+            condition_id = market.get("conditionId")
+            if condition_id not in existing_ids:
+                new_markets.append(market)
     
     logger.info(f"Filtered to {len(new_markets)} new markets")
     return new_markets
@@ -93,30 +102,44 @@ def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:
     if not markets:
         return []
     
-    # Create a list to track condition IDs
-    condition_ids = []
-    condition_id_to_data = {}
+    # Create a list to track market IDs
+    # For binary markets, we'll use conditionId
+    # For multiple-option markets, we'll use the group ID
+    market_ids = []
+    market_id_to_data = {}
     
-    # Extract condition IDs and prepare data mapping
+    # Extract market IDs and prepare data mapping
     for market_data in markets:
-        condition_id = market_data.get("conditionId")
-        
-        if not condition_id:
-            logger.warning(f"Market missing conditionId: {market_data.get('question', 'Unknown')}")
-            continue
+        # Handle multiple-option markets
+        if market_data.get("is_multiple_option"):
+            market_id = market_data.get("id")
+            if not market_id:
+                logger.warning(f"Multiple-option market missing id: {market_data.get('question', 'Unknown')}")
+                continue
             
-        condition_ids.append(condition_id)
-        condition_id_to_data[condition_id] = market_data
+            market_ids.append(market_id)
+            market_id_to_data[market_id] = market_data
+            logger.debug(f"Processing multiple-option market with id: {market_id}")
+        else:
+            # Handle binary markets
+            condition_id = market_data.get("conditionId")
+            if not condition_id:
+                logger.warning(f"Binary market missing conditionId: {market_data.get('question', 'Unknown')}")
+                continue
+            
+            market_ids.append(condition_id)
+            market_id_to_data[condition_id] = market_data
+            logger.debug(f"Processing binary market with conditionId: {condition_id}")
     
-    if not condition_ids:
-        logger.warning("No valid condition IDs found in market data")
+    if not market_ids:
+        logger.warning("No valid market IDs found in market data")
         return []
     
     # The function should be called within an app context
     # Get existing markets in a single query
     existing_markets = {
         market.condition_id: market for market in 
-        ProcessedMarket.query.filter(ProcessedMarket.condition_id.in_(condition_ids)).all()
+        ProcessedMarket.query.filter(ProcessedMarket.condition_id.in_(market_ids)).all()
     }
     
     logger.info(f"Found {len(existing_markets)} existing markets in database")
@@ -125,10 +148,10 @@ def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:
     now = datetime.utcnow()
     
     # Process each market
-    for condition_id, market_data in condition_id_to_data.items():
-        if condition_id in existing_markets:
+    for market_id, market_data in market_id_to_data.items():
+        if market_id in existing_markets:
             # Update existing record
-            market = existing_markets[condition_id]
+            market = existing_markets[market_id]
             market.last_processed = now
             market.process_count += 1
             
@@ -136,19 +159,19 @@ def track_markets_in_db(markets: List[Dict[str, Any]]) -> List[ProcessedMarket]:
                 market.raw_data = market_data
                 
             tracked_markets.append(market)
-            logger.debug(f"Updated existing market: {condition_id}")
+            logger.debug(f"Updated existing market: {market_id}")
             
         else:
             # Create new record
             market = ProcessedMarket(
-                condition_id=condition_id,
+                condition_id=market_id,  # For multi-option, this is the group ID
                 question=market_data.get("question", "Unknown"),
                 raw_data=market_data
             )
             
             db.session.add(market)
             tracked_markets.append(market)
-            logger.debug(f"Added new market: {condition_id}")
+            logger.debug(f"Added new market: {market_id}")
     
     # Save changes
     db.session.commit()
