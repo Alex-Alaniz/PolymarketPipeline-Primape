@@ -539,6 +539,77 @@ def start_deployment_approvals():
         "message": "Deployment approval process started"
     })
 
+@app.route('/clean-environment', methods=['POST'])
+def clean_environment():
+    """API endpoint to clean the environment (database and Slack)"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Another process is already running"
+        })
+    
+    # Define a function to clean the environment
+    def run_environment_cleaning():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting Environment Cleaning...")
+            
+            # Import the environment cleaning module
+            import clean_environment
+            
+            # Run the environment cleaning process
+            with app.app_context():
+                success = clean_environment.reset_full_environment()
+                if success:
+                    print("Environment cleaning completed successfully")
+                else:
+                    print("Environment cleaning failed")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed"
+            
+            # Log process end
+            print("Environment cleaning process completed")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Environment cleaning process failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the environment cleaning process in a separate thread
+    thread = threading.Thread(target=run_environment_cleaning)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Environment cleaning process started"
+    })
+
 @app.route('/sync-slack-db', methods=['POST'])
 def sync_slack_db():
     """API endpoint to synchronize Slack and database"""
