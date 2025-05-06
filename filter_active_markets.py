@@ -71,9 +71,23 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
             if response.status_code == 200:
                 category_markets = response.json()
                 
-                # Add category tag to raw data for tracking
+                # Process each market to extract event categories and images
                 for market in category_markets:
+                    # Store the original query category as a fallback
                     market["fetched_category"] = category
+                    
+                    # Check if the market has events
+                    events = market.get("events", [])
+                    if events:
+                        # Extract event category if available
+                        for event in events:
+                            if "category" in event:
+                                # Use the event's category instead of our query category
+                                market["event_category"] = event["category"]
+                                # Also store event images for reference
+                                market["event_image"] = event.get("image")
+                                market["event_icon"] = event.get("icon")
+                                break
                 
                 all_markets.extend(category_markets)
                 
@@ -94,10 +108,16 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
             "conditionId": market.get("conditionId"),
             "question": market.get("question"),
             "endDate": market.get("endDate"),
-            "category": market.get("fetched_category"),
+            "category": market.get("event_category", market.get("fetched_category")),
+            "fetched_category": market.get("fetched_category"),
+            "event_category": market.get("event_category"),
             "closed": market.get("closed"),
             "archived": market.get("archived"),
-            "active": market.get("active")
+            "active": market.get("active"),
+            "image": market.get("image"),
+            "icon": market.get("icon"),
+            "event_image": market.get("event_image"),
+            "event_icon": market.get("event_icon")
         }
         for market in all_markets
     ]
