@@ -19,6 +19,9 @@ from utils.messaging import get_channel_messages, get_message_reactions, post_me
 # We'll create the apechain module later
 from utils.apechain import deploy_market_to_apechain
 
+# Bot user ID to ignore its reactions (this is the ID that's adding the initial reactions)
+BOT_USER_ID = "U08QJHCKABG"
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -303,20 +306,42 @@ def check_deployment_approvals() -> Tuple[int, int, int]:
         # Get reactions for this message
         reactions = get_message_reactions(event.message_id)
         
+        # Debug logging
+        logger.info(f"Processing reactions for market {market_id} (message {event.message_id})")
+        logger.info(f"Got {len(reactions)} reactions: {reactions}")
+        
         # Check for approval (white_check_mark) or rejection (x) reactions
         has_approval = False
         has_rejection = False
         approver = None
         
         for reaction in reactions:
-            if reaction.get("name") == "white_check_mark":
+            logger.info(f"Processing reaction: {reaction}")
+            reaction_name = reaction.get("name", "")
+            logger.info(f"Reaction name: '{reaction_name}'")
+            
+            # Get users who reacted (excluding the bot)
+            users = [user for user in reaction.get("users", []) if user != BOT_USER_ID]
+            
+            # If only the bot reacted, skip this reaction
+            if not users:
+                logger.info(f"Skipping reaction '{reaction_name}' - only from bot user {BOT_USER_ID}")
+                continue
+                
+            logger.info(f"Non-bot users who reacted with '{reaction_name}': {users}")
+            
+            if reaction_name == "white_check_mark" or reaction_name == "+1" or reaction_name == "thumbsup":
                 has_approval = True
-                # Get first user who reacted as approver
-                approver = reaction.get("users", ["unknown"])[0]
-            elif reaction.get("name") == "x":
+                # Get first non-bot user who reacted as approver
+                approver = users[0]
+                logger.info(f"Found approval reaction from user {approver}")
+            elif reaction_name == "x" or reaction_name == "-1" or reaction_name == "thumbsdown":
                 has_rejection = True
-                # Get first user who reacted as rejector
-                approver = reaction.get("users", ["unknown"])[0]
+                # Get first non-bot user who reacted as rejector
+                approver = users[0]
+                logger.info(f"Found rejection reaction from user {approver}")
+                
+        logger.info(f"Final result: has_approval={has_approval}, has_rejection={has_rejection}, approver={approver}")
         
         # Process based on reactions
         if has_approval and not has_rejection:
