@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import modules
 from pipeline import PolymarketPipeline
-from models import db, Market, ApprovalEvent, PipelineRun, PendingMarket
+from models import db, Market, ApprovalEvent, PipelineRun, PendingMarket, ApprovalLog
 
 # Create Flask app
 app = Flask(__name__)
@@ -986,6 +986,8 @@ def pipeline_flow():
 @app.route('/pending-markets')
 def pending_markets():
     """Show the pending markets with their categories."""
+    # Import here to avoid circular imports
+    from models import ApprovalLog, PendingMarket
     TEMPLATE = """
     <!DOCTYPE html>
     <html>
@@ -1125,8 +1127,18 @@ def pending_markets():
     """
     
     with app.app_context():
-        # Get all pending markets
-        pending_markets = PendingMarket.query.all()
+        # First, get IDs of markets that have been rejected
+        rejected_ids = [
+            log.poly_id for log in ApprovalLog.query.filter_by(decision='rejected').all()
+        ]
+        
+        # Get all pending markets that haven't been rejected
+        if rejected_ids:
+            pending_markets = PendingMarket.query.filter(
+                ~PendingMarket.poly_id.in_(rejected_ids)
+            ).all()
+        else:
+            pending_markets = PendingMarket.query.all()
         
     return render_template_string(TEMPLATE, markets=pending_markets)
 
