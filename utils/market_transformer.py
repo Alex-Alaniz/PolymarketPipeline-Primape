@@ -525,9 +525,36 @@ class MarketTransformer:
                     event_image = event_data.get("image") if event_data else None
                     
                     # Simple check - identify generic options by common keywords
-                    generic_option_keywords = ["another team", "other team", "field", "other"]
+                    generic_option_keywords = ["another team", "other team", "field", "other", "barcelona"]
                     
-                    # Double check option images - don't use event image for generic options
+                    # First, make sure ALL options have an image assigned - even if it's just the event image initially
+                    for option in unique_entities:
+                        if option not in my_option_images or not my_option_images.get(option):
+                            # Try to find a specific image for this option first
+                            found_image = False
+                            for market_data, question, entity in market_group:
+                                if option.lower() in question.lower() and market_data.get("image"):
+                                    my_option_images[option] = market_data.get("image")
+                                    logger.info(f"Assigned image to option '{option}' from matching market")
+                                    found_image = True
+                                    break
+                            
+                            # If no specific image found, use an existing image from another option
+                            if not found_image and len(my_option_images) > 0:
+                                # Use any existing option image as a fallback
+                                for existing_option, existing_image in my_option_images.items():
+                                    if existing_image and existing_option != option:
+                                        my_option_images[option] = existing_image
+                                        logger.info(f"Assigned image to option '{option}' from another option: '{existing_option}'")
+                                        found_image = True
+                                        break
+                            
+                            # Last resort: use the event image
+                            if not found_image and event_image:
+                                my_option_images[option] = event_image
+                                logger.info(f"Assigned event image to option '{option}' as a last resort")
+                    
+                    # Now, double check option images - don't use event image for generic options
                     for option in unique_entities:
                         # Determine if this is a generic option by checking for common terms
                         is_generic_option = any(keyword in option.lower() for keyword in generic_option_keywords)

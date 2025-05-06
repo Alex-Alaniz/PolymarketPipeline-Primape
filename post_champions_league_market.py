@@ -243,7 +243,7 @@ def post_market_to_slack(market_data: Dict[str, Any]) -> bool:
 def main():
     """Main function to post Champions League market"""
     # Champions League market ID
-    market_id = 'group_12815'
+    market_id = 'group_12585'
     
     logger.info(f"Fetching Champions League market with ID: {market_id}")
     market_data = get_market_data(market_id)
