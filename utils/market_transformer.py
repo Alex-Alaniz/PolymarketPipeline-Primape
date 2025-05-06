@@ -432,11 +432,18 @@ class MarketTransformer:
                         for m, q, _ in market_group:
                             if "Barcelona" in q:
                                 barcelona_image = m.get("image")
-                                if barcelona_image:
+                                # Get the event image for comparison
+                                event_img = None
+                                for evt in m.get("events", []):
+                                    if evt.get("image"):
+                                        event_img = evt.get("image")
+                                        break
+                                
+                                if barcelona_image and (not event_img or barcelona_image != event_img):
                                     logger.info(f"Found Barcelona image: {barcelona_image}")
                                     break
                         
-                        # Look for Champions League event image as fallback
+                        # Look for Champions League event image as fallback (not used for Barcelona)
                         champions_league_image = None
                         for m, _, _ in market_group:
                             if "Champions League" in str(m.get("events", [])):
@@ -453,13 +460,12 @@ class MarketTransformer:
                             unique_entities.append("Barcelona")
                             logger.info("Added Barcelona to Champions League options")
                             
-                            # Add Barcelona image
-                            if barcelona_image:
+                            # Add Barcelona image - but ONLY if we found a non-event image
+                            # The generic options handler will assign a proper image later if needed
+                            if barcelona_image and barcelona_image != event_image:
                                 my_option_images["Barcelona"] = barcelona_image
                                 logger.info(f"Added Barcelona image from question: {barcelona_image}")
-                            elif champions_league_image:
-                                my_option_images["Barcelona"] = champions_league_image
-                                logger.info(f"Added Barcelona image from event: {champions_league_image}")
+                            # We deliberately NOT using event image for Barcelona
                     
                     # Special case handling for Stanley Cup
                     if "Stanley Cup" in event_title:
@@ -532,10 +538,24 @@ class MarketTransformer:
                         if "category" in event_data:
                             multiple_market["event_category"] = event_data["category"]
                         
+                        # Define generic options once
+                        generic_options = [
+                            "another team", "other team", "another club", 
+                            "other club", "barcelona", "field", "other"
+                        ]
+                        
+                        # Get event image from event data
+                        event_image = event_data.get("image") if event_data else None
+                        
                         # Double check option images - don't use event image for specific options
                         for option in unique_entities:
-                            # If any option doesn't have an image yet
-                            if option not in my_option_images or not my_option_images[option]:
+                            # First, check if this is a generic option
+                            is_generic_option = any(generic_term in option.lower() for generic_term in generic_options)
+                            
+                            # Process if the option has no image OR if it's a generic option using event image
+                            if (option not in my_option_images or 
+                                not my_option_images[option] or 
+                                (is_generic_option and event_image and my_option_images.get(option) == event_image)):
                                 # For options like "Another team", "Barcelona", etc. find a specific image rather than using event image
                                 found_specific_image = False
                                 
