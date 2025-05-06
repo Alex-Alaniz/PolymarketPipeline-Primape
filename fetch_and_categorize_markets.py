@@ -20,7 +20,7 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 
 from models import db, PendingMarket, ProcessedMarket
 from utils.market_categorizer import categorize_markets
-from utils.messaging import post_message_with_reactions
+from utils.messaging import post_message_to_slack, add_reaction
 
 # Configure logging
 logging.basicConfig(
@@ -394,12 +394,16 @@ def post_markets_to_slack(markets: List[PendingMarket], max_to_post: int = 20) -
             # Format the message
             message_text, blocks = format_market_message(market)
             
-            # Post to Slack with initial reactions
-            response = post_message_with_reactions(
-                message_text, 
-                blocks=blocks,
-                reactions=["white_check_mark", "x"]
-            )
+            # Post to Slack
+            message_ts = post_message_to_slack((message_text, blocks))
+            
+            # Add initial reactions if posted successfully
+            if message_ts:
+                add_reaction(message_ts, "white_check_mark")
+                add_reaction(message_ts, "x")
+                response = {"ts": message_ts}
+            else:
+                response = None
             
             # Update database with message ID
             if response and response.get("ts"):

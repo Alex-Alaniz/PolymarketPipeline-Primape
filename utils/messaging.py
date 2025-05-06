@@ -705,3 +705,33 @@ def post_message_to_slack(message: Union[str, Tuple[str, List[Dict[str, Any]]]])
     else:
         logger.error(f"Failed to post message to Slack: {response.get('error')}")
         return None
+
+
+def post_message_with_reactions(text: str, blocks: Optional[List[Dict[str, Any]]] = None, reactions: Optional[List[str]] = None) -> Optional[Dict[str, Any]]:
+    """
+    Post a message to Slack and add initial reactions.
+    
+    Args:
+        text: Message text
+        blocks: Optional rich formatting blocks
+        reactions: List of reaction names to add
+        
+    Returns:
+        Message response or None if failed
+    """
+    # First post the message
+    response = post_message(slack_channel_id, text, blocks=blocks)
+    
+    if not response:
+        logger.error("Failed to post message")
+        return None
+        
+    # Get the message timestamp/ID
+    message_id = response.get("ts")
+    
+    # Add reactions if requested
+    if reactions and message_id:
+        for reaction in reactions:
+            add_reaction(message_id, reaction)
+            
+    return response
