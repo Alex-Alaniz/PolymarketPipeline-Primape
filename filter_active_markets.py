@@ -305,13 +305,12 @@ def display_active_markets(markets: List[Dict[str, Any]], max_display: int = 5):
         print(f"Market {i+1}:")
         print(f"  Question: {market.get('question', 'Unknown')}")
         
-        # Display category information
+        # Display category information - only show event_category if available, no fallback
         event_category = market.get('event_category')
-        fetched_category = market.get('fetched_category', 'general')
         if event_category:
             print(f"  Category: {event_category} (from event)")
         else:
-            print(f"  Category: {fetched_category} (from API query)")
+            print(f"  Category: Uncategorized")
         
         print(f"  End Date: {market.get('endDate', 'Unknown')}")
         
