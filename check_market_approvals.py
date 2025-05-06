@@ -264,8 +264,8 @@ def create_market_entry(raw_data: Dict[str, Any]) -> bool:
             logger.error(f"Error parsing endDate: {str(e)}")
             
         # Create new market entry
-        # Use event_category if available, otherwise fallback to fetched_category for more accurate categorization
-        category = raw_data.get("event_category", raw_data.get("fetched_category", "general"))
+        # Use event_category ONLY when available, otherwise leave blank (no fallback to fetched_category)
+        category = raw_data.get("event_category", "")
         
         # Get images from both market and event
         market_image = raw_data.get("image")

@@ -142,6 +142,47 @@ def get_channel_messages(limit: int = 10) -> List[Dict[str, Any]]:
     except SlackApiError as e:
         logger.error(f"Error checking reactions in Slack: {str(e)}")
         return []
+        
+        
+def add_reaction(message_id: str, reaction_name: str) -> bool:
+    """
+    Add a reaction to a message.
+    
+    Args:
+        message_id: The message timestamp (ts)
+        reaction_name: The name of the reaction emoji (without colons)
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    # If in test mode, use mock implementation
+    if is_test_environment():
+        from test_utils.mock_slack import add_reaction as mock_add_reaction
+        return mock_add_reaction(message_id, reaction_name)
+    
+    try:
+        # Add reaction
+        response = slack_client.reactions_add(
+            channel=slack_channel_id,
+            timestamp=message_id,
+            name=reaction_name
+        )
+        
+        if response.get("ok"):
+            logger.info(f"Added reaction :{reaction_name}: to message {message_id}")
+            return True
+        else:
+            logger.warning(f"Failed to add reaction :{reaction_name}: to message {message_id}")
+            return False
+            
+    except SlackApiError as e:
+        # Check if the error is because the reaction already exists
+        if "already_reacted" in str(e):
+            logger.info(f"Reaction :{reaction_name}: already exists on message {message_id}")
+            return True
+        else:
+            logger.error(f"Error adding reaction to Slack message: {str(e)}")
+            return False
 
 
 def post_markets_to_slack(markets: List[Dict[str, Any]], max_to_post: int = 5) -> List[Tuple[Dict[str, Any], Optional[str]]]:
@@ -398,8 +439,20 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     response = post_message(slack_channel_id, text, blocks)
     
     if response.get("ok"):
-        logger.info(f"Successfully posted {market_type_text} to Slack, ts: {response.get('ts')}")
-        return response.get("ts")
+        message_id = response.get("ts")
+        logger.info(f"Successfully posted {market_type_text} to Slack, ts: {message_id}")
+        
+        # Automatically add approval/rejection reactions to message
+        try:
+            # Add white_check_mark for approval
+            add_reaction(message_id, "white_check_mark")
+            # Add x for rejection
+            add_reaction(message_id, "x")
+            logger.info(f"Successfully added approval/rejection reactions to message {message_id}")
+        except Exception as e:
+            logger.error(f"Error adding reactions to message: {str(e)}")
+        
+        return message_id
     else:
         logger.error(f"Failed to post market for approval: {response.get('error')}")
         return None
