@@ -228,7 +228,10 @@ def format_market_message(market: Dict[str, Any]) -> str:
     # Extract relevant fields
     question = market.get("question", "Unknown")
     end_date = market.get("endDate", "Unknown")
-    category = market.get("fetched_category", "general")
+    
+    # Prefer event_category over fetched_category for more accurate categorization
+    category = market.get("event_category", market.get("fetched_category", "general"))
+    
     is_multiple = market.get("is_multiple_option", False)
     
     # Extract options

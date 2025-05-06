@@ -265,9 +265,13 @@ def save_filtered_markets(markets: List[Dict[str, Any]], filename: str = "active
             "conditionId": market.get("conditionId"),
             "question": market.get("question"),
             "endDate": market.get("endDate"),
-            "category": market.get("fetched_category"),
+            "category": market.get("event_category", market.get("fetched_category")),  # Prefer event category
+            "fetched_category": market.get("fetched_category"),
+            "event_category": market.get("event_category"),
             "image": market.get("image"),
-            "icon": market.get("icon")
+            "icon": market.get("icon"),
+            "event_image": market.get("event_image"),
+            "event_icon": market.get("event_icon")
         }
         for market in markets
     ]
@@ -297,10 +301,27 @@ def display_active_markets(markets: List[Dict[str, Any]], max_display: int = 5):
     for i, market in enumerate(markets[:max_display]):
         print(f"Market {i+1}:")
         print(f"  Question: {market.get('question', 'Unknown')}")
-        print(f"  Category: {market.get('fetched_category', 'general')}")
+        
+        # Display category information
+        event_category = market.get('event_category')
+        fetched_category = market.get('fetched_category', 'general')
+        if event_category:
+            print(f"  Category: {event_category} (from event)")
+        else:
+            print(f"  Category: {fetched_category} (from API query)")
+        
         print(f"  End Date: {market.get('endDate', 'Unknown')}")
-        print(f"  Image: {market.get('image', 'None')}")
-        print(f"  Icon: {market.get('icon', 'None')}")
+        
+        # Display image information
+        print(f"  Market Image: {market.get('image', 'None')}")
+        print(f"  Market Icon: {market.get('icon', 'None')}")
+        
+        # Display event image information if available
+        if market.get('event_image'):
+            print(f"  Event Image: {market.get('event_image')}")
+        if market.get('event_icon'):
+            print(f"  Event Icon: {market.get('event_icon')}")
+            
         print()
 
 def transform_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

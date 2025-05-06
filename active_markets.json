@@ -5,8 +5,12 @@
     "question": "Champions League Winner",
     "endDate": "2025-05-31T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12672",
@@ -14,8 +18,12 @@
     "question": "La Liga Winner",
     "endDate": "2025-05-25T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12756",
@@ -23,8 +31,12 @@
     "question": "English Premier League Top Scorer",
     "endDate": "2025-05-25T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12815",
@@ -32,8 +44,12 @@
     "question": "NBA Champion",
     "endDate": "2025-06-23T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12817",
@@ -41,8 +57,12 @@
     "question": "NBA MVP",
     "endDate": "2025-05-31T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12831",
@@ -50,8 +70,12 @@
     "question": "Europa League Winner",
     "endDate": "2025-05-21T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_12851",
@@ -59,8 +83,12 @@
     "question": "Premier League: Top 4 finishers",
     "endDate": "2025-05-25T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_13168",
@@ -68,8 +96,12 @@
     "question": "NBA Eastern Conference Champion",
     "endDate": "2025-06-05T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_13169",
@@ -77,8 +109,12 @@
     "question": "NBA Western Conference Champion",
     "endDate": "2025-06-05T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png",
+    "event_image": null,
+    "event_icon": null
   },
   {
     "id": "group_13241",
@@ -86,7 +122,11 @@
     "question": "Stanley Cup Champion 2025",
     "endDate": "2025-06-23T12:00:00Z",
     "category": "politics",
+    "fetched_category": "politics",
+    "event_category": null,
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png",
-    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png"
+    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png",
+    "event_image": null,
+    "event_icon": null
   }
 ]

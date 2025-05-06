@@ -264,23 +264,44 @@ def create_market_entry(raw_data: Dict[str, Any]) -> bool:
             logger.error(f"Error parsing endDate: {str(e)}")
             
         # Create new market entry
+        # Use event_category if available, otherwise fallback to fetched_category for more accurate categorization
+        category = raw_data.get("event_category", raw_data.get("fetched_category", "general"))
+        
+        # Get images from both market and event
+        market_image = raw_data.get("image")
+        market_icon = raw_data.get("icon")
+        event_image = raw_data.get("event_image")
+        event_icon = raw_data.get("event_icon")
+        
+        # Create debugging info for tracing
+        debug_info = {
+            "is_multiple": is_multiple,
+            "source": "polymarket",
+            "options_count": len(options),
+            "category_source": "event" if raw_data.get("event_category") else "api_query",
+            "has_event_image": bool(event_image),
+            "has_event_icon": bool(event_icon)
+        }
+        
         market = Market(
             id=market_id,
             question=raw_data.get("question"),
             type="multiple" if is_multiple else "binary",
-            category=raw_data.get("fetched_category", "general"),
+            category=category,
             sub_category=raw_data.get("subCategory"),
             expiry=expiry_timestamp,
             original_market_id=raw_data.get("id") if not is_multiple else json.dumps(raw_data.get("original_market_ids", [])),
             options=json.dumps(options),
             status="new",
-            icon_url=raw_data.get("icon"),
+            icon_url=market_icon,
+            # Store event images for reference
+            banner_uri=json.dumps({
+                "market_image": market_image,
+                "event_image": event_image,
+                "event_icon": event_icon
+            }),
             # For debugging/tracing
-            banner_path=json.dumps({
-                "is_multiple": is_multiple,
-                "source": "polymarket", 
-                "options_count": len(options)
-            })
+            banner_path=json.dumps(debug_info)
         )
         
         db.session.add(market)
