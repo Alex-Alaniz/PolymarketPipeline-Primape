@@ -73,8 +73,8 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                 
                 # Process each market to extract event categories and images
                 for market in category_markets:
-                    # Store the original query category as a fallback
-                    market["fetched_category"] = category
+                    # We no longer need the fetched_category for active markets
+                    # Instead, we'll only use event_category if available
                     
                     # Check if the market has events
                     events = market.get("events", [])
@@ -82,12 +82,14 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                         # Extract event category if available
                         for event in events:
                             if "category" in event:
-                                # Use the event's category instead of our query category
+                                # Use the event's category
                                 market["event_category"] = event["category"]
                                 # Also store event images for reference
                                 market["event_image"] = event.get("image")
                                 market["event_icon"] = event.get("icon")
                                 break
+                    
+                    # Don't set any category if there's no event category
                 
                 all_markets.extend(category_markets)
                 
@@ -241,7 +243,8 @@ def filter_active_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]
     # Check category distribution
     categories = {}
     for market in filtered_markets:
-        category = market.get("fetched_category", "general")
+        # Use event_category when available, otherwise leave as "uncategorized"
+        category = market.get("event_category", "uncategorized")
         categories[category] = categories.get(category, 0) + 1
     
     logger.info("Category distribution after filtering:")
@@ -265,7 +268,7 @@ def save_filtered_markets(markets: List[Dict[str, Any]], filename: str = "active
             "conditionId": market.get("conditionId"),
             "question": market.get("question"),
             "endDate": market.get("endDate"),
-            "category": market.get("event_category", market.get("fetched_category")),  # Prefer event category
+            "category": market.get("event_category", ""),  # Only use event category, no fallback
             "fetched_category": market.get("fetched_category"),
             "event_category": market.get("event_category"),
             "image": market.get("image"),
