@@ -393,9 +393,9 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             }
         })
     
-    # Add image if available
+    # Add market image if available
     if market_data.get("image"):
-        logger.info(f"Adding image URL: {market_data.get('image')}")
+        logger.info(f"Adding market image URL: {market_data.get('image')}")
         blocks.append(
             {
                 "type": "image",
@@ -408,9 +408,25 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             }
         )
     
-    # Add icon if available and different from image
-    if market_data.get("icon") and market_data.get("icon") != market_data.get("image"):
-        logger.info(f"Adding icon URL: {market_data.get('icon')}")
+    # Add event image if available and different from market image
+    event_image = market_data.get("event_image")
+    if event_image and event_image != market_data.get("image"):
+        logger.info(f"Adding event image URL: {event_image}")
+        blocks.append(
+            {
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Event Image"
+                },
+                "image_url": event_image,
+                "alt_text": "Event Image"
+            }
+        )
+    
+    # Add market icon if available and different from images
+    if market_data.get("icon") and market_data.get("icon") != market_data.get("image") and market_data.get("icon") != event_image:
+        logger.info(f"Adding market icon URL: {market_data.get('icon')}")
         blocks.append(
             {
                 "type": "image",
@@ -420,6 +436,22 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
                 },
                 "image_url": market_data.get("icon"),
                 "alt_text": "Market Icon"
+            }
+        )
+        
+    # Add event icon if available and different from other images
+    event_icon = market_data.get("event_icon")
+    if event_icon and event_icon != market_data.get("image") and event_icon != market_data.get("icon") and event_icon != event_image:
+        logger.info(f"Adding event icon URL: {event_icon}")
+        blocks.append(
+            {
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Event Icon"
+                },
+                "image_url": event_icon,
+                "alt_text": "Event Icon"
             }
         )
     
