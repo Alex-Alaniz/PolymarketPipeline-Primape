@@ -165,9 +165,32 @@ def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
         })
         
         # Sign and send transaction
-        signed_tx = w3.eth.account.sign_transaction(tx, private_key)
-        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
-        tx_hash_hex = tx_hash.hex()
+        try:
+            signed_tx = w3.eth.account.sign_transaction(tx, private_key)
+            # Check how the signed transaction looks
+            logger.info(f"Signed transaction: {dir(signed_tx)}")
+            
+            # Get the raw transaction - naming might be different in different web3 versions
+            raw_tx = None
+            if hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            elif hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            elif hasattr(signed_tx, 'raw'):
+                raw_tx = signed_tx.raw
+            
+            if not raw_tx:
+                logger.error("Could not find raw transaction in signed transaction object")
+                return None, None
+                
+            tx_hash = w3.eth.send_raw_transaction(raw_tx)
+            tx_hash_hex = tx_hash.hex()
+            logger.info(f"Transaction sent with hash: {tx_hash_hex}")
+        except Exception as e:
+            logger.error(f"Error during transaction signing or sending: {str(e)}")
+            # Include more detailed error info
+            logger.error(f"Transaction data: {tx}")
+            return None, None
         
         # Wait for transaction receipt
         logger.info(f"Waiting for transaction receipt: {tx_hash_hex}")
