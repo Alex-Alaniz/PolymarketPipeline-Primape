@@ -490,9 +490,28 @@ def update_deployed_message(message_id: str, market: ProcessedMarket) -> None:
             deployed_time = deployed_market.updated_at.strftime("%Y-%m-%d %H:%M:%S UTC")
             attachments[0]['footer'] = f"✅ DEPLOYED to ApeChain on {deployed_time} | ID: {deployed_market.apechain_market_id or 'Unknown'}"
             
+            # Update title/text if available in attachment
+            if 'title' in attachments[0] and "DEPLOYED" not in attachments[0]['title']:
+                attachments[0]['title'] = f"✅ DEPLOYED | {attachments[0]['title']}"
+            
+            # Add pretext showing status if not already present
+            if 'pretext' not in attachments[0]:
+                attachments[0]['pretext'] = "This market has been successfully deployed to the blockchain."
+            
             # Add blockchain transaction if available
             if deployed_market.blockchain_tx:
                 attachments[0]['footer_icon'] = "https://www.apechain.io/favicon.ico"
+            
+            # Update the message text to include deployment status
+            original_text = original.get('text', '')
+            if "DEPLOYED" not in original_text:
+                # Replace "New" with "DEPLOYED" in message titles
+                if original_text.startswith("*New"):
+                    new_text = original_text.replace("*New", "*✅ DEPLOYED |")
+                else:
+                    new_text = f"*✅ DEPLOYED* | {original_text}"
+            else:
+                new_text = original_text
             
             # Try to update the message
             try:
@@ -500,7 +519,7 @@ def update_deployed_message(message_id: str, market: ProcessedMarket) -> None:
                     channel=slack_client.channel_id,
                     ts=message_id,
                     attachments=attachments,
-                    text=original.get('text')
+                    text=new_text
                 )
                 
                 # Remove reactions since they're no longer needed
@@ -554,13 +573,32 @@ def update_pending_deployment_message(message_id: str, market: ProcessedMarket) 
             approval_time = market.approval_date.strftime("%Y-%m-%d %H:%M:%S UTC") if market.approval_date else "Unknown"
             attachments[0]['footer'] = f"⏳ PENDING DEPLOYMENT | Approved on {approval_time}"
             
+            # Update title/text if available in attachment
+            if 'title' in attachments[0] and "APPROVED" not in attachments[0]['title']:
+                attachments[0]['title'] = f"⏳ APPROVED, PENDING DEPLOYMENT | {attachments[0]['title']}"
+            
+            # Add pretext showing status if not already present
+            if 'pretext' not in attachments[0]:
+                attachments[0]['pretext'] = "This market has been approved and is awaiting deployment to the blockchain."
+            
+            # Update the message text to include pending deployment status
+            original_text = original.get('text', '')
+            if "APPROVED" not in original_text and "PENDING" not in original_text:
+                # Replace "New" with "APPROVED" in message titles
+                if original_text.startswith("*New"):
+                    new_text = original_text.replace("*New", "*⏳ APPROVED, PENDING DEPLOYMENT |")
+                else:
+                    new_text = f"*⏳ APPROVED, PENDING DEPLOYMENT* | {original_text}"
+            else:
+                new_text = original_text
+            
             # Try to update the message
             try:
                 slack_client.client.chat_update(
                     channel=slack_client.channel_id,
                     ts=message_id,
                     attachments=attachments,
-                    text=original.get('text')
+                    text=new_text
                 )
                 logger.info(f"Updated message {message_id} to show pending deployment status")
             except Exception as e:
