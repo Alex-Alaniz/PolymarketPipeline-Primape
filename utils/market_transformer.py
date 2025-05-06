@@ -224,7 +224,7 @@ class MarketTransformer:
                         "endDate": template_market.get("endDate"),
                         "image": template_market.get("image"),  # Main market image (from first market)
                         "icon": template_market.get("icon"),
-                        "fetched_category": template_market.get("fetched_category", "general"),
+                        # Don't use fetched_category at all, will be populated by event_category if available
                         "original_market_ids": market_ids,
                         "outcomes": json.dumps(unique_entities), # Store as JSON string
                         "option_images": json.dumps(option_to_image), # Map of option -> image URL

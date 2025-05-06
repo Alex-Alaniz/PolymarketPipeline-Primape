@@ -151,7 +151,8 @@ class PolymarketPipeline:
         # Check category distribution
         categories = {}
         for market in filtered_markets:
-            category = market.get("fetched_category", "general")
+            # Use event_category when available, otherwise leave as "uncategorized"
+            category = market.get("event_category", "uncategorized")
             categories[category] = categories.get(category, 0) + 1
         
         logger.info("Market category distribution:")

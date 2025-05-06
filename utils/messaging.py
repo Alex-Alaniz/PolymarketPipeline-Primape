@@ -304,7 +304,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             "fields": [
                 {
                     "type": "mrkdwn",
-                    "text": f"*Category:* {market_data.get('fetched_category', 'general')}"
+                    "text": f"*Category:* {market_data.get('event_category', 'Uncategorized')}"
                 },
                 {
                     "type": "mrkdwn",
