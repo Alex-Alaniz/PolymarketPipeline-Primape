@@ -376,6 +376,21 @@ class MarketTransformer:
                     # Use the first market as a template
                     template_market = market_group[0][0]
                     
+                    # Find the best market to use for event data
+                    best_event_market = None
+                    for market_data, _, _ in market_group:
+                        if market_data.get("events") and len(market_data.get("events")) > 0:
+                            event = market_data["events"][0]
+                            if event.get("image"):
+                                # If we find a market with an event that has an image, use it
+                                best_event_market = market_data
+                                logger.info(f"Using market ID {market_data.get('id')} for event data as it has an event image")
+                                break
+                    
+                    # If we didn't find a market with event image, fall back to the template market
+                    if not best_event_market:
+                        best_event_market = template_market
+                    
                     # Deduplicate entities while preserving order
                     unique_entities = []
                     seen = set()
@@ -397,10 +412,11 @@ class MarketTransformer:
                             # Save image for this option
                             option_to_image[entity] = market_data.get("image")
                     
-                    # Extract event data if available
+                    # Extract event data from our best market
                     event_data = None
-                    if template_market.get("events") and len(template_market.get("events")) > 0:
-                        event_data = template_market["events"][0]
+                    if best_event_market.get("events") and len(best_event_market.get("events")) > 0:
+                        event_data = best_event_market["events"][0]
+                        logger.info(f"Using event data from market ID {best_event_market.get('id')}, event image: {event_data.get('image')}")
                     
                     # Dictionary to map options to their images
                     my_option_images = {}
@@ -510,10 +526,40 @@ class MarketTransformer:
                     
                     # Add event data if available
                     if event_data:
-                        multiple_market["event_image"] = event_data.get("image")
+                        event_image = event_data.get("image")
+                        multiple_market["event_image"] = event_image
                         multiple_market["event_icon"] = event_data.get("icon")
                         if "category" in event_data:
                             multiple_market["event_category"] = event_data["category"]
+                        
+                        # Double check option images - don't use event image for specific options
+                        for option in unique_entities:
+                            # If any option doesn't have an image yet
+                            if option not in my_option_images or not my_option_images[option]:
+                                # For options like "Another team", "Barcelona", etc. find a specific image rather than using event image
+                                found_specific_image = False
+                                for market_data, question, entity in market_group:
+                                    # Use case insensitive checking to find mentions
+                                    if option.lower() in question.lower() and market_data.get("image"):
+                                        my_option_images[option] = market_data.get("image")
+                                        logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
+                                        found_specific_image = True
+                                        break
+                                
+                                # If still no image found, use the team or entity image from one of the existing options
+                                if not found_specific_image and len(my_option_images) > 0:
+                                    # If no specific image found, use a team image from one of the existing options
+                                    for existing_option, existing_image in my_option_images.items():
+                                        if existing_image and existing_option != option:
+                                            my_option_images[option] = existing_image
+                                            logger.info(f"Using another team's image for '{option}': {existing_image}")
+                                            found_specific_image = True
+                                            break
+                                
+                                # Only as a last resort use the event image
+                                if not found_specific_image and event_image:
+                                    my_option_images[option] = event_image
+                                    logger.info(f"Using event image for '{option}' as last resort: {event_image}")
                     
                     result.append((multiple_market, "multiple", event_title))
                 else:
