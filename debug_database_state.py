@@ -47,10 +47,9 @@ def check_processed_markets():
     unposted_markets = ProcessedMarket.query.filter_by(posted=False).limit(5).all()
     logger.info(f"Sample of unposted markets ({len(unposted_markets)} of {unposted_count}):")
     for market in unposted_markets:
-        logger.info(f"ID: {market.id}, Condition ID: {market.condition_id}")
+        logger.info(f"Condition ID: {market.condition_id}")
         logger.info(f"  - Question: {market.question}")
-        logger.info(f"  - Created: {market.created_at}")
-        logger.info(f"  - Category: {market.category}")
+        # Only log attributes that we know exist
         logger.info(f"  - Is raw data stored: {'Yes' if market.raw_data else 'No'}")
     
     # Check if the model has an error field
@@ -141,7 +140,7 @@ def check_approval_events():
     for status, count in status_counts.items():
         logger.info(f"  - {status}: {count}")
     
-    return total_count, type_counts, status_counts
+    return total_count, stage_counts, status_counts
 
 def main():
     """Main function"""

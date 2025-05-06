@@ -299,7 +299,7 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
     
     # Log the first few multi-option markets for debugging
     for i, market in enumerate(markets):
-        if market.get('is_multiple_option', False):
+        if market.get('is_multiple_option', False) and i < 3:  # Only log the first 3 for brevity
             logger.info(f"Multi-option market {i+1} before DB tracking:")
             logger.info(f"  - ID: {market.get('id')}")
             logger.info(f"  - Question: {market.get('question', 'Unknown')}")
@@ -319,8 +319,17 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
     
     # Use application context for database operations
     with app.app_context():
-        # Track markets in database within the app context
+        # IMPORTANT CHANGE: Track ALL markets in database with posted=False initially
+        # This ensures all markets are tracked, even if they aren't posted in this batch
         tracked_markets = track_markets_in_db(markets)
+        
+        # Explicitly set all tracked markets to posted=False initially
+        for market in tracked_markets:
+            market.posted = False
+            market.message_id = None
+        
+        # Save this change before proceeding
+        db.session.commit()
         
         # Track how many multi-option markets were successfully tracked
         multi_option_tracked = sum(1 for m in tracked_markets 
@@ -352,8 +361,15 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                                   if m.raw_data and m.raw_data.get('is_multiple_option', False))
         logger.info(f"Found {multi_option_to_post} multi-option markets to post to Slack")
         
+        # IMPORTANT CHANGE: Count total markets to know how many remain unposted
+        total_markets = len(to_post)
+        
         # Limit number of markets to post
         to_post = to_post[:max_to_post]
+        
+        # Report how many markets will remain unposted for future batches
+        markets_for_future = total_markets - len(to_post)
+        logger.info(f"Posting {len(to_post)} markets now, {markets_for_future} markets remaining for future batches")
         
         # Post to Slack
         logger.info(f"Posting {len(to_post)} new markets to Slack")
@@ -415,6 +431,7 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 posted_markets.append(market)
                 logger.info(f"Posted market {market.condition_id} to Slack")
             else:
+                # IMPORTANT: Keep posted=False if posting failed, so it can be retried
                 logger.warning(f"Failed to post market {market.condition_id} to Slack")
         
         # Count how many multi-option markets were successfully posted
@@ -425,7 +442,10 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
         # Save changes
         db.session.commit()
         
-        logger.info(f"Posted {len(posted_markets)} markets to Slack")
+        # Double-check unposted count for confirmation
+        unposted_count = ProcessedMarket.query.filter_by(posted=False).count()
+        logger.info(f"Posted {len(posted_markets)} markets to Slack, {unposted_count} markets remain unposted")
+        
         return posted_markets
 
 def main():
