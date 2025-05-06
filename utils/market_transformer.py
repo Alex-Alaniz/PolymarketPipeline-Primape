@@ -155,6 +155,29 @@ class MarketTransformer:
         logger.info("DEBUGGING MARKET GROUPS BY EVENT")
         for event_id, market_list in grouped_by_event.items():
             logger.info(f"Event ID: {event_id}, Number of markets: {len(market_list)}")
+            
+            # Extra debugging for Champions League and Stanley Cup
+            if "Champions League" in str(event_id) or any("Champions League" in q for _, q, _ in market_list):
+                logger.info(f"FOUND CHAMPIONS LEAGUE GROUP with ID: {event_id}")
+                logger.info(f"Champions League markets count: {len(market_list)}")
+                for i, (m, q, e) in enumerate(market_list):
+                    logger.info(f"  CL Market {i+1}: ID={m.get('id')}, CondID={m.get('conditionId')}, Q={q}, Entity={e}")
+                    logger.info(f"    Outcomes: {m.get('outcomes')}")
+                    logger.info(f"    Has events: {bool(m.get('events'))}")
+                    if m.get('events'):
+                        logger.info(f"    Event title: {m.get('events')[0].get('title')}")
+            
+            if "Stanley Cup" in str(event_id) or any("Stanley Cup" in q for _, q, _ in market_list):
+                logger.info(f"FOUND STANLEY CUP GROUP with ID: {event_id}")
+                logger.info(f"Stanley Cup markets count: {len(market_list)}")
+                for i, (m, q, e) in enumerate(market_list):
+                    logger.info(f"  SC Market {i+1}: ID={m.get('id')}, CondID={m.get('conditionId')}, Q={q}, Entity={e}")
+                    logger.info(f"    Outcomes: {m.get('outcomes')}")
+                    logger.info(f"    Has events: {bool(m.get('events'))}")
+                    if m.get('events'):
+                        logger.info(f"    Event title: {m.get('events')[0].get('title')}")
+            
+            # Log all markets in the group
             for i, (m, q, e) in enumerate(market_list):
                 logger.info(f"  Market {i+1}: {q} -> entity: {e}")
         
@@ -227,6 +250,33 @@ class MarketTransformer:
                                 match = re.search(r"Will\s+(.*?)(?:\s+in\s+|\s+by\s+|\s+at\s+|\s+on\s+|\?|$)", question, re.IGNORECASE)
                                 if match:
                                     extracted = match.group(1).strip()
+                                    
+                            # Pattern 5: Champions League specific pattern
+                            if not extracted and "Champions League" in question:
+                                match = re.search(r"Will\s+(.*?)\s+win the Champions League", question, re.IGNORECASE)
+                                if match:
+                                    extracted = match.group(1).strip()
+                                    
+                            # Pattern 6: Stanley Cup specific pattern
+                            if not extracted and "Stanley Cup" in question:
+                                match = re.search(r"Will\s+(.*?)\s+win the 2025 Stanley Cup", question, re.IGNORECASE)
+                                if match:
+                                    extracted = match.group(1).strip()
+                                
+                            # Pattern 7: Direct entity extraction for CL/Stanley Cup options
+                            if not extracted:
+                                # Check for Champions League teams
+                                if "Champions League" in question:
+                                    for team in ["Arsenal", "Inter Milan", "Paris Saint-Germain", "Bayern Munich"]:
+                                        if team in question:
+                                            extracted = team
+                                            break
+                                # Check for Stanley Cup teams
+                                elif "Stanley Cup" in question:
+                                    for team in ["Carolina Hurricanes", "Edmonton Oilers"]:
+                                        if team in question:
+                                            extracted = team
+                                            break
                             
                             if extracted and extracted not in entities:
                                 logger.info(f"Fallback extraction found entity '{extracted}' from '{question}'")
