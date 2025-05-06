@@ -136,6 +136,7 @@ def sync_message_to_db(message: Dict[str, Any]) -> bool:
     
     if not market_data or not market_data.get('condition_id'):
         # Not a market message or couldn't extract data
+        logger.debug(f"Could not extract valid market data from message {message_id}")
         return False
     
     with app.app_context():
@@ -144,8 +145,14 @@ def sync_message_to_db(message: Dict[str, Any]) -> bool:
         
         if existing:
             # We have this market but with a different message ID - update it
+            logger.info(f"Found existing market {market_data['condition_id']} - updating with message ID {message_id}")
             existing.message_id = message_id
             existing.posted = True
+            
+            # If we have raw_data in the market_data but not in existing, update it
+            if not existing.raw_data and 'raw_data' in market_data:
+                logger.info(f"Updating raw_data for market {market_data['condition_id']}")
+                existing.raw_data = market_data['raw_data']
             
             # Check for reactions
             reactions = message.get('reactions', [])
@@ -153,17 +160,33 @@ def sync_message_to_db(message: Dict[str, Any]) -> bool:
             
             db.session.commit()
             logger.info(f"Updated existing market record for {market_data['condition_id']} with message ID {message_id}")
+            
+            # If market is approved, check if we need to create a Market entry
+            if existing.approved and not Market.query.get(existing.condition_id):
+                logger.info(f"Market {existing.condition_id} is approved but no Market entry exists - attempting to create one")
+                try:
+                    from check_market_approvals import create_market_entry
+                    if existing.raw_data:
+                        success = create_market_entry(existing.raw_data)
+                        if success:
+                            logger.info(f"Created Market entry for approved market {existing.condition_id}")
+                except Exception as e:
+                    logger.error(f"Error creating Market entry: {str(e)}")
+            
             return True
         else:
             # Create a new record
             try:
+                # Try to extract or create a more complete raw_data
+                enhanced_data = enhance_market_data(message, market_data)
+                
                 new_market = ProcessedMarket(
                     condition_id=market_data['condition_id'],
                     question=market_data.get('question', 'Unknown question'),
                     first_seen=datetime.utcnow(),
                     posted=True,
                     message_id=message_id,
-                    raw_data=market_data
+                    raw_data=enhanced_data
                 )
                 
                 # Check for reactions
@@ -173,11 +196,127 @@ def sync_message_to_db(message: Dict[str, Any]) -> bool:
                 db.session.add(new_market)
                 db.session.commit()
                 logger.info(f"Created new market record for {market_data['condition_id']} from message {message_id}")
+                
+                # If market is approved, try to create Market entry
+                if new_market.approved:
+                    logger.info(f"Newly created market {new_market.condition_id} is approved - attempting to create Market entry")
+                    try:
+                        from check_market_approvals import create_market_entry
+                        if new_market.raw_data:
+                            success = create_market_entry(new_market.raw_data)
+                            if success:
+                                logger.info(f"Created Market entry for newly approved market {new_market.condition_id}")
+                    except Exception as e:
+                        logger.error(f"Error creating Market entry: {str(e)}")
+                
                 return True
             except Exception as e:
                 logger.error(f"Error creating market record: {str(e)}")
                 db.session.rollback()
                 return False
+
+def enhance_market_data(message: Dict[str, Any], basic_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Enhance market data with additional information from the message.
+    
+    Args:
+        message: Slack message object
+        basic_data: Basic market data extracted from the message
+        
+    Returns:
+        Enhanced market data dictionary
+    """
+    enhanced_data = basic_data.copy()
+    
+    # Try to extract JSON data from the message text
+    try:
+        text = message.get('text', '')
+        if '{' in text and '}' in text:
+            import re
+            # More aggressive JSON pattern that can span multiple lines
+            json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+            json_matches = re.findall(json_pattern, text)
+            
+            for json_str in json_matches:
+                try:
+                    data = json.loads(json_str)
+                    # Check if this JSON contains relevant market data
+                    if 'condition_id' in data or 'conditionId' in data or 'id' in data:
+                        # Match the ID to make sure we're using the right JSON object
+                        potential_id = data.get('condition_id') or data.get('conditionId') or data.get('id')
+                        if potential_id == basic_data['condition_id']:
+                            logger.info(f"Found complete raw data for market {basic_data['condition_id']}")
+                            # This is our market data, use it as raw_data
+                            enhanced_data = data
+                            if 'condition_id' not in enhanced_data and 'conditionId' in enhanced_data:
+                                enhanced_data['condition_id'] = enhanced_data['conditionId']
+                            enhanced_data['extracted_from_json'] = True
+                            return enhanced_data
+                except json.JSONDecodeError:
+                    continue
+    except Exception as e:
+        logger.warning(f"Error extracting JSON from message text: {str(e)}")
+    
+    # If we couldn't extract complete data, set minimal fields
+    if 'question' not in enhanced_data:
+        enhanced_data['question'] = extract_question_from_message(message) or "Unknown Market"
+    
+    if 'end_date' not in enhanced_data and 'endDate' not in enhanced_data:
+        # Try to extract date from message
+        date_str = extract_date_from_message(message)
+        if date_str:
+            enhanced_data['endDate'] = date_str
+    
+    enhanced_data['manual_entry'] = True
+    return enhanced_data
+
+def extract_question_from_message(message: Dict[str, Any]) -> Optional[str]:
+    """Extract market question from Slack message"""
+    # Check attachments first
+    if message.get('attachments'):
+        for attachment in message['attachments']:
+            if attachment.get('title'):
+                return attachment['title']
+    
+    # Check message text
+    text = message.get('text', '')
+    
+    # Pattern: "*Question:* Some question text"
+    if '*Question:*' in text:
+        lines = text.split('\n')
+        for line in lines:
+            if '*Question:*' in line:
+                return line.replace('*Question:*', '').strip()
+    
+    # Pattern: "Will X happen?"
+    if 'Will ' in text:
+        lines = text.split('\n')
+        for line in lines:
+            if line.strip().startswith('Will ') and '?' in line:
+                return line.strip()
+    
+    return None
+
+def extract_date_from_message(message: Dict[str, Any]) -> Optional[str]:
+    """Extract end date from Slack message"""
+    # Look for date patterns in text
+    text = message.get('text', '')
+    
+    # Pattern: "*End Date:* YYYY-MM-DD"
+    if '*End Date:*' in text:
+        lines = text.split('\n')
+        for line in lines:
+            if '*End Date:*' in line:
+                date_str = line.replace('*End Date:*', '').strip()
+                # Try to parse and format the date
+                try:
+                    from dateutil import parser
+                    date_obj = parser.parse(date_str)
+                    return date_obj.isoformat() + 'Z'
+                except:
+                    return date_str
+    
+    return None
 
 def extract_market_data_from_message(message: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     """
