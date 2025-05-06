@@ -7,7 +7,6 @@
     "endDate": "2025-05-31T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507285",
       "507300",
@@ -26,7 +25,10 @@
       "507305"
     ],
     "outcomes": "[\"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\"]",
-    "is_multiple_option": true
+    "option_images": "{\"Arsenal\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png\", \"Inter Milan\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-inter-milan-win-the-uefa-champions-league-qLXmECEH1IMR.png\", \"Paris Saint-Germain\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-paris-saint-germain-win-the-uefa-champions-league-NxlXl1qZffuf.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/champions-league-winner-2025-F-QYbKsrHt_E.jpg",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/champions-league-winner-2025-F-QYbKsrHt_E.jpg"
   },
   {
     "id": "group_12672",
@@ -36,7 +38,6 @@
     "endDate": "2025-05-25T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507395",
       "507396",
@@ -55,7 +56,10 @@
       "507413"
     ],
     "outcomes": "[\"Real Madrid\", \"Barcelona\", \"another team\"]",
-    "is_multiple_option": true
+    "option_images": "{\"Real Madrid\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-l82oJ7YPGB14.png\", \"Barcelona\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-barcelona-win-la-liga-vCC-C0S5sp4O.png\", \"another team\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png"
   },
   {
     "id": "group_12756",
@@ -65,7 +69,6 @@
     "endDate": "2025-05-25T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507666",
       "507675",
@@ -144,7 +147,10 @@
       "507688"
     ],
     "outcomes": "[\"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\"]",
-    "is_multiple_option": true
+    "option_images": "{\"Erling Haaland\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-erling-haaland-be-the-top-goalscorer-in-the-epl-2425-k427ifOTqVUu.png\", \"Mohamed Salah\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-mohamed-salah-be-the-top-goalscorer-in-the-epl-2425-QiC6wG50Sq0c.png\", \"Alexander Isak\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-alexander-isak-be-the-top-goalscorer-in-the-epl-2425-fzlXVgbIUj71.png\", \"Ollie Watkins\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-ollie-watkins-be-the-top-goalscorer-in-the-epl-2425-lwHVkZMR43yS.png\", \"Julian Alvarez\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-julian-alvarez-be-the-top-goalscorer-in-the-epl-ET9M8THFBQGf.png\", \"Heung-Min Son\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-heung-min-son-be-the-top-goalscorer-in-the-epl-_aFtnqL4InJd.png\", \"Kai Havertz\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-kai-havertz-be-the-top-goalscorer-in-the-epl-WR5MlcVBQbzG.png\", \"Cole Palmer\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-cole-palmer-be-the-top-goalscorer-in-the-epl-wPtQZflbUXnr.png\", \"Dominic Solanke\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-dominic-solanke-be-the-top-goalscorer-in-the-epl-65tV-SBKIw7i.png\", \"Luis Diaz\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-luis-diaz-be-the-top-goalscorer-in-the-epl-gpwwJG7znKjg.png\", \"Bukayo Saka\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-bukayo-saka-be-the-top-goalscorer-in-the-epl-Hul-tRKv11Hg.png\", \"Diogo Jota\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-diogo-jota-be-the-top-goalscorer-in-the-epl-VTl1MAmtvwBO.png\", \"Nicolas Jackson\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nicolas-jackson-be-the-top-goalscorer-in-the-epl-cKoa4Na-y3qU.png\", \"Jamie Vardy\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-jamie-vardy-be-the-top-goalscorer-in-the-epl-1dYFX9ixRG9P.png\", \"another player\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/epl-matchday-1-chelsea-vs-man-city-WFCGLcOMQtp0.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/epl-top-scorer-x3nkhWe1lRwh.jpg",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/epl-top-scorer-x3nkhWe1lRwh.jpg"
   },
   {
     "id": "group_12815",
@@ -154,7 +160,6 @@
     "endDate": "2025-06-23T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507857",
       "507861",
@@ -194,7 +199,10 @@
       "507876"
     ],
     "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the New York Knicks\", \"the Oklahoma City Thunder\"]",
-    "is_multiple_option": true
+    "option_images": "{\"the Boston Celtics\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png\", \"the Cleveland Cavaliers\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/CLE.png\", \"the Denver Nuggets\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png\", \"the Golden State Warriors\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/GSW.png\", \"the Indiana Pacers\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/IND.png\", \"the Minnesota Timberwolves\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/MIN.png\", \"the New York Knicks\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/NYK.png\", \"the Oklahoma City Thunder\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/OKC.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-champion-2024-2025-NiYghxjb7928.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-champion-2024-2025-NiYghxjb7928.png"
   },
   {
     "id": "group_12817",
@@ -204,7 +212,6 @@
     "endDate": "2025-05-31T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507906",
       "507912",
@@ -217,7 +224,10 @@
       "507914"
     ],
     "outcomes": "[\"Nikola Jokic\", \"Shai Gilgeous-Alexander\", \"Giannis Antetokounmpo\"]",
-    "is_multiple_option": true
+    "option_images": "{\"Nikola Jokic\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-nikola-jokic-win-the-2024-25-nba-mvp-XQWGgY-45r8p.png\", \"Shai Gilgeous-Alexander\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-shai-gilgeous-alexander-win-the-2024-25-nba-mvp-21CvHon7cL4a.png\", \"Giannis Antetokounmpo\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-giannis-antetokounmpo-win-the-2024-25-nba-mvp-rE0C25SBbg4Q.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-mvp-2024-25-F8n6pBrLqf72.jpg",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-mvp-2024-25-F8n6pBrLqf72.jpg"
   },
   {
     "id": "group_12831",
@@ -227,7 +237,6 @@
     "endDate": "2025-05-21T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "507979",
       "507997",
@@ -243,7 +252,10 @@
       "508062"
     ],
     "outcomes": "[\"Athletic Bilbao\", \"Manchester United\", \"Tottenham Hotspur\", \"Another team\"]",
-    "is_multiple_option": true
+    "option_images": "{\"Athletic Bilbao\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-athletic-bilbao-win-the-uefa-europa-league-PTuTPsYADDPG.png\", \"Manchester United\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-manchester-united-win-the-uefa-europa-league-Bwd8rhNuzSG6.png\", \"Tottenham Hotspur\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-tottenham-hotspur-win-the-uefa-europa-league-7zq336VOy_6i.png\", \"Another team\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/europa-league-winner-24-25-ab27HqZmwUDR.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/europa-league-winner-24-25-ab27HqZmwUDR.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/europa-league-winner-24-25-ab27HqZmwUDR.png"
   },
   {
     "id": "group_12851",
@@ -253,7 +265,6 @@
     "endDate": "2025-05-25T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "508145",
       "508146",
@@ -262,7 +273,10 @@
       "508145"
     ],
     "outcomes": "[]",
-    "is_multiple_option": true
+    "option_images": "{}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/premier-league-top-4-finishers-PpzlFqJlmAkA.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/premier-league-top-4-finishers-PpzlFqJlmAkA.png"
   },
   {
     "id": "group_13168",
@@ -272,7 +286,6 @@
     "endDate": "2025-06-05T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "508799",
       "508804",
@@ -284,7 +297,10 @@
       "508809"
     ],
     "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Indiana Pacers\", \"the New York Knicks\"]",
-    "is_multiple_option": true
+    "option_images": "{\"the Boston Celtics\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/BOS.png\", \"the Cleveland Cavaliers\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/CLE.png\", \"the Indiana Pacers\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/IND.png\", \"the New York Knicks\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/NYK.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-eastern-conference-champion-2-AXnvDbSzhV.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-eastern-conference-champion-2-AXnvDbSzhV.png"
   },
   {
     "id": "group_13169",
@@ -294,7 +310,6 @@
     "endDate": "2025-06-05T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "508814",
       "508816",
@@ -306,7 +321,10 @@
       "508823"
     ],
     "outcomes": "[\"the Denver Nuggets\", \"the Golden State Warriors\", \"the Minnesota Timberwolves\", \"the Oklahoma City Thunder\"]",
-    "is_multiple_option": true
+    "option_images": "{\"the Denver Nuggets\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/DEN.png\", \"the Golden State Warriors\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/GSW.png\", \"the Minnesota Timberwolves\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/MIN.png\", \"the Oklahoma City Thunder\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/New+NBA+Team+Logos+/OKC.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-western-conference-champion-tS9_NLkdadCG.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/nba-western-conference-champion-tS9_NLkdadCG.png"
   },
   {
     "id": "group_13241",
@@ -316,12 +334,14 @@
     "endDate": "2025-06-23T12:00:00Z",
     "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png",
     "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png",
-    "fetched_category": "politics",
     "original_market_ids": [
       "509090",
       "509090"
     ],
     "outcomes": "[\"the Carolina Hurricanes\"]",
-    "is_multiple_option": true
+    "option_images": "{\"the Carolina Hurricanes\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-the-carolina-hurricanes-win-the-2025-stanley-cup-01ckYBPS7ss7.png\"}",
+    "is_multiple_option": true,
+    "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/stanley-cup-winner-y6Camx0ddhlo.png",
+    "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/stanley-cup-winner-y6Camx0ddhlo.png"
   }
 ]

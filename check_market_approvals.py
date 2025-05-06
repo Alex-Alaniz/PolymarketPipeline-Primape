@@ -123,7 +123,7 @@ def check_market_approvals() -> Tuple[int, int, int]:
                     question=market.question,
                     expiry=end_date_timestamp,
                     status="rejected",
-                    category=market.raw_data.get('fetched_category', 'general') if market.raw_data else 'general',
+                    category=market.raw_data.get('event_category', '') if market.raw_data else '',
                     icon_url=market.raw_data.get('icon') if market.raw_data else None
                 )
                 db.session.add(placeholder)
@@ -165,7 +165,7 @@ def check_market_approvals() -> Tuple[int, int, int]:
                         question=market.question,
                         expiry=end_date_timestamp,
                         status="rejected",
-                        category=market.raw_data.get('fetched_category', 'general') if market.raw_data else 'general',
+                        category=market.raw_data.get('event_category', '') if market.raw_data else '',
                         icon_url=market.raw_data.get('icon') if market.raw_data else None
                     )
                     db.session.add(placeholder)
