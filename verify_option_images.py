@@ -168,21 +168,43 @@ def analyze_market(market: Dict[str, Any], target_option: str) -> Tuple[bool, st
     if not market.get("is_multiple_option", False):
         return False, "Not a multi-option market"
     
-    outcomes = json.loads(market.get("outcomes", "[]"))
-    option_images = json.loads(market.get("option_images", "{}"))
-    event_image = market.get("event_image")
+    # Print all keys for debugging
+    logger.info(f"Market keys: {list(market.keys())}")
+    
+    # Get outcomes as a list (handle both string and list formats)
+    outcomes_raw = market.get("outcomes", "[]")
+    outcomes = json.loads(outcomes_raw) if isinstance(outcomes_raw, str) else outcomes_raw
+    logger.info(f"Outcomes: {outcomes}")
+    
+    # Get option images (handle both string and dict formats)
+    option_images_raw = market.get("option_images", "{}")
+    option_images = json.loads(option_images_raw) if isinstance(option_images_raw, str) else option_images_raw
+    logger.info(f"Option images: {option_images}")
+    
+    # Get event image
+    event_image = market.get("event_image", "")
+    logger.info(f"Event image: {event_image}")
+    
+    # Print debug info about the target option
+    logger.info(f"Checking target option: '{target_option}'")
     
     # Check if the target option exists
     if target_option not in outcomes:
+        logger.info(f"Target option '{target_option}' not found in outcomes")
         return False, f"Target option '{target_option}' not found in outcomes"
     
     # Check if the target option has an image
     if target_option not in option_images:
+        logger.info(f"Target option '{target_option}' has no image")
         return False, f"Target option '{target_option}' has no image"
     
     # Check if it's using the event image
     image_url = option_images[target_option]
+    logger.info(f"Target option '{target_option}' image URL: {image_url}")
+    
+    # Check against event image
     using_event_image = (image_url == event_image) if image_url and event_image else False
+    logger.info(f"Is using event image? {using_event_image}")
     
     if using_event_image:
         return False, f"Target option '{target_option}' is still using the event image"
@@ -252,6 +274,26 @@ def verify_fix_with_test_data():
         logger.info(f"{status} - {issue}: {details}")
         if not fixed:
             all_fixed = False
+    
+    # Additional debugging for CL market
+    if cl_market:
+        logger.info("\n=== DETAILED CL MARKET DEBUG ===")
+        logger.info(f"Event image: {cl_market.get('event_image')}")
+        option_images = json.loads(cl_market.get("option_images", "{}"))
+        for option, image in option_images.items():
+            logger.info(f"Option '{option}' image: {image}")
+            if option == "Barcelona":
+                logger.info(f"Barcelona image matches event image: {image == cl_market.get('event_image')}")
+    
+    # Additional debugging for La Liga market
+    if liga_market:
+        logger.info("\n=== DETAILED LA LIGA MARKET DEBUG ===")
+        logger.info(f"Event image: {liga_market.get('event_image')}")
+        option_images = json.loads(liga_market.get("option_images", "{}"))
+        for option, image in option_images.items():
+            logger.info(f"Option '{option}' image: {image}")
+            if "another" in option.lower():
+                logger.info(f"Another Team image matches event image: {image == liga_market.get('event_image')}")
     
     if all_fixed:
         logger.info("\n✅ ALL ISSUES FIXED! The image handling for Barcelona and 'Another Team' options is working correctly.")
