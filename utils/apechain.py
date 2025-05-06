@@ -200,16 +200,23 @@ def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
         if receipt.status == 1:
             # Parse transaction logs to get market ID
             try:
-                # Example log parsing - adjust based on actual contract event structure
-                logs = contract.events.MarketCreated().process_receipt(receipt)
-                if logs and len(logs) > 0:
-                    market_id = logs[0]['args']['marketId']
-                    logger.info(f"Market deployed to Apechain. Market ID: {market_id}")
-                    return str(market_id), tx_hash_hex
-                else:
-                    # If we can't parse logs, use transaction hash as ID
-                    logger.warning("Market created but couldn't extract market ID from logs")
-                    return tx_hash_hex, tx_hash_hex
+                # Try to parse logs if the contract ABI has event definitions
+                try:
+                    # Check if the contract ABI has MarketCreated event
+                    if hasattr(contract.events, 'MarketCreated'):
+                        logs = contract.events.MarketCreated().process_receipt(receipt)
+                        if logs and len(logs) > 0:
+                            market_id = logs[0]['args']['marketId']
+                            logger.info(f"Market deployed to Apechain. Market ID: {market_id}")
+                            return str(market_id), tx_hash_hex
+                    else:
+                        logger.info("Contract ABI doesn't include MarketCreated event, using transaction hash as market ID")
+                except Exception as e:
+                    logger.warning(f"Error processing contract events: {str(e)}")
+                
+                # If we can't parse logs or there's no event definition, use transaction hash as ID
+                logger.info(f"Market created with transaction hash: {tx_hash_hex}")
+                return tx_hash_hex, tx_hash_hex
             except Exception as e:
                 logger.warning(f"Error parsing transaction logs: {str(e)}")
                 # Return transaction hash as identifier if we can't get the market ID
