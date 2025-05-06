@@ -154,6 +154,49 @@ class MessagingClient:
         except SlackApiError as e:
             logger.error(f"Error getting channel history from Slack: {str(e)}")
             return [], None
+            
+    def update_message(self, message_id: str, text: str, 
+                      attachments: Optional[List[Dict[str, Any]]] = None) -> bool:
+        """
+        Update an existing message in Slack.
+        
+        Args:
+            message_id: The message timestamp (ts) to update
+            text: New message text
+            attachments: New message attachments
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        # If in test mode, just log and return
+        if is_test_environment():
+            logger.info(f"[TEST MODE] Would update message {message_id}")
+            return True
+        
+        try:
+            # Build update parameters
+            params = {
+                "channel": self.channel_id,
+                "ts": message_id,
+                "text": text
+            }
+            
+            if attachments:
+                params["attachments"] = attachments
+                
+            # Update the message
+            response = self.client.chat_update(**params)
+            
+            if response and response.get("ok"):
+                logger.info(f"Successfully updated message {message_id}")
+                return True
+            else:
+                logger.warning(f"Failed to update message {message_id}: {response.get('error', 'Unknown error')}")
+                return False
+                
+        except SlackApiError as e:
+            logger.error(f"Error updating message in Slack: {str(e)}")
+            return False
 
 
 def post_message(channel_id: Optional[str], text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
