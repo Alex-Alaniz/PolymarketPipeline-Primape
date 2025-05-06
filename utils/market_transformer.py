@@ -402,21 +402,95 @@ class MarketTransformer:
                     if template_market.get("events") and len(template_market.get("events")) > 0:
                         event_data = template_market["events"][0]
                     
-                    # Special case handling for Champions League and Stanley Cup
-                    if "Champions League" in event_title and "Barcelona" not in unique_entities:
-                        unique_entities.append("Barcelona")
-                        logger.info("Added Barcelona to Champions League options")
+                    # Dictionary to map options to their images
+                    my_option_images = {}
                     
-                    if "Stanley Cup" in event_title and "Washington Capitals" not in unique_entities and not any("Washington" in e for e in unique_entities):
-                        found_washington = False
-                        for entity in unique_entities:
-                            if entity.lower().startswith("the washington"):
-                                found_washington = True
-                                break
+                    # First, copy existing images
+                    for option, image in option_to_image.items():
+                        my_option_images[option] = image
+                    
+                    # Special case handling for Champions League
+                    if "Champions League" in event_title:
+                        # Look for Barcelona image
+                        barcelona_image = None
+                        for m, q, _ in market_group:
+                            if "Barcelona" in q:
+                                barcelona_image = m.get("image")
+                                if barcelona_image:
+                                    logger.info(f"Found Barcelona image: {barcelona_image}")
+                                    break
                         
-                        if not found_washington:
-                            unique_entities.append("the Washington Capitals")
-                            logger.info("Added Washington Capitals to Stanley Cup options")
+                        # Look for Champions League event image as fallback
+                        champions_league_image = None
+                        for m, _, _ in market_group:
+                            if "Champions League" in str(m.get("events", [])):
+                                for event in m.get("events", []):
+                                    if event.get("image"):
+                                        champions_league_image = event.get("image")
+                                        logger.info(f"Found Champions League event image: {champions_league_image}")
+                                        break
+                                if champions_league_image:
+                                    break
+                        
+                        # If Barcelona not in options yet, add it
+                        if "Barcelona" not in unique_entities:
+                            unique_entities.append("Barcelona")
+                            logger.info("Added Barcelona to Champions League options")
+                            
+                            # Add Barcelona image
+                            if barcelona_image:
+                                my_option_images["Barcelona"] = barcelona_image
+                                logger.info(f"Added Barcelona image from question: {barcelona_image}")
+                            elif champions_league_image:
+                                my_option_images["Barcelona"] = champions_league_image
+                                logger.info(f"Added Barcelona image from event: {champions_league_image}")
+                    
+                    # Special case handling for Stanley Cup
+                    if "Stanley Cup" in event_title:
+                        # Look for Stanley Cup event image as fallback
+                        stanley_cup_image = None
+                        for m, _, _ in market_group:
+                            if "Stanley Cup" in str(m.get("events", [])):
+                                for event in m.get("events", []):
+                                    if event.get("image"):
+                                        stanley_cup_image = event.get("image")
+                                        logger.info(f"Found Stanley Cup event image: {stanley_cup_image}")
+                                        break
+                                if stanley_cup_image:
+                                    break
+                        
+                        # Process each team we want to ensure is included
+                        stanley_cup_teams = [
+                            "the Washington Capitals",
+                            "the Dallas Stars",
+                            "the Florida Panthers", 
+                            "the Toronto Maple Leafs",
+                            "the Vegas Golden Knights",
+                            "the Winnipeg Jets"
+                        ]
+                        
+                        for team in stanley_cup_teams:
+                            team_short = team.replace("the ", "")
+                            
+                            # Check if team already exists in options (with or without "the")
+                            if team not in unique_entities and not any(team_short in entity for entity in unique_entities):
+                                unique_entities.append(team)
+                                logger.info(f"Added {team} to Stanley Cup options")
+                                
+                                # Try to find team-specific image
+                                team_image = None
+                                for m, q, _ in market_group:
+                                    if team_short in q:
+                                        team_image = m.get("image")
+                                        if team_image:
+                                            logger.info(f"Found {team} image: {team_image}")
+                                            my_option_images[team] = team_image
+                                            break
+                                
+                                # Use default Stanley Cup image if no team-specific image
+                                if not team_image and stanley_cup_image:
+                                    my_option_images[team] = stanley_cup_image
+                                    logger.info(f"Added {team} image from event: {stanley_cup_image}")
                     
                     # Create a new market data dictionary
                     multiple_market = {
@@ -430,7 +504,7 @@ class MarketTransformer:
                         # Don't use fetched_category at all, will be populated by event_category if available
                         "original_market_ids": market_ids,
                         "outcomes": json.dumps(unique_entities), # Store as JSON string
-                        "option_images": json.dumps(option_to_image), # Map of option -> image URL
+                        "option_images": json.dumps(my_option_images), # Map of option -> image URL
                         "is_multiple_option": True
                     }
                     
