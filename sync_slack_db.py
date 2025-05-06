@@ -463,19 +463,21 @@ def update_deployed_message(message_id: str, market: ProcessedMarket) -> None:
         message_id: Slack message ID
         market: ProcessedMarket instance
     """
-    # Get original message
-    message = slack_client.client.conversations_history(
-        channel=slack_client.channel_id,
+    if not message_id:
+        logger.error("No message ID provided")
+        return
+        
+    # Get original message using our MessagingClient
+    messages, _ = slack_client.get_channel_history(
         latest=message_id,
-        limit=1,
-        inclusive=True
+        limit=1
     )
     
-    if not message or not message.get('messages'):
+    if not messages:
         logger.error(f"Could not retrieve message {message_id}")
         return
     
-    original = message['messages'][0]
+    original = messages[0]
     
     # Create updated message with deployed status
     if original.get('attachments'):
@@ -513,30 +515,31 @@ def update_deployed_message(message_id: str, market: ProcessedMarket) -> None:
             else:
                 new_text = original_text
             
-            # Try to update the message
-            try:
-                slack_client.client.chat_update(
-                    channel=slack_client.channel_id,
-                    ts=message_id,
-                    attachments=attachments,
-                    text=new_text
-                )
+            # Use our new update_message method to update the message
+            success = slack_client.update_message(
+                message_id=message_id,
+                text=new_text,
+                attachments=attachments
+            )
+            
+            if success:
+                logger.info(f"Successfully updated message {message_id} to show deployed status")
                 
                 # Remove reactions since they're no longer needed
                 for reaction in ['white_check_mark', 'x']:
                     try:
-                        slack_client.client.reactions_remove(
-                            channel=slack_client.channel_id,
-                            timestamp=message_id,
-                            name=reaction
-                        )
-                    except:
+                        # Use client directly for reactions_remove since we didn't add this to MessagingClient
+                        if slack_client.client:
+                            slack_client.client.reactions_remove(
+                                channel=slack_client.channel_id,
+                                timestamp=message_id,
+                                name=reaction
+                            )
+                    except Exception as e:
                         # Ignore errors removing reactions
-                        pass
-                
-                logger.info(f"Updated message {message_id} to show deployed status")
-            except Exception as e:
-                logger.error(f"Error updating message {message_id}: {str(e)}")
+                        logger.debug(f"Error removing reaction {reaction}: {str(e)}")
+            else:
+                logger.error(f"Failed to update message {message_id} to show deployed status")
 
 def update_pending_deployment_message(message_id: str, market: ProcessedMarket) -> None:
     """
@@ -546,19 +549,21 @@ def update_pending_deployment_message(message_id: str, market: ProcessedMarket) 
         message_id: Slack message ID
         market: ProcessedMarket instance
     """
-    # Get original message
-    message = slack_client.client.conversations_history(
-        channel=slack_client.channel_id,
+    if not message_id:
+        logger.error("No message ID provided")
+        return
+        
+    # Get original message using our MessagingClient
+    messages, _ = slack_client.get_channel_history(
         latest=message_id,
-        limit=1,
-        inclusive=True
+        limit=1
     )
     
-    if not message or not message.get('messages'):
+    if not messages:
         logger.error(f"Could not retrieve message {message_id}")
         return
     
-    original = message['messages'][0]
+    original = messages[0]
     
     # Create updated message with pending deployment status
     if original.get('attachments'):
@@ -592,17 +597,17 @@ def update_pending_deployment_message(message_id: str, market: ProcessedMarket) 
             else:
                 new_text = original_text
             
-            # Try to update the message
-            try:
-                slack_client.client.chat_update(
-                    channel=slack_client.channel_id,
-                    ts=message_id,
-                    attachments=attachments,
-                    text=new_text
-                )
-                logger.info(f"Updated message {message_id} to show pending deployment status")
-            except Exception as e:
-                logger.error(f"Error updating message {message_id}: {str(e)}")
+            # Use our new update_message method to update the message
+            success = slack_client.update_message(
+                message_id=message_id,
+                text=new_text,
+                attachments=attachments
+            )
+            
+            if success:
+                logger.info(f"Successfully updated message {message_id} to show pending deployment status")
+            else:
+                logger.error(f"Failed to update message {message_id} to show pending deployment status")
 
 def main():
     """
