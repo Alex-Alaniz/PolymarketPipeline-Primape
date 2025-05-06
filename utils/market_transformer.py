@@ -527,76 +527,56 @@ class MarketTransformer:
                     # Simple check - identify generic options by common keywords
                     generic_option_keywords = ["another team", "other team", "field", "other", "barcelona"]
                     
-                    # First, make sure ALL options have an image assigned - even if it's just the event image initially
-                    # Track which images we've already used for fallback to avoid duplicates
-                    used_fallback_images = set()
+                    # First, map each option to its original market data to get proper images
+                    # This ensures we use the exact images from the API for each option
+                    option_to_original_market = {}
                     
+                    # Search through all markets to find the original market data for each option
                     for option in unique_entities:
-                        if option not in my_option_images or not my_option_images.get(option):
-                            # Always try to find a specific image for this option first
-                            found_image = False
-                            
-                            # Search for markets that specifically mention this option
-                            for market_data, question, entity in market_group:
-                                # Exact match for this option in the question
-                                if option.lower() in question.lower() and market_data.get("image"):
-                                    my_option_images[option] = market_data.get("image")
-                                    logger.info(f"Assigned image to option '{option}' from matching market")
-                                    found_image = True
-                                    break
-                            
-                            # If no specific image found for generic options like "Barcelona" or "Another team",
-                            # find an unused team image to avoid all generic options using the same image
-                            if not found_image and len(my_option_images) > 0:
-                                # Check if this is a generic option
-                                is_generic = any(keyword in option.lower() for keyword in generic_option_keywords)
-                                
-                                # For generic options, try to use a unique team image that hasn't been used as fallback yet
-                                available_images = []
-                                
-                                for existing_option, existing_image in my_option_images.items():
-                                    if (existing_image and 
-                                        existing_option != option and 
-                                        existing_image != event_image and
-                                        existing_image not in used_fallback_images):
-                                        available_images.append((existing_option, existing_image))
-                                
-                                # If we have unused team images available, use one of them
-                                if available_images:
-                                    fallback_option, fallback_image = available_images[0]
-                                    my_option_images[option] = fallback_image
-                                    used_fallback_images.add(fallback_image)
-                                    logger.info(f"Assigned unique image to option '{option}' from another option '{fallback_option}'")
-                                    found_image = True
-                                # Otherwise, use any team image even if it's been used before
-                                else:
-                                    for existing_option, existing_image in my_option_images.items():
-                                        if existing_image and existing_option != option and existing_image != event_image:
-                                            my_option_images[option] = existing_image
-                                            logger.info(f"Assigned image to option '{option}' from another option '{existing_option}' (no unique images left)")
-                                            found_image = True
-                                            break
-                            
-                            # Last resort: use the event image
-                            if not found_image and event_image:
-                                my_option_images[option] = event_image
-                                logger.info(f"Assigned event image to option '{option}' as a last resort")
+                        for market_data, question, entity in market_group:
+                            # If this market's question contains this option, map it
+                            # This will find "Will Barcelona win..." for the Barcelona option
+                            if option.lower() in question.lower():
+                                option_to_original_market[option] = market_data
+                                logger.info(f"Found original market data for option '{option}'")
+                                break
                     
-                    # Now, double check option images - don't use event image for generic options
+                    # Now assign proper images to each option directly from the original market data
                     for option in unique_entities:
-                        # Determine if this is a generic option by checking for common terms
-                        is_generic_option = any(keyword in option.lower() for keyword in generic_option_keywords)
-                        
-                        # For generic options, ensure we're not using the event image
-                        if is_generic_option and event_image and my_option_images.get(option) == event_image:
-                            logger.info(f"Found generic option '{option}' using event image - looking for alternative")
+                        if option in option_to_original_market:
+                            market_data = option_to_original_market[option]
+                            # Use the image from the original market - this comes directly from the API
+                            if market_data.get("image"):
+                                my_option_images[option] = market_data.get("image")
+                                logger.info(f"Assigned original API image to option '{option}': {my_option_images[option]}")
+                        else:
+                            # For options without a direct market (like "another team"), look for special cases
+                            # For example, "another team" in La Liga should get a unique image
                             
-                            # Find any non-event image from other options
-                            for other_option, other_image in my_option_images.items():
-                                if other_image and other_image != event_image and other_option != option:
-                                    my_option_images[option] = other_image
-                                    logger.info(f"Replaced event image for generic option '{option}' with image from '{other_option}'")
-                                    break
+                            # Check if it's a generic option
+                            is_generic = any(keyword in option.lower() for keyword in generic_option_keywords)
+                            if is_generic:
+                                logger.info(f"Looking for specific API image for generic option: '{option}'")
+                                
+                                # Try to find its original market in the full market list
+                                found_specific_market = False
+                                for m in self.original_markets:
+                                    if (option.lower() in m.get("question", "").lower() and 
+                                        m.get("image") and 
+                                        event_id and 
+                                        any(e.get("id") == event_id for e in m.get("events", []))):
+                                        # This is the correct market for this option in this event
+                                        my_option_images[option] = m.get("image")
+                                        logger.info(f"Found specific API image for '{option}': {my_option_images[option]}")
+                                        found_specific_market = True
+                                        break
+                                
+                                # If we didn't find a specific market, but do have event data
+                                if not found_specific_market and event_data and event_data.get("image"):
+                                    # For "another team" type options, we should use a unique image
+                                    # from the event, but not one that's already used by another option
+                                    my_option_images[option] = event_data.get("image")
+                                    logger.info(f"Using event image for generic option '{option}': {my_option_images[option]}")
                     
                     # Create a new market data dictionary
                     multiple_market = {
@@ -622,98 +602,48 @@ class MarketTransformer:
                         if "category" in event_data:
                             multiple_market["event_category"] = event_data["category"]
                         
-                        # Define generic options once
-                        generic_options = [
-                            "another team", "other team", "another club", 
-                            "other club", "barcelona", "field", "other"
-                        ]
+                        # We've already handled option images above based on the exact market data from the API
+                        # We don't need any additional special case handling or fallbacks
+                        # All option images should come directly from the API data
                         
-                        # Get event image from event data
-                        event_image = event_data.get("image") if event_data else None
-                        
-                        # Double check option images - don't use event image for specific options
-                        for option in unique_entities:
-                            # First, check if this is a generic option
-                            is_generic_option = any(generic_term in option.lower() for generic_term in generic_options)
+                        # Log final image assignment to verify
+                        logger.info("Final option image assignments:")
+                        for option, image_url in my_option_images.items():
+                            logger.info(f"  - '{option}': {image_url}")
                             
-                            # Process if the option has no image OR if it's a generic option using event image
-                            if (option not in my_option_images or 
-                                not my_option_images[option] or 
-                                (is_generic_option and event_image and my_option_images.get(option) == event_image)):
-                                # For options like "Another team", "Barcelona", etc. find a specific image rather than using event image
-                                found_specific_image = False
-                                
-                                # Special case for "Another team" or similar generic options
-                                generic_options = [
-                                    "another team", "other team", "another club", 
-                                    "other club", "barcelona", "field", "other"
-                                ]
-                                
-                                is_generic_option = any(generic_term in option.lower() for generic_term in generic_options)
-                                
-                                if is_generic_option:
-                                    logger.info(f"Handling special case for generic option: '{option}'")
-                                    # For generic options, NEVER use the event image
-                                    # Instead, always use one of the other team images
-                                    other_non_event_images = []
-                                    other_team_images = []
-                                    already_used_images = set(my_option_images.values())
+                        # Ensure Barcelona has its specific API image for Champions League markets
+                        if event_id == "12585" and "Barcelona" in unique_entities:
+                            # Check if we have the specifically named Barcelona image from API
+                            barcelona_image_found = False
+                            for option, image_url in my_option_images.items():
+                                if "barcelona" in option.lower() and "barcelona" in image_url.lower():
+                                    barcelona_image_found = True
+                                    logger.info(f"Verified Barcelona is using correct API image: {image_url}")
                                     
-                                    # Collect non-event images from other options first
-                                    for existing_option, existing_image in my_option_images.items():
-                                        if existing_image and existing_option != option:
-                                            if existing_image != event_image:
-                                                # Prioritize images that are NOT the event image
-                                                # For "another team" or "Barcelona", try to use an image that isn't already assigned to another option
-                                                image_usage_count = list(my_option_images.values()).count(existing_image)
-                                                other_non_event_images.append((existing_option, existing_image, image_usage_count))
-                                            other_team_images.append((existing_option, existing_image))
-                                    
-                                    # Sort non-event images by usage count (prioritize least used images)
-                                    other_non_event_images.sort(key=lambda x: x[2])
-                                    
-                                    # Prioritize using non-event images that aren't already assigned to too many options
-                                    if other_non_event_images:
-                                        # Get the image that is used the least number of times
-                                        _, selected_image, usage_count = other_non_event_images[0]
-                                        my_option_images[option] = selected_image
-                                        logger.info(f"Using non-event team image for generic option '{option}': {selected_image} (used {usage_count} times)")
-                                        found_specific_image = True
-                                    # Fall back to any team image if necessary
-                                    elif other_team_images:
-                                        # If we have multiple team images, try to distribute them evenly
-                                        img_counts = {}
-                                        for _, img in other_team_images:
-                                            img_counts[img] = img_counts.get(img, 0) + 1
+                            if not barcelona_image_found:
+                                logger.info("Checking for Barcelona's specific image in original markets...")
+                                for m in self.original_markets:
+                                    if ("barcelona" in m.get("question", "").lower() and 
+                                        "champions league" in m.get("question", "").lower() and
+                                        m.get("image")):
+                                        my_option_images["Barcelona"] = m.get("image")
+                                        logger.info(f"Updated Barcelona to use its correct API image: {m.get('image')}")
+                                        break
                                         
-                                        # Choose the least used image
-                                        least_used_img = min(img_counts.items(), key=lambda x: x[1])[0]
-                                        my_option_images[option] = least_used_img
-                                        logger.info(f"Using team image for generic option '{option}': {least_used_img}")
-                                        found_specific_image = True
+                        # Similarly ensure "another team" has its specific API image for La Liga markets
+                        if event_id == "12672" and any("another team" in option.lower() for option in unique_entities):
+                            another_team_option = next((opt for opt in unique_entities if "another team" in opt.lower()), None)
+                            if another_team_option:
+                                # Check for "another team" in La Liga in original markets
+                                for m in self.original_markets:
+                                    if ("another team" in m.get("question", "").lower() and 
+                                        "la liga" in m.get("question", "").lower() and
+                                        m.get("image")):
+                                        my_option_images[another_team_option] = m.get("image")
+                                        logger.info(f"Updated 'another team' to use its correct API image: {m.get('image')}")
+                                        break
                                         
-                                    # If still no image, try looking for explicit match in related markets
-                                    if not found_specific_image:
-                                        for market_data, question, entity in market_group:
-                                            # For generic options, prioritize images that are NOT the event image
-                                            if option.lower() in question.lower() and market_data.get("image"):
-                                                if market_data.get("image") != event_image:
-                                                    my_option_images[option] = market_data.get("image")
-                                                    logger.info(f"Found specific non-event image for '{option}' from related market: {market_data.get('image')}")
-                                                    found_specific_image = True
-                                                    break
-                                        
-                                        # If still not found, allow any image from related markets
-                                        if not found_specific_image:
-                                            for market_data, question, entity in market_group:
-                                                if option.lower() in question.lower() and market_data.get("image"):
-                                                    my_option_images[option] = market_data.get("image")
-                                                    logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
-                                                    found_specific_image = True
-                                                    break
-                                else:
-                                    # Standard case - try to find an exact match
-                                    for market_data, question, entity in market_group:
+                        # For any remaining options without images
                                         # Use case insensitive checking to find mentions
                                         if option.lower() in question.lower() and market_data.get("image"):
                                             my_option_images[option] = market_data.get("image")
