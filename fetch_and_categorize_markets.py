@@ -97,7 +97,8 @@ def filter_active_non_expired_markets(markets: List[Dict[str, Any]]) -> List[Dic
     Returns:
         List[Dict[str, Any]]: Filtered list of markets
     """
-    now = datetime.utcnow()
+    # Use UTC now with timezone info for proper comparison
+    now = datetime.now(datetime.utcnow().astimezone().tzinfo)
     filtered_markets = []
     
     for market in markets:
@@ -115,12 +116,22 @@ def filter_active_non_expired_markets(markets: List[Dict[str, Any]]) -> List[Dic
         end_date_str = market.get("endDate")
         if end_date_str:
             try:
-                end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                # Make sure we have a timezone-aware datetime for comparison
+                if 'Z' in end_date_str:
+                    # Replace Z with +00:00 for UTC timezone
+                    end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                elif '+' in end_date_str or '-' in end_date_str and 'T' in end_date_str:
+                    # Already has timezone info
+                    end_date = datetime.fromisoformat(end_date_str)
+                else:
+                    # No timezone, assume UTC
+                    end_date = datetime.fromisoformat(end_date_str).replace(tzinfo=now.tzinfo)
+                
                 if end_date < now:
                     logger.debug(f"Skipping expired market: {market.get('question')}")
                     continue
             except Exception as e:
-                logger.warning(f"Error parsing end date: {str(e)}")
+                logger.warning(f"Error parsing end date '{end_date_str}': {str(e)}")
                 # Continue without filtering if we can't parse the date
                 
         # Ensure market has a question
@@ -220,13 +231,23 @@ def store_pending_markets(markets: List[Dict[str, Any]]) -> List[PendingMarket]:
             
             # Extract expiry timestamp
             expiry_timestamp = None
-            if market.get("endDate"):
+            end_date_str = market.get("endDate")
+            if end_date_str:
                 try:
-                    expiry_timestamp = int(datetime.fromisoformat(
-                        market.get("endDate").replace("Z", "+00:00")
-                    ).timestamp())
+                    # Handle different timestamp formats
+                    if 'Z' in end_date_str:
+                        # Replace Z with +00:00 for UTC timezone
+                        end_date = datetime.fromisoformat(end_date_str.replace("Z", "+00:00"))
+                    elif '+' in end_date_str or '-' in end_date_str and 'T' in end_date_str:
+                        # Already has timezone info
+                        end_date = datetime.fromisoformat(end_date_str)
+                    else:
+                        # No timezone, assume UTC
+                        end_date = datetime.fromisoformat(end_date_str).replace(tzinfo=datetime.now().astimezone().tzinfo)
+                    
+                    expiry_timestamp = int(end_date.timestamp())
                 except Exception as e:
-                    logger.error(f"Error parsing endDate for {poly_id}: {str(e)}")
+                    logger.error(f"Error parsing endDate '{end_date_str}' for {poly_id}: {str(e)}")
                     
             # Get options/outcomes
             options = []
