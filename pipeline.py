@@ -32,6 +32,7 @@ from filter_active_markets import fetch_markets, filter_active_markets
 from fetch_active_markets_with_tracker import post_new_markets, filter_new_markets
 from check_market_approvals import check_market_approvals
 from utils.market_transformer import MarketTransformer
+from utils.option_image_fixer import apply_image_fixes, verify_option_images
 
 # Configure logging
 logging.basicConfig(
@@ -163,6 +164,15 @@ class PolymarketPipeline:
         logger.info("Transforming markets to combine related ones")
         transformer = MarketTransformer()
         transformed_markets = transformer.transform_markets(filtered_markets)
+        
+        # Apply fixes to ensure each option has its own unique image
+        logger.info("Applying option image fixes to ensure unique images for all options")
+        transformed_markets = apply_image_fixes(transformed_markets)
+        
+        # Verify and log option images
+        for market in transformed_markets:
+            if market.get('is_multiple_option', False):
+                verify_option_images(market)
         
         # Check how many multi-option markets were created
         multi_option_count = sum(1 for m in transformed_markets if m.get('is_multiple_option', False))
