@@ -543,7 +543,8 @@ class MarketTransformer:
                                 is_generic_option = (
                                     "another" in option.lower() or 
                                     "other" in option.lower() or
-                                    option.lower() == "barcelona"
+                                    option.lower() == "barcelona" or
+                                    option.lower() == "another team"
                                 )
                                 
                                 if is_generic_option:
@@ -594,9 +595,21 @@ class MarketTransformer:
                                     logger.info(f"Using event image for '{option}' as last resort: {event_image}")
                                 elif not found_specific_image and is_generic_option:
                                     # For generic options like "Another team", if we still don't have an image,
-                                    # Use the main market image rather than the event image
-                                    my_option_images[option] = market_group[0][0].get("image", "")
-                                    logger.info(f"Using market image for generic option '{option}': {my_option_images[option]}")
+                                    # Try to find ANY team-specific image from the markets
+                                    for market_data, question, entity in market_group:
+                                        if market_data.get("image") and market_data.get("image") != event_image:
+                                            my_option_images[option] = market_data.get("image")
+                                            logger.info(f"Using alternative market image for generic option '{option}': {my_option_images[option]}")
+                                            found_specific_image = True
+                                            break
+                                    
+                                    # If still no image found, use any non-event image
+                                    if not found_specific_image:
+                                        for market_data, question, entity in market_group:
+                                            if market_data.get("image"):
+                                                my_option_images[option] = market_data.get("image")
+                                                logger.info(f"Using last resort market image for generic option '{option}': {my_option_images[option]}")
+                                                break
                     
                     result.append((multiple_market, "multiple", event_title))
                 else:
