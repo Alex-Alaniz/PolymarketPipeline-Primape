@@ -195,6 +195,7 @@ HTML_TEMPLATE = """
         
         <div>
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
+            <button id="check-approvals" class="button" style="background-color: var(--bs-success); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="checkMarketApprovals()">Check Market Approvals</button>
             <button id="run-deployment" class="button" style="background-color: var(--bs-warning); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="runDeploymentApprovals()">Check Deployment Approvals</button>
             <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
         </div>
@@ -254,6 +255,31 @@ HTML_TEMPLATE = """
             });
         }
         
+        function checkMarketApprovals() {
+            fetch('/check-market-approvals', {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('status').textContent = 'running';
+                    document.getElementById('run-pipeline').disabled = true;
+                    document.getElementById('check-approvals').disabled = true;
+                    document.getElementById('run-deployment').disabled = true;
+                    // Refresh page after 2 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to start market approval check: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while checking market approvals');
+            });
+        }
+        
         function runDeploymentApprovals() {
             fetch('/run-deployment-approvals', {
                 method: 'POST',
@@ -263,6 +289,7 @@ HTML_TEMPLATE = """
                 if (data.success) {
                     document.getElementById('status').textContent = 'running';
                     document.getElementById('run-pipeline').disabled = true;
+                    document.getElementById('check-approvals').disabled = true;
                     document.getElementById('run-deployment').disabled = true;
                     // Refresh page after 2 seconds
                     setTimeout(() => {
@@ -482,6 +509,99 @@ def start_deployment_approvals():
     return jsonify({
         "success": True,
         "message": "Deployment approval process started"
+    })
+
+@app.route('/check-market-approvals', methods=['POST'])
+def check_market_approvals():
+    """API endpoint to check initial market approvals"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Another process is already running"
+        })
+    
+    # Define a function to check market approvals
+    def run_market_approvals():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting Market Approval Check Process...")
+            
+            # Import the market approval module
+            import check_market_approvals
+            
+            # Run the market approval process
+            with app.app_context():
+                # Check for market approvals
+                pending, approved, rejected = check_market_approvals.check_market_approvals()
+                print(f"Market approval results: {pending} pending, {approved} approved, {rejected} rejected")
+                
+                # Create market entries for approved markets
+                if approved > 0:
+                    print("Creating market entries for approved markets...")
+                    markets_created = 0
+                    
+                    # Get all approved markets that haven't been processed yet
+                    from models import db, ProcessedMarket
+                    approved_markets = ProcessedMarket.query.filter_by(
+                        approved=True, 
+                        posted=True
+                    ).all()
+                    
+                    for processed_market in approved_markets:
+                        if processed_market.raw_data:
+                            try:
+                                # Create market entry if it doesn't exist yet
+                                success = check_market_approvals.create_market_entry(processed_market.raw_data)
+                                if success:
+                                    markets_created += 1
+                            except Exception as e:
+                                print(f"Error creating market entry: {str(e)}")
+                    
+                    print(f"Created {markets_created} market entries for approved markets")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed"
+            
+            # Log process end
+            print("Market approval check process completed successfully")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Market approval check process failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the market approval check process in a separate thread
+    thread = threading.Thread(target=run_market_approvals)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Market approval check process started"
     })
 
 @app.route('/status')
