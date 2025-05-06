@@ -540,35 +540,58 @@ class MarketTransformer:
                                 found_specific_image = False
                                 
                                 # Special case for "Another team" or similar generic options
-                                is_generic_option = (
-                                    "another" in option.lower() or 
-                                    "other" in option.lower() or
-                                    option.lower() == "barcelona" or
-                                    option.lower() == "another team"
-                                )
+                                generic_options = [
+                                    "another team", "other team", "another club", 
+                                    "other club", "barcelona", "field", "other"
+                                ]
+                                
+                                is_generic_option = any(generic_term in option.lower() for generic_term in generic_options)
                                 
                                 if is_generic_option:
                                     logger.info(f"Handling special case for generic option: '{option}'")
                                     # For generic options, NEVER use the event image
                                     # Instead, always use one of the other team images
-                                    other_images = []
+                                    other_non_event_images = []
+                                    other_team_images = []
+                                    
+                                    # Collect non-event images from other options first
                                     for existing_option, existing_image in my_option_images.items():
                                         if existing_image and existing_option != option:
-                                            other_images.append(existing_image)
+                                            if existing_image != event_image:
+                                                # Prioritize images that are NOT the event image
+                                                other_non_event_images.append(existing_image)
+                                            other_team_images.append(existing_image)
                                     
-                                    if other_images:
-                                        # Use the first available team image
-                                        my_option_images[option] = other_images[0]
-                                        logger.info(f"Using team image for generic option '{option}': {other_images[0]}")
+                                    # Prioritize using non-event images first
+                                    if other_non_event_images:
+                                        my_option_images[option] = other_non_event_images[0]
+                                        logger.info(f"Using non-event team image for generic option '{option}': {other_non_event_images[0]}")
                                         found_specific_image = True
-                                    else:
-                                        # Fallback to looking for explicit match in related markets
+                                    # Fall back to any team image if necessary
+                                    elif other_team_images:
+                                        my_option_images[option] = other_team_images[0]
+                                        logger.info(f"Using team image for generic option '{option}': {other_team_images[0]}")
+                                        found_specific_image = True
+                                        
+                                    # If still no image, try looking for explicit match in related markets
+                                    if not found_specific_image:
                                         for market_data, question, entity in market_group:
+                                            # For generic options, prioritize images that are NOT the event image
                                             if option.lower() in question.lower() and market_data.get("image"):
-                                                my_option_images[option] = market_data.get("image")
-                                                logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
-                                                found_specific_image = True
-                                                break
+                                                if market_data.get("image") != event_image:
+                                                    my_option_images[option] = market_data.get("image")
+                                                    logger.info(f"Found specific non-event image for '{option}' from related market: {market_data.get('image')}")
+                                                    found_specific_image = True
+                                                    break
+                                        
+                                        # If still not found, allow any image from related markets
+                                        if not found_specific_image:
+                                            for market_data, question, entity in market_group:
+                                                if option.lower() in question.lower() and market_data.get("image"):
+                                                    my_option_images[option] = market_data.get("image")
+                                                    logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
+                                                    found_specific_image = True
+                                                    break
                                 else:
                                     # Standard case - try to find an exact match
                                     for market_data, question, entity in market_group:

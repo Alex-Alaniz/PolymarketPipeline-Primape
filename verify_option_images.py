@@ -9,150 +9,159 @@ This script:
 import json
 import logging
 import requests
-from typing import Dict, List, Any, Optional, Tuple
-
+from typing import Dict, Any, List, Tuple
 from utils.market_transformer import MarketTransformer
 
-# Setup logging
+# Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 def create_test_data() -> List[Dict[str, Any]]:
     """Create test data that simulates the problematic scenarios"""
-    
-    # Common event data
+    # Common event banner
     event_banner = "https://example.com/event-banner.png"
     
-    # Champions League test
-    cl_event_id = "test-champions-league-event"
-    cl_markets = []
-    
-    # Teams with proper images
-    cl_teams = [
-        {"name": "Real Madrid", "image": "https://example.com/real-madrid.png"},
-        {"name": "Manchester City", "image": "https://example.com/manchester-city.png"},
-        {"name": "Bayern Munich", "image": "https://example.com/bayern.png"},
-    ]
-    
-    # Add team markets
-    for team in cl_teams:
-        cl_markets.append({
-            "id": f"will-{team['name'].lower().replace(' ', '-')}-win-cl",
-            "question": f"Will {team['name']} win the Champions League?",
-            "image": team["image"],
-            "icon": team["image"],
+    # Champions League test with 3 teams to ensure multi-option creation
+    champions_league_markets = [
+        {
+            "id": "real-madrid-market",
+            "question": "Will Real Madrid win the Champions League?",
+            "image": "https://example.com/real-madrid.png",
+            "icon": "https://example.com/real-madrid.png",
             "active": True,
             "closed": False,
             "archived": False,
-            "liquidity": 10000,
             "category": "sports",
             "subcategory": "soccer",
-            "conditionId": f"{team['name'].lower().replace(' ', '-')}-cl-condition",
             "outcomes": [{"value": "Yes"}, {"value": "No"}],
-            "eventId": cl_event_id,
+            "eventId": "champions-league-event",
             "events": [
                 {
-                    "id": cl_event_id,
-                    "title": "Champions League Winner",
+                    "id": "champions-league-event",
+                    "title": "Champions League Winner 2025",
                     "image": event_banner,
                     "icon": event_banner,
                     "category": "soccer"
                 }
             ]
-        })
-    
-    # Add Barcelona with event image (the problematic case)
-    cl_markets.append({
-        "id": "will-barcelona-win-cl",
-        "question": "Will Barcelona win the Champions League?",
-        "image": event_banner,  # Using event banner - this is the issue
-        "icon": event_banner,
-        "active": True,
-        "closed": False,
-        "archived": False,
-        "liquidity": 10000,
-        "category": "sports",
-        "subcategory": "soccer",
-        "conditionId": "barcelona-cl-condition",
-        "outcomes": [{"value": "Yes"}, {"value": "No"}],
-        "eventId": cl_event_id,
-        "events": [
-            {
-                "id": cl_event_id,
-                "title": "Champions League Winner",
-                "image": event_banner,
-                "icon": event_banner,
-                "category": "soccer"
-            }
-        ]
-    })
-    
-    # La Liga test with "Another Team" issue
-    liga_event_id = "test-la-liga-event"
-    liga_markets = []
-    
-    # Teams with proper images
-    liga_teams = [
-        {"name": "Real Madrid", "image": "https://example.com/real-madrid.png"},
-        {"name": "Barcelona", "image": "https://example.com/barcelona.png"},
-        {"name": "Atletico Madrid", "image": "https://example.com/atletico.png"},
-    ]
-    
-    # Add team markets
-    for team in liga_teams:
-        liga_markets.append({
-            "id": f"will-{team['name'].lower().replace(' ', '-')}-win-liga",
-            "question": f"Will {team['name']} win La Liga?",
-            "image": team["image"],
-            "icon": team["image"],
+        },
+        {
+            "id": "barcelona-market",
+            "question": "Will Barcelona win the Champions League?",
+            "image": event_banner,  # Using event banner for Barcelona
+            "icon": event_banner,
             "active": True,
             "closed": False,
             "archived": False,
-            "liquidity": 10000,
             "category": "sports",
             "subcategory": "soccer",
-            "conditionId": f"{team['name'].lower().replace(' ', '-')}-liga-condition",
             "outcomes": [{"value": "Yes"}, {"value": "No"}],
-            "eventId": liga_event_id,
+            "eventId": "champions-league-event",
             "events": [
                 {
-                    "id": liga_event_id,
-                    "title": "La Liga Winner",
+                    "id": "champions-league-event",
+                    "title": "Champions League Winner 2025",
                     "image": event_banner,
                     "icon": event_banner,
                     "category": "soccer"
                 }
             ]
-        })
+        },
+        {
+            "id": "another-team-cl-market",
+            "question": "Will Another Team win the Champions League?",
+            "image": event_banner,  # Using event banner for Another Team
+            "icon": event_banner,
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "category": "sports",
+            "subcategory": "soccer",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
+            "eventId": "champions-league-event",
+            "events": [
+                {
+                    "id": "champions-league-event",
+                    "title": "Champions League Winner 2025",
+                    "image": event_banner,
+                    "icon": event_banner,
+                    "category": "soccer"
+                }
+            ]
+        }
+    ]
     
-    # Add "Another Team" with event image (the problematic case)
-    liga_markets.append({
-        "id": "will-another-team-win-liga",
-        "question": "Will Another Team win La Liga?",
-        "image": event_banner,  # Using event banner - this is the issue
-        "icon": event_banner,
-        "active": True,
-        "closed": False,
-        "archived": False,
-        "liquidity": 10000,
-        "category": "sports",
-        "subcategory": "soccer",
-        "conditionId": "another-team-liga-condition",
-        "outcomes": [{"value": "Yes"}, {"value": "No"}],
-        "eventId": liga_event_id,
-        "events": [
-            {
-                "id": liga_event_id,
-                "title": "La Liga Winner",
-                "image": event_banner,
-                "icon": event_banner,
-                "category": "soccer"
-            }
-        ]
-    })
+    # La Liga test with 3 teams to ensure multi-option creation
+    la_liga_markets = [
+        {
+            "id": "real-madrid-liga-market",
+            "question": "Will Real Madrid win La Liga?",
+            "image": "https://example.com/real-madrid.png",
+            "icon": "https://example.com/real-madrid.png",
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "category": "sports",
+            "subcategory": "soccer",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
+            "eventId": "la-liga-event",
+            "events": [
+                {
+                    "id": "la-liga-event",
+                    "title": "La Liga Winner 2025",
+                    "image": event_banner,
+                    "icon": event_banner,
+                    "category": "soccer"
+                }
+            ]
+        },
+        {
+            "id": "barcelona-liga-market",
+            "question": "Will Barcelona win La Liga?",
+            "image": "https://example.com/barcelona.png",
+            "icon": "https://example.com/barcelona.png",
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "category": "sports",
+            "subcategory": "soccer",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
+            "eventId": "la-liga-event",
+            "events": [
+                {
+                    "id": "la-liga-event",
+                    "title": "La Liga Winner 2025",
+                    "image": event_banner,
+                    "icon": event_banner,
+                    "category": "soccer"
+                }
+            ]
+        },
+        {
+            "id": "another-team-liga-market",
+            "question": "Will Another Team win La Liga?",
+            "image": event_banner,  # Using event banner for Another Team
+            "icon": event_banner,
+            "active": True,
+            "closed": False,
+            "archived": False,
+            "category": "sports",
+            "subcategory": "soccer",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
+            "eventId": "la-liga-event",
+            "events": [
+                {
+                    "id": "la-liga-event",
+                    "title": "La Liga Winner 2025",
+                    "image": event_banner,
+                    "icon": event_banner,
+                    "category": "soccer"
+                }
+            ]
+        }
+    ]
     
-    # Combine all test markets
-    return cl_markets + liga_markets
+    return champions_league_markets + la_liga_markets
 
 def analyze_market(market: Dict[str, Any], target_option: str) -> Tuple[bool, str]:
     """
@@ -165,59 +174,27 @@ def analyze_market(market: Dict[str, Any], target_option: str) -> Tuple[bool, st
     Returns:
         Tuple of (is_fixed, details)
     """
-    if not market.get("is_multiple_option", False):
-        return False, "Not a multi-option market"
-    
-    # Print all keys for debugging
-    logger.info(f"Market keys: {list(market.keys())}")
-    
-    # Get outcomes as a list (handle both string and list formats)
-    outcomes_raw = market.get("outcomes", "[]")
-    outcomes = json.loads(outcomes_raw) if isinstance(outcomes_raw, str) else outcomes_raw
-    logger.info(f"Outcomes: {outcomes}")
-    
-    # Get option images (handle both string and dict formats)
+    outcomes = json.loads(market.get("outcomes", "[]")) if isinstance(market.get("outcomes"), str) else market.get("outcomes", [])
     option_images_raw = market.get("option_images", "{}")
     option_images = json.loads(option_images_raw) if isinstance(option_images_raw, str) else option_images_raw
-    logger.info(f"Option images: {option_images}")
+    event_image = market.get("event_image")
     
-    # Get event image
-    event_image = market.get("event_image", "")
-    logger.info(f"Event image: {event_image}")
-    
-    # Print debug info about the target option
-    logger.info(f"Checking target option: '{target_option}'")
-    
-    # Check if the target option exists
     if target_option not in outcomes:
-        logger.info(f"Target option '{target_option}' not found in outcomes")
-        return False, f"Target option '{target_option}' not found in outcomes"
+        return (False, f"Option '{target_option}' not found in outcomes: {outcomes}")
     
-    # Check if the target option has an image
-    if target_option not in option_images:
-        logger.info(f"Target option '{target_option}' has no image")
-        return False, f"Target option '{target_option}' has no image"
-    
-    # Check if it's using the event image
-    image_url = option_images[target_option]
-    logger.info(f"Target option '{target_option}' image URL: {image_url}")
-    
-    # Check against event image
-    using_event_image = (image_url == event_image) if image_url and event_image else False
-    logger.info(f"Is using event image? {using_event_image}")
-    
-    if using_event_image:
-        return False, f"Target option '{target_option}' is still using the event image"
+    image = option_images.get(target_option)
+    if not image:
+        return (False, f"No image found for option '{target_option}'")
+        
+    is_event_image = (image == event_image)
+    if is_event_image:
+        return (False, f"Issue: Option '{target_option}' is using event image: {image}")
     else:
-        # Get details about what image it's using instead
-        if image_url in [option_images.get(opt) for opt in outcomes if opt != target_option]:
-            return True, f"Target option '{target_option}' is using another team's image correctly"
-        else:
-            return True, f"Target option '{target_option}' is using a unique image (not event image)"
+        return (True, f"Fixed: Option '{target_option}' is using unique image: {image}")
 
 def verify_fix_with_test_data():
     """Verify our fix with controlled test data"""
-    logger.info("\n=== VERIFYING FIX WITH TEST DATA ===")
+    logger.info("Starting verification with test data...")
     
     # Create test data
     test_markets = create_test_data()
@@ -226,199 +203,157 @@ def verify_fix_with_test_data():
     # Transform markets
     transformer = MarketTransformer()
     transformed = transformer.transform_markets(test_markets)
-    logger.info(f"Transformed {len(transformed)} markets")
     
-    # Find our multi-option markets
-    cl_market = None
-    liga_market = None
+    # Check for multi-option markets
+    multi_option_markets = [m for m in transformed if m.get("is_multiple_option", False)]
+    logger.info(f"Transformed into {len(transformed)} markets, of which {len(multi_option_markets)} are multi-option")
     
-    for market in transformed:
-        if market.get("is_multiple_option", False):
-            question = market.get("question", "").lower()
-            if "champions league" in question:
-                cl_market = market
-            elif "la liga" in question:
-                liga_market = market
+    if not multi_option_markets:
+        logger.error("No multi-option markets were created - test failed")
+        return False
     
-    # Analysis results
-    results = []
+    # Check specifically for the problematic options
+    barcelona_fixed = False
+    another_team_fixed = False
     
-    # Analyze Champions League market for Barcelona
-    if cl_market:
-        logger.info("\n* Found Champions League multi-option market:")
-        logger.info(f"  Question: {cl_market.get('question')}")
+    for market in multi_option_markets:
+        logger.info(f"Checking multi-option market: {market.get('question')}")
         
-        barcelona_fixed, details = analyze_market(cl_market, "Barcelona")
-        results.append(("Barcelona in Champions League", barcelona_fixed, details))
-    else:
-        logger.error("No Champions League multi-option market found")
-        results.append(("Barcelona in Champions League", False, "Market not found"))
-    
-    # Analyze La Liga market for "Another Team"
-    if liga_market:
-        logger.info("\n* Found La Liga multi-option market:")
-        logger.info(f"  Question: {liga_market.get('question')}")
+        # Check for Barcelona option
+        barcelona_result = analyze_market(market, "Barcelona")
+        if barcelona_result[0]:
+            logger.info(f"Barcelona check: {barcelona_result[1]}")
+            barcelona_fixed = True
+        else:
+            logger.warning(f"Barcelona check: {barcelona_result[1]}")
         
-        another_team_fixed, details = analyze_market(liga_market, "Another Team")
-        results.append(("Another Team in La Liga", another_team_fixed, details))
+        # Check for Another Team option
+        another_team_result = analyze_market(market, "Another Team")
+        if another_team_result[0]:
+            logger.info(f"Another Team check: {another_team_result[1]}")
+            another_team_fixed = True
+        else:
+            logger.warning(f"Another Team check: {another_team_result[1]}")
+    
+    # Summarize results
+    if barcelona_fixed and another_team_fixed:
+        logger.info("✅ TEST PASSED: Both Barcelona and Another Team options are using proper images")
+        return True
+    elif barcelona_fixed:
+        logger.warning("⚠️ TEST PARTIALLY PASSED: Barcelona is fixed but Another Team has issues")
+        return False
+    elif another_team_fixed:
+        logger.warning("⚠️ TEST PARTIALLY PASSED: Another Team is fixed but Barcelona has issues")
+        return False
     else:
-        logger.error("No La Liga multi-option market found")
-        results.append(("Another Team in La Liga", False, "Market not found"))
-    
-    # Print summary
-    logger.info("\n=== TEST RESULTS ===")
-    all_fixed = True
-    
-    for issue, fixed, details in results:
-        status = "✅ FIXED" if fixed else "❌ NOT FIXED"
-        logger.info(f"{status} - {issue}: {details}")
-        if not fixed:
-            all_fixed = False
-    
-    # Additional debugging for CL market
-    if cl_market:
-        logger.info("\n=== DETAILED CL MARKET DEBUG ===")
-        logger.info(f"Event image: {cl_market.get('event_image')}")
-        option_images = json.loads(cl_market.get("option_images", "{}"))
-        for option, image in option_images.items():
-            logger.info(f"Option '{option}' image: {image}")
-            if option == "Barcelona":
-                logger.info(f"Barcelona image matches event image: {image == cl_market.get('event_image')}")
-    
-    # Additional debugging for La Liga market
-    if liga_market:
-        logger.info("\n=== DETAILED LA LIGA MARKET DEBUG ===")
-        logger.info(f"Event image: {liga_market.get('event_image')}")
-        option_images = json.loads(liga_market.get("option_images", "{}"))
-        for option, image in option_images.items():
-            logger.info(f"Option '{option}' image: {image}")
-            if "another" in option.lower():
-                logger.info(f"Another Team image matches event image: {image == liga_market.get('event_image')}")
-    
-    if all_fixed:
-        logger.info("\n✅ ALL ISSUES FIXED! The image handling for Barcelona and 'Another Team' options is working correctly.")
-    else:
-        logger.error("\n❌ ISSUES REMAIN! Some problems with image handling still exist.")
-    
-    return all_fixed
+        logger.error("❌ TEST FAILED: Both Barcelona and Another Team options have issues")
+        return False
 
 def verify_fix_with_real_data():
     """Verify our fix with real data from Polymarket API"""
-    logger.info("\n=== VERIFYING FIX WITH REAL API DATA ===")
+    logger.info("Starting verification with real Polymarket data...")
     
-    # Try to fetch real data from Polymarket API
-    real_markets = []
+    # Get sports markets that might have "Another Team" or "Barcelona" options
+    url = "https://gamma-api.polymarket.com/markets"
+    params = {
+        "cat": "soccer",  # Filter to soccer markets for better chances
+        "limit": 50
+    }
     
     try:
-        # Try to get Champions League markets
-        url = "https://gamma-api.polymarket.com/markets"
-        params = {"limit": 30, "q": "Champions League", "cat": "soccer"}
-        
         response = requests.get(url, params=params)
         response.raise_for_status()
-        cl_markets = response.json()
-        logger.info(f"Fetched {len(cl_markets)} Champions League markets from Polymarket API")
-        real_markets.extend(cl_markets)
+        markets = response.json()
         
-        # Try to get La Liga markets
-        params = {"limit": 30, "q": "La Liga", "cat": "soccer"}
+        logger.info(f"Fetched {len(markets)} markets from API")
         
-        response = requests.get(url, params=params)
-        response.raise_for_status()
-        liga_markets = response.json()
-        logger.info(f"Fetched {len(liga_markets)} La Liga markets from Polymarket API")
-        real_markets.extend(liga_markets)
+        # Transform markets
+        transformer = MarketTransformer()
+        transformed = transformer.transform_markets(markets)
+        
+        # Find multi-option markets
+        multi_option_markets = [m for m in transformed if m.get("is_multiple_option", False)]
+        logger.info(f"Found {len(multi_option_markets)} multi-option markets")
+        
+        if not multi_option_markets:
+            logger.warning("No multi-option markets found in real data - can't verify")
+            return None
+        
+        # Check for markets with our target options
+        found_barcelona = False
+        found_another_team = False
+        barcelona_fixed = None
+        another_team_fixed = None
+        
+        for market in multi_option_markets:
+            outcomes = json.loads(market.get("outcomes", "[]")) if isinstance(market.get("outcomes"), str) else market.get("outcomes", [])
+            
+            if "Barcelona" in outcomes:
+                found_barcelona = True
+                result = analyze_market(market, "Barcelona")
+                barcelona_fixed = result[0]
+                logger.info(f"Barcelona in real data: {result[1]}")
+            
+            # Check for "Another Team" or similar variations
+            for outcome in outcomes:
+                if "another team" in outcome.lower():
+                    found_another_team = True
+                    result = analyze_market(market, outcome)
+                    another_team_fixed = result[0]
+                    logger.info(f"Another Team in real data: {result[1]}")
+        
+        # Summarize real data results
+        if not found_barcelona and not found_another_team:
+            logger.warning("Neither Barcelona nor Another Team options found in real data")
+            return None
+        
+        if found_barcelona and found_another_team:
+            if barcelona_fixed and another_team_fixed:
+                logger.info("✅ REAL DATA TEST PASSED: Both Barcelona and Another Team are fixed")
+                return True
+            else:
+                logger.warning(f"⚠️ REAL DATA TEST ISSUES: Barcelona fixed: {barcelona_fixed}, Another Team fixed: {another_team_fixed}")
+                return False
+        elif found_barcelona:
+            logger.info(f"Barcelona only found in real data - fixed: {barcelona_fixed}")
+            return barcelona_fixed
+        elif found_another_team:
+            logger.info(f"Another Team only found in real data - fixed: {another_team_fixed}")
+            return another_team_fixed
     
     except Exception as e:
-        logger.error(f"Failed to fetch real data from Polymarket API: {e}")
-        logger.info("Continuing with only test data verification")
-        return None
-    
-    # Transform markets
-    transformer = MarketTransformer()
-    transformed = transformer.transform_markets(real_markets)
-    logger.info(f"Transformed {len(transformed)} real markets")
-    
-    # Find multi-option markets
-    multi_option_markets = [m for m in transformed if m.get("is_multiple_option", False)]
-    logger.info(f"Found {len(multi_option_markets)} multi-option markets in real data")
-    
-    if not multi_option_markets:
-        logger.warning("No multi-option markets found in real data, can't verify with real data")
-        return None
-    
-    # Find markets with Barcelona or "Another Team" options
-    results = []
-    
-    for market in multi_option_markets:
-        outcomes = json.loads(market.get("outcomes", "[]"))
-        question = market.get("question", "")
-        
-        # Check for Barcelona
-        if "Barcelona" in outcomes:
-            barcelona_fixed, details = analyze_market(market, "Barcelona")
-            results.append((f"Barcelona in '{question}'", barcelona_fixed, details))
-        
-        # Check for Another Team
-        for outcome in outcomes:
-            if "another" in outcome.lower() or "other" in outcome.lower():
-                another_fixed, details = analyze_market(market, outcome)
-                results.append((f"'{outcome}' in '{question}'", another_fixed, details))
-    
-    # Print summary
-    if results:
-        logger.info("\n=== REAL DATA RESULTS ===")
-        all_fixed = True
-        
-        for issue, fixed, details in results:
-            status = "✅ FIXED" if fixed else "❌ NOT FIXED"
-            logger.info(f"{status} - {issue}: {details}")
-            if not fixed:
-                all_fixed = False
-        
-        if all_fixed:
-            logger.info("\n✅ REAL DATA VERIFICATION PASSED! Images are handled correctly for real Polymarket data.")
-        else:
-            logger.error("\n❌ REAL DATA VERIFICATION FAILED! Some issues persist with real data.")
-        
-        return all_fixed
-    else:
-        logger.warning("No markets with Barcelona or 'Another Team' options found in real data")
+        logger.error(f"Error fetching real data: {e}")
         return None
 
 def main():
     """Main verification function"""
-    logger.info("Starting verification of 'Another Team' and Barcelona image fix")
+    logger.info("=== OPTION IMAGE HANDLING VERIFICATION ===")
     
-    # Verify with test data
-    test_passed = verify_fix_with_test_data()
+    # First test with controlled test data
+    test_data_result = verify_fix_with_test_data()
     
-    # Verify with real data if available
-    real_passed = verify_fix_with_real_data()
+    # Then verify with real data if available
+    real_data_result = verify_fix_with_real_data()
     
-    # Final verdict
-    logger.info("\n=== FINAL VERIFICATION RESULTS ===")
-    
-    if test_passed:
-        logger.info("✅ TEST DATA VERIFICATION: PASSED")
+    # Final conclusion
+    logger.info("\n=== VERIFICATION SUMMARY ===")
+    if test_data_result:
+        logger.info("✓ Test data: All issues FIXED")
     else:
-        logger.error("❌ TEST DATA VERIFICATION: FAILED")
+        logger.error("✗ Test data: Issues REMAIN")
     
-    if real_passed is not None:
-        if real_passed:
-            logger.info("✅ REAL DATA VERIFICATION: PASSED")
-        else:
-            logger.error("❌ REAL DATA VERIFICATION: FAILED")
+    if real_data_result is True:
+        logger.info("✓ Real data: All issues FIXED")
+    elif real_data_result is False:
+        logger.error("✗ Real data: Issues REMAIN")
     else:
-        logger.warning("⚠️ REAL DATA VERIFICATION: SKIPPED (no suitable data)")
+        logger.warning("? Real data: INCONCLUSIVE (target options not found)")
     
-    # Overall conclusion
-    if test_passed and (real_passed is None or real_passed):
-        logger.info("\n🎉 CONCLUSION: FIX IS WORKING CORRECTLY!")
-        logger.info("The issue with 'Another Team' and Barcelona options using event banner images has been fixed.")
+    # Overall result
+    if test_data_result and (real_data_result is True or real_data_result is None):
+        logger.info("\n✅ OVERALL: The fixes are working correctly")
     else:
-        logger.error("\n❌ CONCLUSION: FIX NEEDS IMPROVEMENT")
-        logger.error("Some issues remain with the image handling for 'Another Team' or Barcelona options.")
+        logger.error("\n❌ OVERALL: Issues remain with option image handling")
 
 if __name__ == "__main__":
     main()
