@@ -125,6 +125,26 @@ class PolymarketPipeline:
         except Exception as e:
             logger.error(f"Error updating PipelineRun record: {str(e)}")
     
+    def get_run_count(self) -> int:
+        """
+        Get the count of previous successful pipeline runs.
+        Used to vary parameters across runs to maximize market diversity.
+        
+        Returns:
+            int: Number of previous runs (including current)
+        """
+        try:
+            # Count previous successful runs
+            run_count = PipelineRun.query.filter(
+                PipelineRun.status.in_(["completed", "running"])
+            ).count()
+            
+            # Add 1 for current run (starts at 0)
+            return run_count
+        except Exception as e:
+            logger.error(f"Error getting run count: {str(e)}")
+            return 0
+            
     def fetch_and_filter_markets(self):
         """
         Fetch markets from Polymarket API and filter active ones.
@@ -133,8 +153,12 @@ class PolymarketPipeline:
         Returns:
             list: Filtered and transformed market data
         """
-        logger.info("Fetching markets from Polymarket API")
-        markets = fetch_markets()
+        # Use run_count to vary the fetch parameters
+        run_count = self.get_run_count()
+        logger.info(f"Starting pipeline run #{run_count}")
+        
+        logger.info(f"Fetching markets from Polymarket API (variant: {run_count})")
+        markets = fetch_markets(variant=run_count)
         
         if not markets:
             logger.error("Failed to fetch markets from API")

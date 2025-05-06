@@ -33,13 +33,15 @@ CATEGORIES = {
     "science": 30
 }
 
-def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
+def fetch_markets(limit: int = 200, variant: int = 0) -> List[Dict[str, Any]]:
     """
     Fetch markets from Polymarket API using the gamma API endpoint.
     Fetches a diverse set of markets across different categories.
     
     Args:
         limit: Maximum number of markets to fetch per query
+        variant: A variant number to diversify market fetching
+                (run 0 = default, run 1, 2, etc. = different parameters)
         
     Returns:
         List of market data dictionaries
@@ -47,14 +49,34 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     # Base API URL
     base_url = "https://gamma-api.polymarket.com/markets"
     
-    # Base parameters
+    # Base parameters with anti-caching timestamp
+    timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
     params = {
         "closed": "false",
         "archived": "false",
         "active": "true",
         "limit": "200",  # Always fetch 200 for maximum coverage
-        "include_detailed_events": "true"  # Get more detailed event information
+        "include_detailed_events": "true",  # Get more detailed event information
+        "_t": timestamp  # Add timestamp to avoid caching
     }
+    
+    # Modify parameters based on variant to get different sets of markets
+    if variant > 0:
+        # On subsequent runs, we get markets with different sort parameters
+        sort_options = ["newest", "oldest", "volume", "liquidity", "expiry"]
+        sort_choice = sort_options[variant % len(sort_options)]
+        params["sort"] = sort_choice
+        logger.info(f"Using variant {variant} with sort={sort_choice}")
+        
+        # We can also vary the category focus for more diversity
+        if variant % 3 == 1:
+            # Focus on sports and entertainment
+            CATEGORIES["sports"] = 100
+            CATEGORIES["entertainment"] = 80
+        elif variant % 3 == 2:
+            # Focus on politics and crypto
+            CATEGORIES["politics"] = 100
+            CATEGORIES["crypto"] = 80
     
     all_markets = []
     found_event_ids = set()  # Track event IDs to group multi-option markets better
