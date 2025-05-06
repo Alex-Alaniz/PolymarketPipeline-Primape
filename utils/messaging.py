@@ -173,6 +173,11 @@ class MessagingClient:
             logger.info(f"[TEST MODE] Would update message {message_id}")
             return True
         
+        # Ensure client is initialized
+        if not self.client:
+            logger.error("Slack client not initialized")
+            return False
+            
         try:
             # Build update parameters
             params = {
@@ -181,10 +186,14 @@ class MessagingClient:
                 "text": text
             }
             
+            # Convert attachments to JSON string for Slack API
             if attachments:
-                params["attachments"] = attachments
+                import json
+                # Slack API expects attachments as a JSON string
+                params["attachments"] = json.dumps(attachments)
                 
-            # Update the message
+            # Update the message with proper debug logging
+            logger.debug(f"Updating message {message_id} with params: {params}")
             response = self.client.chat_update(**params)
             
             if response and response.get("ok"):
@@ -194,7 +203,7 @@ class MessagingClient:
                 logger.warning(f"Failed to update message {message_id}: {response.get('error', 'Unknown error')}")
                 return False
                 
-        except SlackApiError as e:
+        except Exception as e:
             logger.error(f"Error updating message in Slack: {str(e)}")
             return False
 
