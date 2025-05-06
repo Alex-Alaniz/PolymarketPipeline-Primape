@@ -55,8 +55,7 @@ def post_markets_for_deployment_approval() -> List[Market]:
             message = format_deployment_message(market)
             
             # Post to Slack - pass the tuple directly
-            message_response = post_message_to_slack(message)
-            message_id = message_response.get('ts') if isinstance(message_response, dict) else None
+            message_id = post_message_to_slack(message)
             
             if message_id:
                 # Add initial reactions (✅ and ❌) for easier voting
@@ -232,6 +231,21 @@ def format_deployment_message(market: Market) -> Tuple[str, List[Dict[str, Any]]
                 "type": "image",
                 "image_url": event_image,
                 "alt_text": "Event Banner"
+            }
+        })
+    # Add market image if available and it's different from event image
+    elif market_image:
+        logger.info(f"Adding market image as banner: {market_image}")
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Market Banner*"
+            },
+            "accessory": {
+                "type": "image",
+                "image_url": market_image,
+                "alt_text": "Market Banner"
             }
         })
     
