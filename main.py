@@ -196,6 +196,7 @@ HTML_TEMPLATE = """
         <div>
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
             <button id="check-approvals" class="button" style="background-color: var(--bs-success); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="checkMarketApprovals()">Check Market Approvals</button>
+            <button id="post-unposted" class="button" style="background-color: var(--bs-purple); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="postUnpostedMarkets()">Post Next Batch</button>
             <button id="run-deployment" class="button" style="background-color: var(--bs-warning); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="runDeploymentApprovals()">Check Deployment Approvals</button>
             <button id="sync-slack-db" class="button" style="background-color: var(--bs-info); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="syncSlackDb()">Sync Slack & DB</button>
             <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
@@ -319,6 +320,7 @@ HTML_TEMPLATE = """
                     document.getElementById('check-approvals').disabled = true;
                     document.getElementById('run-deployment').disabled = true;
                     document.getElementById('sync-slack-db').disabled = true;
+                    document.getElementById('post-unposted').disabled = true;
                     // Refresh page after 2 seconds
                     setTimeout(() => {
                         window.location.reload();
@@ -330,6 +332,33 @@ HTML_TEMPLATE = """
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while synchronizing Slack and database');
+            });
+        }
+        
+        function postUnpostedMarkets() {
+            fetch('/post-unposted-markets', {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('status').textContent = 'running';
+                    document.getElementById('run-pipeline').disabled = true;
+                    document.getElementById('check-approvals').disabled = true;
+                    document.getElementById('run-deployment').disabled = true;
+                    document.getElementById('sync-slack-db').disabled = true;
+                    document.getElementById('post-unposted').disabled = true;
+                    // Refresh page after 2 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to post unposted markets: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while posting unposted markets');
             });
         }
         
@@ -801,6 +830,76 @@ def get_markets():
             return jsonify({
                 "error": str(e)
             }), 500
+
+@app.route('/post-unposted-markets', methods=['POST'])
+def post_unposted_markets():
+    """API endpoint to post the next batch of unposted markets"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Another process is already running"
+        })
+    
+    # Define a function to run the unposted markets posting process
+    def run_post_unposted_markets():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting process to post unposted markets...")
+            
+            # Run the post unposted markets process
+            from post_unposted_markets import main as post_unposted_main
+            
+            with app.app_context():
+                result = post_unposted_main()
+                if result == 0:
+                    print("Successfully posted unposted markets")
+                else:
+                    print("Failed to post unposted markets")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed" if result == 0 else "failed"
+            
+            # Log process end
+            print("Post unposted markets process completed")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Post unposted markets process failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the process in a separate thread
+    thread = threading.Thread(target=run_post_unposted_markets)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Process to post unposted markets started"
+    })
 
 @app.route('/runs')
 def get_runs():
