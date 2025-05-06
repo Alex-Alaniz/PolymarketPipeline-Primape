@@ -204,9 +204,47 @@ def verify_fix_with_test_data():
     transformer = MarketTransformer()
     transformed = transformer.transform_markets(test_markets)
     
-    # Check for multi-option markets
-    multi_option_markets = [m for m in transformed if m.get("is_multiple_option", False)]
-    logger.info(f"Transformed into {len(transformed)} markets, of which {len(multi_option_markets)} are multi-option")
+    # Debug raw transformed markets
+    logger.info(f"Transformed into {len(transformed)} markets")
+    for i, market in enumerate(transformed):
+        logger.info(f"Market {i+1} ID: {market.get('id')}")
+        logger.info(f"  Question: {market.get('question')}")
+        logger.info(f"  Is multiple option: {market.get('is_multiple_option', False)}")
+        logger.info(f"  Has outcomes: {isinstance(market.get('outcomes'), list) or 'outcomes' in market}")
+        if 'outcomes' in market:
+            outcomes = market.get('outcomes')
+            if isinstance(outcomes, str):
+                try:
+                    decoded = json.loads(outcomes)
+                    logger.info(f"  Outcomes (decoded): {decoded}")
+                except:
+                    logger.info(f"  Outcomes (raw): {outcomes}")
+            else:
+                logger.info(f"  Outcomes: {outcomes}")
+    
+    # Find multi-option markets
+    multi_option_markets = []
+    for m in transformed:
+        if m.get("is_multiple_option", False):
+            multi_option_markets.append(m)
+        # Also check if outcomes contains more than 2 options (for legacy format)
+        elif m.get("outcomes"):
+            outcomes = m.get("outcomes")
+            if isinstance(outcomes, str):
+                try:
+                    decoded = json.loads(outcomes)
+                    if len(decoded) > 2:
+                        logger.info(f"Found legacy multi-option market: {m.get('question')} with {len(decoded)} options")
+                        m["is_multiple_option"] = True
+                        multi_option_markets.append(m)
+                except:
+                    pass
+            elif isinstance(outcomes, list) and len(outcomes) > 2:
+                logger.info(f"Found legacy multi-option market: {m.get('question')} with {len(outcomes)} options")
+                m["is_multiple_option"] = True
+                multi_option_markets.append(m)
+    
+    logger.info(f"Found {len(multi_option_markets)} multi-option markets")
     
     if not multi_option_markets:
         logger.error("No multi-option markets were created - test failed")
@@ -271,8 +309,46 @@ def verify_fix_with_real_data():
         transformer = MarketTransformer()
         transformed = transformer.transform_markets(markets)
         
+        # Debug raw transformed markets
+        logger.info(f"Transformed into {len(transformed)} markets")
+        for i, market in enumerate(transformed[:5]):  # Just log the first 5 for brevity
+            logger.info(f"Market {i+1} ID: {market.get('id')}")
+            logger.info(f"  Question: {market.get('question')}")
+            logger.info(f"  Is multiple option: {market.get('is_multiple_option', False)}")
+            logger.info(f"  Has outcomes: {isinstance(market.get('outcomes'), list) or 'outcomes' in market}")
+            if 'outcomes' in market:
+                outcomes = market.get('outcomes')
+                if isinstance(outcomes, str):
+                    try:
+                        decoded = json.loads(outcomes)
+                        logger.info(f"  Outcomes (decoded): {decoded}")
+                    except:
+                        logger.info(f"  Outcomes (raw): {outcomes}")
+                else:
+                    logger.info(f"  Outcomes: {outcomes}")
+        
         # Find multi-option markets
-        multi_option_markets = [m for m in transformed if m.get("is_multiple_option", False)]
+        multi_option_markets = []
+        for m in transformed:
+            if m.get("is_multiple_option", False):
+                multi_option_markets.append(m)
+            # Also check if outcomes contains more than 2 options (for legacy format)
+            elif m.get("outcomes"):
+                outcomes = m.get("outcomes")
+                if isinstance(outcomes, str):
+                    try:
+                        decoded = json.loads(outcomes)
+                        if len(decoded) > 2:
+                            logger.info(f"Found legacy multi-option market: {m.get('question')} with {len(decoded)} options")
+                            m["is_multiple_option"] = True
+                            multi_option_markets.append(m)
+                    except:
+                        pass
+                elif isinstance(outcomes, list) and len(outcomes) > 2:
+                    logger.info(f"Found legacy multi-option market: {m.get('question')} with {len(outcomes)} options")
+                    m["is_multiple_option"] = True
+                    multi_option_markets.append(m)
+        
         logger.info(f"Found {len(multi_option_markets)} multi-option markets")
         
         if not multi_option_markets:
