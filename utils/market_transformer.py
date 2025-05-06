@@ -22,6 +22,8 @@ class MarketTransformer:
     def __init__(self):
         """Initialize the transformer"""
         self.processed_market_ids = set()
+        # Store original markets for reference when looking up specific option images
+        self.original_markets = []
     
     def extract_entity_from_question(self, question: str, pattern: str) -> Optional[str]:
         """Extract the entity from a question based on a pattern"""
@@ -602,86 +604,48 @@ class MarketTransformer:
                         if "category" in event_data:
                             multiple_market["event_category"] = event_data["category"]
                         
-                        # We've already handled option images above based on the exact market data from the API
-                        # We don't need any additional special case handling or fallbacks
-                        # All option images should come directly from the API data
-                        
-                        # Log final image assignment to verify
+                        # Make sure we have the right option images from the API data
                         logger.info("Final option image assignments:")
                         for option, image_url in my_option_images.items():
                             logger.info(f"  - '{option}': {image_url}")
                             
                         # Ensure Barcelona has its specific API image for Champions League markets
                         if event_id == "12585" and "Barcelona" in unique_entities:
-                            # Check if we have the specifically named Barcelona image from API
+                            # Check if we have the specific Barcelona image from API
                             barcelona_image_found = False
-                            for option, image_url in my_option_images.items():
-                                if "barcelona" in option.lower() and "barcelona" in image_url.lower():
+                            for m in self.original_markets:
+                                if ("barcelona" in m.get("question", "").lower() and 
+                                    "champions league" in m.get("question", "").lower() and
+                                    m.get("image")):
+                                    my_option_images["Barcelona"] = m.get("image")
+                                    logger.info(f"Updated Barcelona to use its correct API image: {m.get('image')}")
                                     barcelona_image_found = True
-                                    logger.info(f"Verified Barcelona is using correct API image: {image_url}")
+                                    break
                                     
-                            if not barcelona_image_found:
-                                logger.info("Checking for Barcelona's specific image in original markets...")
-                                for m in self.original_markets:
-                                    if ("barcelona" in m.get("question", "").lower() and 
-                                        "champions league" in m.get("question", "").lower() and
-                                        m.get("image")):
-                                        my_option_images["Barcelona"] = m.get("image")
-                                        logger.info(f"Updated Barcelona to use its correct API image: {m.get('image')}")
-                                        break
+                            if barcelona_image_found:
+                                logger.info("Successfully found and fixed Barcelona's image in Champions League market")
+                            else:
+                                logger.warning("Could not find Barcelona's specific image in original markets")
                                         
                         # Similarly ensure "another team" has its specific API image for La Liga markets
                         if event_id == "12672" and any("another team" in option.lower() for option in unique_entities):
                             another_team_option = next((opt for opt in unique_entities if "another team" in opt.lower()), None)
                             if another_team_option:
                                 # Check for "another team" in La Liga in original markets
+                                another_team_image_found = False
                                 for m in self.original_markets:
                                     if ("another team" in m.get("question", "").lower() and 
                                         "la liga" in m.get("question", "").lower() and
                                         m.get("image")):
                                         my_option_images[another_team_option] = m.get("image")
                                         logger.info(f"Updated 'another team' to use its correct API image: {m.get('image')}")
+                                        another_team_image_found = True
                                         break
                                         
-                        # For any remaining options without images
-                                        # Use case insensitive checking to find mentions
-                                        if option.lower() in question.lower() and market_data.get("image"):
-                                            my_option_images[option] = market_data.get("image")
-                                            logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
-                                            found_specific_image = True
-                                            break
-                                
-                                # If still no image found, use the team or entity image from one of the existing options
-                                if not found_specific_image and len(my_option_images) > 0:
-                                    # If no specific image found, use a team image from one of the existing options
-                                    for existing_option, existing_image in my_option_images.items():
-                                        if existing_image and existing_option != option:
-                                            my_option_images[option] = existing_image
-                                            logger.info(f"Using another team's image for '{option}': {existing_image}")
-                                            found_specific_image = True
-                                            break
-                                
-                                # Only as a last resort use the event image, and NEVER for "Another team" option
-                                if not found_specific_image and event_image and not is_generic_option:
-                                    my_option_images[option] = event_image
-                                    logger.info(f"Using event image for '{option}' as last resort: {event_image}")
-                                elif not found_specific_image and is_generic_option:
-                                    # For generic options like "Another team", if we still don't have an image,
-                                    # Try to find ANY team-specific image from the markets
-                                    for market_data, question, entity in market_group:
-                                        if market_data.get("image") and market_data.get("image") != event_image:
-                                            my_option_images[option] = market_data.get("image")
-                                            logger.info(f"Using alternative market image for generic option '{option}': {my_option_images[option]}")
-                                            found_specific_image = True
-                                            break
-                                    
-                                    # If still no image found, use any non-event image
-                                    if not found_specific_image:
-                                        for market_data, question, entity in market_group:
-                                            if market_data.get("image"):
-                                                my_option_images[option] = market_data.get("image")
-                                                logger.info(f"Using last resort market image for generic option '{option}': {my_option_images[option]}")
-                                                break
+                                if another_team_image_found:
+                                    logger.info("Successfully found and fixed 'another team' image in La Liga market")
+                                else:
+                                    logger.warning("Could not find 'another team' specific image in original markets")
                     
                     result.append((multiple_market, "multiple", event_title))
                 else:
@@ -704,6 +668,9 @@ class MarketTransformer:
         if not markets:
             logger.error("No markets provided for transformation")
             return []
+        
+        # Store the original markets for reference when looking up specific option images
+        self.original_markets = markets
         
         logger.info(f"Transforming {len(markets)} markets")
         
