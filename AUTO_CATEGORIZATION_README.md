@@ -58,7 +58,8 @@ Markets are assigned to one of the following categories:
 - GPT-4o-mini costs approximately $0.0002 per market
 - Average categorization time is about 300-400ms per market
 - Retry mechanism handles transient API failures
-- Default fallback to "all" ensures pipeline continues even if categorization fails
+- Default fallback to "news" category ensures pipeline continues even if categorization fails
+- Markets that require manual review are flagged with needs_manual_categorization=True
 
 ## Example Usage
 
@@ -85,7 +86,7 @@ The auto-categorization feature integrates with the existing pipeline while main
 1. Previously deployed markets remain intact
 2. New markets go through categorization before deployment
 3. The category field is added to the Market model for frontend integration
-4. The "all" category serves as a fallback for markets that don't fit other categories
+4. Markets with uncertain categorization default to "news" with a flag for manual review
 
 ## Testing and Validation
 

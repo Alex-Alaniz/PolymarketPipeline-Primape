@@ -22,7 +22,8 @@ logger = logging.getLogger("market_categorizer")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY")
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
-VALID_CATEGORIES = ["politics", "crypto", "sports", "business", "culture", "news", "tech", "all"]
+# Valid market categories - "all" is only a UI filter, not a valid category
+VALID_CATEGORIES = ["politics", "crypto", "sports", "business", "culture", "news", "tech"]
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
 def categorize_market(question: str) -> Optional[str]:
@@ -65,8 +66,11 @@ def categorize_market(question: str) -> Optional[str]:
             logger.info(f"Market categorized as: {category}")
             return category
         else:
-            logger.warning(f"Invalid category returned: {category}. Defaulting to 'all'")
-            return "all"
+            # Choose the most appropriate fallback category - "news" is a reasonable default
+            # as it's generic enough to encompass a wide range of markets
+            fallback_category = "news"
+            logger.warning(f"Invalid category returned: {category}. Defaulting to '{fallback_category}'")
+            return fallback_category
             
     except Exception as e:
         logger.error(f"Error categorizing market: {str(e)}")
@@ -97,13 +101,18 @@ def categorize_markets(markets: list[Dict[str, Any]]) -> list[Dict[str, Any]]:
             category = categorize_market(question)
             
             # Add the category to the market data
-            market['ai_category'] = category or 'all'  # Default to 'all' if categorization failed
+            if category:
+                market['ai_category'] = category
+            else:
+                # Use news as fallback
+                market['ai_category'] = 'news'
+                market['needs_manual_categorization'] = True
             categorized_markets.append(market)
             
         except Exception as e:
             logger.error(f"Failed to categorize market {market.get('question', 'Unknown')}: {str(e)}")
-            # Still include the market, but with default category
-            market['ai_category'] = 'all'
+            # Still include the market, but with fallback category "news"
+            market['ai_category'] = 'news'
             market['ai_category_error'] = str(e)
             market['needs_manual_categorization'] = True
             categorized_markets.append(market)
