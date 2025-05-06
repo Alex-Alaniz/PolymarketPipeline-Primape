@@ -1,0 +1,79 @@
+{
+  "user": "U08QJHCKABG",
+  "type": "message",
+  "ts": "1746570607.718889",
+  "bot_id": "B08QJHCK2EA",
+  "app_id": "A08QUHQ8V99",
+  "text": "*New Market for Review* *Category:* :newspaper: News  *Question:* Will Arsenal win the UEFA Champions League?  Options: Yes, No ",
+  "team": "T08P6QGL532",
+  "bot_profile": {
+    "id": "B08QJHCK2EA",
+    "deleted": false,
+    "name": "PolyPipe by PRIMAPE",
+    "updated": 1746555546,
+    "app_id": "A08QUHQ8V99",
+    "user_id": "U08QJHCKABG",
+    "icons": {
+      "image_36": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_36.png",
+      "image_48": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_48.png",
+      "image_72": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_72.png"
+    },
+    "team_id": "T08P6QGL532"
+  },
+  "blocks": [
+    {
+      "type": "section",
+      "block_id": "ACnXy",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*New Market for Review*\n*Category:* :newspaper: News",
+        "verbatim": false
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "YNjyt",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Question:* Will Arsenal win the UEFA Champions League?",
+        "verbatim": false
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "lq6GL",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Options: Yes, No",
+        "verbatim": false
+      }
+    },
+    {
+      "type": "context",
+      "block_id": "qBxl+",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "React with :white_check_mark: to approve or :x: to reject",
+          "verbatim": false
+        }
+      ]
+    }
+  ],
+  "reactions": [
+    {
+      "name": "white_check_mark",
+      "users": [
+        "U08QJHCKABG"
+      ],
+      "count": 1
+    },
+    {
+      "name": "x",
+      "users": [
+        "U08QJHCKABG"
+      ],
+      "count": 1
+    }
+  ]
+}

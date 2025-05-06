@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-
 """
 Clean Environment for Pipeline Testing
 
@@ -13,158 +12,77 @@ Use this script before running end-to-end tests of the pipeline.
 import os
 import sys
 import logging
-import time
-from typing import List, Dict, Any, Optional
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler()]
 )
-logger = logging.getLogger("environment_cleaner")
+logger = logging.getLogger('clean_environment')
 
-# Import modules
-from utils.messaging import slack_client, slack_channel_id
-from reset_db import reset_database
-
-def get_channel_history(limit: int = 100, cursor: str = None) -> tuple[List[Dict[str, Any]], Optional[str]]:
-    """
-    Get message history from the Slack channel.
+def run_db_reset():
+    """Run the database reset script."""
+    logger.info("Starting database reset...")
     
-    Args:
-        limit: Maximum number of messages to retrieve
-        cursor: Pagination cursor for fetching next batch
-        
-    Returns:
-        Tuple of (messages, next_cursor)
-    """
     try:
-        logger.info(f"Fetching up to {limit} messages from Slack channel")
+        import reset_db_clean
+        result = reset_db_clean.main()
         
-        response = slack_client.conversations_history(
-            channel=slack_channel_id,
-            limit=limit,
-            cursor=cursor
-        )
-        
-        messages = response.get('messages', [])
-        next_cursor = response.get('response_metadata', {}).get('next_cursor')
-        
-        logger.info(f"Fetched {len(messages)} messages")
-        return messages, next_cursor
-    except Exception as e:
-        logger.error(f"Error fetching channel history: {str(e)}")
-        return [], None
-
-def delete_message(ts: str) -> bool:
-    """
-    Delete a message from the Slack channel.
+        if result == 0:
+            logger.info("Database reset completed successfully")
+            return True
+        else:
+            logger.error("Database reset failed with exit code {}".format(result))
+            return False
     
-    Args:
-        ts: Message timestamp/ID
-        
-    Returns:
-        True if deletion was successful, False otherwise
-    """
+    except Exception as e:
+        logger.error(f"Error running database reset: {str(e)}")
+        return False
+
+def run_slack_cleanup():
+    """Run the Slack channel cleanup script."""
+    logger.info("Starting Slack channel cleanup...")
+    
     try:
-        response = slack_client.chat_delete(
-            channel=slack_channel_id,
-            ts=ts
-        )
-        return response.get('ok', False)
+        import clean_slack_channel
+        result = clean_slack_channel.main()
+        
+        if result == 0:
+            logger.info("Slack channel cleanup completed successfully")
+            return True
+        else:
+            logger.error("Slack channel cleanup failed with exit code {}".format(result))
+            return False
+    
     except Exception as e:
-        logger.error(f"Error deleting message {ts}: {str(e)}")
+        logger.error(f"Error running Slack cleanup: {str(e)}")
         return False
-
-def clean_channel(batch_size: int = 100, rate_limit_delay: float = 0.5) -> int:
-    """
-    Clean all messages from the Slack channel.
-    
-    Args:
-        batch_size: Number of messages to fetch and delete at once
-        rate_limit_delay: Delay between deletions to avoid rate limiting
-        
-    Returns:
-        Number of messages deleted
-    """
-    deleted_count = 0
-    cursor = None
-    
-    logger.info("Starting Slack channel cleaning...")
-    
-    while True:
-        # Get batch of messages
-        messages, cursor = get_channel_history(limit=batch_size, cursor=cursor)
-        
-        if not messages:
-            logger.info("No more messages to delete")
-            break
-            
-        # Delete messages
-        for message in messages:
-            ts = message.get('ts')
-            if ts:
-                success = delete_message(ts)
-                if success:
-                    deleted_count += 1
-                    logger.info(f"Deleted message {ts} ({deleted_count} total)")
-                else:
-                    logger.warning(f"Failed to delete message {ts}")
-                
-                # Sleep to avoid rate limiting
-                time.sleep(rate_limit_delay)
-                
-        # If no cursor, we've reached the end
-        if not cursor:
-            break
-            
-    logger.info(f"Slack channel cleaning complete. Deleted {deleted_count} messages.")
-    return deleted_count
-
-def reset_full_environment(preserve_deployed_markets=True):
-    """
-    Reset both the database and clean the Slack channel.
-    
-    Args:
-        preserve_deployed_markets: If True, deployed markets will be preserved
-                                   during the database reset
-    """
-    # Step 1: Reset database while preserving deployed markets
-    logger.info(f"Step 1: Resetting database {'(preserving deployed markets)' if preserve_deployed_markets else ''}...")
-    db_success = reset_database(preserve_deployed_markets=preserve_deployed_markets)
-    
-    if db_success:
-        logger.info("Database reset successful")
-    else:
-        logger.error("Database reset failed")
-        return False
-        
-    # Step 2: Clean Slack channel
-    logger.info("Step 2: Cleaning Slack channel...")
-    messages_deleted = clean_channel()
-    
-    if messages_deleted >= 0:  # Zero is ok if there were no messages
-        logger.info(f"Slack channel cleaning successful ({messages_deleted} messages deleted)")
-    else:
-        logger.error("Slack channel cleaning failed")
-        return False
-        
-    return True
 
 def main():
-    """
-    Main function to run the environment cleaning.
-    """
-    logger.info("Starting environment cleaning...")
+    """Main function to run environment cleaning."""
+    logger.info("=== Starting Environment Cleanup ===")
     
-    success = reset_full_environment()
+    # Step 1: Reset the database
+    db_success = run_db_reset()
     
-    if success:
-        logger.info("Environment cleaning completed successfully")
+    # Step 2: Clean the Slack channel
+    slack_success = run_slack_cleanup()
+    
+    # Report results
+    if db_success and slack_success:
+        logger.info("Environment cleanup completed successfully")
         return 0
-    else:
-        logger.error("Environment cleaning failed")
+    elif not db_success and not slack_success:
+        logger.error("Both database reset and Slack cleanup failed")
+        return 3
+    elif not db_success:
+        logger.error("Database reset failed, but Slack cleanup succeeded")
         return 1
+    else:
+        logger.error("Database reset succeeded, but Slack cleanup failed")
+        return 2
 
 if __name__ == "__main__":
     sys.exit(main())

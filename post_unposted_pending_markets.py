@@ -95,73 +95,50 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
     category = market.category.lower() if market.category else 'news'
     emoji = category_emoji.get(category, category_emoji['unknown'])
     
-    # Format message text
-    message_text = f"*{market.question}*\n\nCategory: {emoji} {category.capitalize()}"
+    # Format options list for display
+    option_values = []
+    if market.options:
+        for option in market.options:
+            option_value = option.get('value', 'Unknown')
+            option_values.append(option_value)
+    options_str = ', '.join(option_values) if option_values else 'Yes, No'
     
-    # Create blocks for rich formatting
+    # Format message text to exactly match the original format
+    message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {market.question}  Options: {options_str} "
+    
+    # Create blocks for rich formatting exactly matching the original format
     blocks = [
         {
-            "type": "header",
+            "type": "section",
             "text": {
-                "type": "plain_text",
-                "text": "New Market for Approval",
-                "emoji": True
+                "type": "mrkdwn",
+                "text": f"*New Market for Review*\n*Category:* {emoji} {category.capitalize()}"
             }
         },
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*{market.question}*"
+                "text": f"*Question:* {market.question}"
             }
-        }
-    ]
-    
-    # Add market options if available
-    if market.options:
-        options_text = "*Options:*\n"
-        for option in market.options:
-            option_value = option.get('value', 'Unknown')
-            options_text += f"• {option_value}\n"
-        
-        blocks.append({
+        },
+        {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": options_text
+                "text": f"Options: {options_str}"
             }
-        })
-    
-    # Add category section with badge
-    blocks.append({
-        "type": "section",
-        "text": {
-            "type": "mrkdwn",
-            "text": f"*Category:* {emoji} {category.capitalize()}"
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "React with :white_check_mark: to approve or :x: to reject"
+                }
+            ]
         }
-    })
-    
-    # Add image if available
-    if market.banner_url:
-        blocks.append({
-            "type": "image",
-            "image_url": market.banner_url,
-            "alt_text": market.question
-        })
-    
-    # Add divider
-    blocks.append({"type": "divider"})
-    
-    # Add approval/rejection buttons context
-    blocks.append({
-        "type": "context",
-        "elements": [
-            {
-                "type": "mrkdwn",
-                "text": "React with :white_check_mark: to approve or :x: to reject"
-            }
-        ]
-    })
+    ]
     
     return message_text, blocks
 
