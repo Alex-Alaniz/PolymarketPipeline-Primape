@@ -125,7 +125,7 @@ class PendingMarket(db.Model):
     
     poly_id = db.Column(db.String(255), primary_key=True)
     question = db.Column(db.Text, nullable=False)
-    category = db.Column(db.String(50), nullable=False, default='all')
+    category = db.Column(db.String(50), nullable=False, default='news')
     banner_url = db.Column(db.Text)
     icon_url = db.Column(db.Text)
     options = db.Column(JSON)

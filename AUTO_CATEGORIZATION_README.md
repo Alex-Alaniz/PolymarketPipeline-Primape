@@ -1,6 +1,6 @@
 # Auto-Categorization for Polymarket Pipeline
 
-This document explains the auto-categorization feature added to the Polymarket pipeline. The feature automatically assigns one of eight predefined categories to each market before it's posted to Slack for approval.
+This document explains the auto-categorization feature added to the Polymarket pipeline. The feature automatically assigns one of seven predefined categories to each market before it's posted to Slack for approval.
 
 ## Categories
 
@@ -15,7 +15,7 @@ Markets are assigned to one of the following categories:
 | culture | :performing_arts: | Entertainment, music, movies, art, celebrities |
 | news | :newspaper: | Current events, breaking news, world affairs |
 | tech | :computer: | Technology releases, scientific discoveries, breakthroughs |
-| all | :globe_with_meridians: | Default category for markets that don't fit other categories |
+Note: "all" is not a valid category but only a UI filter option. "news" is used as the default category for markets that don't fit other categories.
 
 ## Implementation Details
 

@@ -250,7 +250,7 @@ def store_pending_markets(markets: List[Dict[str, Any]]) -> List[PendingMarket]:
             pending_market = PendingMarket(
                 poly_id=poly_id,
                 question=market.get("question", ""),
-                category=market.get("ai_category", "all"),
+                category=market.get("ai_category", "news"),
                 banner_url=banner_url,
                 icon_url=icon_url,
                 options=json.dumps(options),
