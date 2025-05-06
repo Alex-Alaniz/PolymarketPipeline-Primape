@@ -121,13 +121,17 @@ def clean_channel(batch_size: int = 100, rate_limit_delay: float = 0.5) -> int:
     logger.info(f"Slack channel cleaning complete. Deleted {deleted_count} messages.")
     return deleted_count
 
-def reset_full_environment():
+def reset_full_environment(preserve_deployed_markets=True):
     """
     Reset both the database and clean the Slack channel.
+    
+    Args:
+        preserve_deployed_markets: If True, deployed markets will be preserved
+                                   during the database reset
     """
-    # Step 1: Reset database
-    logger.info("Step 1: Resetting database...")
-    db_success = reset_database()
+    # Step 1: Reset database while preserving deployed markets
+    logger.info(f"Step 1: Resetting database {'(preserving deployed markets)' if preserve_deployed_markets else ''}...")
+    db_success = reset_database(preserve_deployed_markets=preserve_deployed_markets)
     
     if db_success:
         logger.info("Database reset successful")
