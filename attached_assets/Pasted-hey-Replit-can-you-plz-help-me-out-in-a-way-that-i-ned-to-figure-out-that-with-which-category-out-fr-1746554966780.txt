@@ -1,0 +1,32 @@
+hey Replit can you plz help me out in a way that i ned to figure out that with which category out from the listed one the market s we have approved belongs to (the appproved markets means like approved from the slack channel)
+like we need to identify for each market that the market belongs to which category we have a total of like 8 category out from these every time we just need one from the list of the categories and for this we need the best way to do this this 
+whether GPT key whould work for us here or we can use some other less expensive approch 
+the best way which i think i miight be wrong as well is that we use gpt api anf generate a very optimized prompt with just the market question string and teh list of categories because the maeket question string is more tna sufficuent for teh model to identify that this market belongss to which category 
+after then we jsut also give a expected  response format the most siplified one so that we wont  get much cost for the input and the output tokens 
+then when we be having the category identified we have one more major thig the same like we arent send the image and the icon to the ape chain smart contract so we are svaing with some marlket identifier in our databse 
+i just need the proper explanantionthat how we are handling the databse thing and how we be liking our market images icons and categories back with  the correct market because we are fetching the marjets from ten ape chain smart contract and teh images icons and the category for ecah marketr form the databse so if you want me to share the response i am having form the smart conatrct when i fetch the maret i can do  that 
+
+this si the response we are getting  from teh ape chain smart vcontract on our front end dynamically and with each market there is a id which we got when teh market is craeted on the ape chain smart contract 
+so some how i am thinkig that if you have the access to fetch that market id  by first deploying the approved markets from our poly market pipelien which is running for us in the background 
+Get market info
+
+_marketId (uint256)
+
+ question string, endTime uint256, resolved bool, winningOptionIndex uint256
+
+[ getMarketInfo(uint256) method Response ]
+  question   string :  
+  endTime   uint256 :  
+  resolved   bool :  false
+  winningOptionIndex   uint256 :  
+
+
+ ["all"
+ "politics"
+ "crypto"
+ "sports" 
+ "business"
+ "culture"
+ "news"
+ "tech"]
+ 
