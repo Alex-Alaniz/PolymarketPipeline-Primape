@@ -133,6 +133,7 @@ class PendingMarket(db.Model):
     slack_message_id = db.Column(db.String(255))
     raw_data = db.Column(JSON)  # Complete original data
     needs_manual_categorization = db.Column(db.Boolean, default=False)
+    posted = db.Column(db.Boolean, default=False)  # Track if posted to Slack
     fetched_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     

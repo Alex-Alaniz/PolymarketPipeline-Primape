@@ -411,10 +411,10 @@ def post_markets_to_slack(markets: List[PendingMarket], max_to_post: int = 20) -
     """
     posted_count = 0
     
-    # Limit to max_to_post
-    markets = markets[:max_to_post]
+    # Limit to max_to_post, but only for posting (all markets are already stored)
+    markets_to_post = markets[:max_to_post]
     
-    for market in markets:
+    for market in markets_to_post:
         try:
             # Format the message
             message_text, blocks = format_market_message(market)
@@ -433,6 +433,7 @@ def post_markets_to_slack(markets: List[PendingMarket], max_to_post: int = 20) -
             # Update database with message ID
             if response and response.get("ts"):
                 market.slack_message_id = response["ts"]
+                market.posted = True  # Explicitly mark as posted only when successful
                 db.session.commit()
                 
                 logger.info(f"Posted market {market.poly_id} to Slack with message ID {market.slack_message_id}")
@@ -442,9 +443,11 @@ def post_markets_to_slack(markets: List[PendingMarket], max_to_post: int = 20) -
                 time.sleep(1)
             else:
                 logger.error(f"Failed to post market {market.poly_id} to Slack: No response")
+                # This market remains with posted=False and will be available for future batches
                 
         except Exception as e:
             logger.error(f"Error posting market {market.poly_id} to Slack: {str(e)}")
+            # This market remains with posted=False and will be available for future batches
             
     logger.info(f"Posted {posted_count} markets to Slack for approval")
     return posted_count
@@ -473,13 +476,17 @@ def main():
             # 3. Categorize markets with GPT-4o-mini
             categorized_markets = categorize_markets(new_markets)
             
-            # 4. Store in pending_markets table
+            # 4. Store ALL markets in pending_markets table
+            # This creates entries for ALL markets, not just the ones we post in this batch
             pending_markets = store_pending_markets(categorized_markets)
             
-            # 5. Post to Slack with category badges
+            # 5. Post to Slack with category badges (up to MAX_MARKETS_TO_POST)
+            # Only markets that are actually posted will be marked as posted=True
             posted_count = post_markets_to_slack(pending_markets, max_to_post=MAX_MARKETS_TO_POST)
             
-            logger.info(f"Successfully fetched, categorized, and posted {posted_count} markets to Slack")
+            total_markets = len(pending_markets)
+            logger.info(f"Successfully processed {total_markets} markets, posted {posted_count} to Slack")
+            logger.info(f"Remaining {total_markets - posted_count} markets are stored for future batches")
             
         except Exception as e:
             logger.error(f"Error in market fetching process: {str(e)}")
