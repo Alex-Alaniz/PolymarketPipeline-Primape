@@ -35,7 +35,7 @@ def create_mock_europa_league_markets() -> List[Dict[str, Any]]:
     # Event image (different from team images)
     event_image = "https://example.com/europa-league.png"
     
-    # Create markets
+    # Create markets with proper structure
     markets = []
     
     # Add markets for each team
@@ -48,15 +48,21 @@ def create_mock_europa_league_markets() -> List[Dict[str, Any]]:
             "active": True,
             "closed": False,
             "archived": False,
+            "liquidity": 10000,
+            "category": "sports",
+            "subcategory": "soccer",
             "conditionId": f"{team['id']}-condition",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
             "eventId": event_id,
-            "event": {
-                "id": event_id,
-                "name": "UEFA Europa League 2025",
-                "image": event_image,
-                "icon": event_image,
-                "category": "soccer"
-            }
+            "events": [
+                {
+                    "id": event_id,
+                    "title": "UEFA Europa League 2025 Winner",
+                    "image": event_image,
+                    "icon": event_image,
+                    "category": "soccer"
+                }
+            ]
         })
     
     # Add Another Team market
@@ -68,15 +74,21 @@ def create_mock_europa_league_markets() -> List[Dict[str, Any]]:
         "active": True,
         "closed": False,
         "archived": False,
+        "liquidity": 10000,
+        "category": "sports",
+        "subcategory": "soccer",
         "conditionId": "another-team-europa-condition",
+        "outcomes": [{"value": "Yes"}, {"value": "No"}],
         "eventId": event_id,
-        "event": {
-            "id": event_id,
-            "name": "UEFA Europa League 2025",
-            "image": event_image,
-            "icon": event_image,
-            "category": "soccer"
-        }
+        "events": [
+            {
+                "id": event_id,
+                "title": "UEFA Europa League 2025 Winner",
+                "image": event_image,
+                "icon": event_image,
+                "category": "soccer"
+            }
+        ]
     })
     
     return markets
@@ -100,7 +112,7 @@ def create_mock_champions_league_markets() -> List[Dict[str, Any]]:
     # Event image (different from team images)
     event_image = "https://example.com/champions-league.png"
     
-    # Create markets
+    # Create markets with proper structure
     markets = []
     
     # Add markets for each team
@@ -113,15 +125,21 @@ def create_mock_champions_league_markets() -> List[Dict[str, Any]]:
             "active": True,
             "closed": False,
             "archived": False,
+            "liquidity": 10000,
+            "category": "sports",
+            "subcategory": "soccer",
             "conditionId": f"{team['id']}-condition",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
             "eventId": event_id,
-            "event": {
-                "id": event_id,
-                "name": "UEFA Champions League 2025",
-                "image": event_image,
-                "icon": event_image,
-                "category": "soccer"
-            }
+            "events": [
+                {
+                    "id": event_id,
+                    "title": "UEFA Champions League 2025 Winner",
+                    "image": event_image,
+                    "icon": event_image,
+                    "category": "soccer"
+                }
+            ]
         })
     
     # Add Barcelona market with event image instead of team image
@@ -133,15 +151,21 @@ def create_mock_champions_league_markets() -> List[Dict[str, Any]]:
         "active": True,
         "closed": False,
         "archived": False,
+        "liquidity": 10000,
+        "category": "sports",
+        "subcategory": "soccer",
         "conditionId": "barcelona-champions-condition",
+        "outcomes": [{"value": "Yes"}, {"value": "No"}],
         "eventId": event_id,
-        "event": {
-            "id": event_id,
-            "name": "UEFA Champions League 2025",
-            "image": event_image,
-            "icon": event_image,
-            "category": "soccer"
-        }
+        "events": [
+            {
+                "id": event_id,
+                "title": "UEFA Champions League 2025 Winner",
+                "image": event_image,
+                "icon": event_image,
+                "category": "soccer"
+            }
+        ]
     })
     
     # Add Another Team market
@@ -153,15 +177,21 @@ def create_mock_champions_league_markets() -> List[Dict[str, Any]]:
         "active": True,
         "closed": False,
         "archived": False,
+        "liquidity": 10000,
+        "category": "sports",
+        "subcategory": "soccer",
         "conditionId": "another-team-champions-condition",
+        "outcomes": [{"value": "Yes"}, {"value": "No"}],
         "eventId": event_id,
-        "event": {
-            "id": event_id,
-            "name": "UEFA Champions League 2025",
-            "image": event_image,
-            "icon": event_image,
-            "category": "soccer"
-        }
+        "events": [
+            {
+                "id": event_id,
+                "title": "UEFA Champions League 2025 Winner",
+                "image": event_image,
+                "icon": event_image,
+                "category": "soccer"
+            }
+        ]
     })
     
     return markets
@@ -185,7 +215,7 @@ def create_mock_la_liga_markets() -> List[Dict[str, Any]]:
     # Event image (different from team images)
     event_image = "https://example.com/la-liga.png"
     
-    # Create markets
+    # Create markets with proper structure
     markets = []
     
     # Add markets for each team
@@ -198,15 +228,21 @@ def create_mock_la_liga_markets() -> List[Dict[str, Any]]:
             "active": True,
             "closed": False,
             "archived": False,
+            "liquidity": 10000,
+            "category": "sports",
+            "subcategory": "soccer",
             "conditionId": f"{team['id']}-condition",
+            "outcomes": [{"value": "Yes"}, {"value": "No"}],
             "eventId": event_id,
-            "event": {
-                "id": event_id,
-                "name": "La Liga 2025",
-                "image": event_image,
-                "icon": event_image,
-                "category": "soccer"
-            }
+            "events": [
+                {
+                    "id": event_id,
+                    "title": "La Liga 2025 Winner",
+                    "image": event_image,
+                    "icon": event_image,
+                    "category": "soccer"
+                }
+            ]
         })
     
     # Add Another Team market
@@ -218,15 +254,21 @@ def create_mock_la_liga_markets() -> List[Dict[str, Any]]:
         "active": True,
         "closed": False,
         "archived": False,
+        "liquidity": 10000,
+        "category": "sports",
+        "subcategory": "soccer",
         "conditionId": "another-team-la-liga-condition",
+        "outcomes": [{"value": "Yes"}, {"value": "No"}],
         "eventId": event_id,
-        "event": {
-            "id": event_id,
-            "name": "La Liga 2025",
-            "image": event_image,
-            "icon": event_image,
-            "category": "soccer"
-        }
+        "events": [
+            {
+                "id": event_id,
+                "title": "La Liga 2025 Winner",
+                "image": event_image,
+                "icon": event_image,
+                "category": "soccer"
+            }
+        ]
     })
     
     return markets
