@@ -48,10 +48,10 @@ def post_markets_for_deployment_approval() -> List[Market]:
     
     for market in markets_to_deploy:
         try:
-            # Format message with market details
+            # Format message with market details - now returns a tuple of (text, blocks)
             message = format_deployment_message(market)
             
-            # Post to Slack
+            # Post to Slack - pass the tuple directly
             message_id = post_message_to_slack(message)
             
             if message_id:
