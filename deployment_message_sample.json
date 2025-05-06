@@ -1,0 +1,124 @@
+{
+  "user": "U08QJHCKABG",
+  "type": "message",
+  "ts": "1746543349.241079",
+  "bot_id": "B08QJHCK2EA",
+  "app_id": "A08QUHQ8V99",
+  "text": "*Market for Deployment Approval*  *Question:* Ukraine joins NATO in 2025?",
+  "team": "T08P6QGL532",
+  "bot_profile": {
+    "id": "B08QJHCK2EA",
+    "app_id": "A08QUHQ8V99",
+    "user_id": "U08QJHCKABG",
+    "name": "PolyPipe by PRIMAPE",
+    "icons": {
+      "image_36": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_36.png",
+      "image_48": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_48.png",
+      "image_72": "https://avatars.slack-edge.com/2025-05-04/8848854757508_eb2703496f50b3f42147_72.png"
+    },
+    "deleted": false,
+    "updated": 1746555546,
+    "team_id": "T08P6QGL532"
+  },
+  "blocks": [
+    {
+      "type": "header",
+      "block_id": "zrKkI",
+      "text": {
+        "type": "plain_text",
+        "text": "Market for Deployment Approval",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "gaOSk",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Question:* Ukraine joins NATO in 2025?",
+        "verbatim": false
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "scu8N",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Category:* Uncategorized",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Expiry:* 2025-12-31 12:00:00 UTC",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "block_id": "SSGf0",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Type:* Binary Market (Yes/No)",
+          "verbatim": false
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*ID:* 0x9bacdaac65cbe257e96e58daf343c56879ea9003bdaed7cdb8cfcd1a82121d3a",
+          "verbatim": false
+        }
+      ]
+    },
+    {
+      "type": "section",
+      "block_id": "GWQfd",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Options:*\n  1. Yes\n  2. No\n",
+        "verbatim": false
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "5EYkF",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Market Banner*",
+        "verbatim": false
+      },
+      "accessory": {
+        "type": "image",
+        "image_url": "https://polymarket-upload.s3.us-east-2.amazonaws.com/ukraine-joins-nato-in-2025-Z7Kbc9JqzK6S.jpg",
+        "alt_text": "Market Banner"
+      }
+    },
+    {
+      "type": "section",
+      "block_id": "g/HNW",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Please review this market carefully before deployment to Apechain.\nReact with :white_check_mark: to approve or :x: to reject.",
+        "verbatim": false
+      }
+    }
+  ],
+  "reactions": [
+    {
+      "name": "white_check_mark",
+      "users": [
+        "U08QJHCKABG",
+        "U08P6QGLNGG"
+      ],
+      "count": 2
+    },
+    {
+      "name": "x",
+      "users": [
+        "U08QJHCKABG"
+      ],
+      "count": 1
+    }
+  ]
+}

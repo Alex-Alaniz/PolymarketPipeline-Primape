@@ -151,10 +151,38 @@ def list_tables():
 
 def drop_all_tables():
     """Drop all tables in the database."""
+    # First, try to use raw SQL to drop all tables with CASCADE
+    try:
+        connection = engine.connect()
+        # Disable foreign key constraints temporarily
+        connection.execute("SET session_replication_role = 'replica';")
+        
+        # Get all table names from the database
+        tables = list_tables()
+        
+        # Drop tables in reverse order to handle dependencies
+        for table_name in reversed(tables):
+            logger.info(f"Dropping table: {table_name}")
+            try:
+                connection.execute(f'DROP TABLE IF EXISTS "{table_name}" CASCADE;')
+            except Exception as e:
+                logger.error(f"Error dropping table {table_name}: {str(e)}")
+        
+        # Re-enable foreign key constraints
+        connection.execute("SET session_replication_role = 'origin';")
+        connection.close()
+        logger.info("All tables dropped successfully")
+        return
+    except Exception as e:
+        logger.warning(f"Failed to drop tables with raw SQL: {str(e)}")
+        logger.info("Falling back to SQLAlchemy method...")
+    
+    # Fallback: SQLAlchemy method
     tables = list_tables()
     metadata.reflect(bind=engine)
     
-    for table_name in tables:
+    # Try to drop tables in reverse order to handle dependencies
+    for table_name in reversed(tables):
         if table_name in metadata.tables:
             table = metadata.tables[table_name]
             logger.info(f"Dropping table: {table_name}")
