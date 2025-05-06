@@ -2,12 +2,15 @@
 Database models for the Polymarket pipeline.
 """
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.dialects.postgresql import JSON
 
 # Initialize database
 db = SQLAlchemy()
+
+# Maximum age for pending markets (in days)
+PENDING_MARKET_MAX_AGE_DAYS = 7
 
 class Market(db.Model):
     """Market model for storing market data."""
@@ -110,6 +113,75 @@ class PipelineRun(db.Model):
             'markets_failed': self.markets_failed,
             'markets_deployed': self.markets_deployed,
             'error': self.error
+        }
+
+class PendingMarket(db.Model):
+    """
+    Model for storing markets awaiting approval in Slack.
+    Markets in this table have been categorized by AI but not yet approved.
+    Once approved, they will be moved to the Market table.
+    """
+    __tablename__ = 'pending_markets'
+    
+    poly_id = db.Column(db.String(255), primary_key=True)
+    question = db.Column(db.Text, nullable=False)
+    category = db.Column(db.String(50), nullable=False, default='all')
+    banner_url = db.Column(db.Text)
+    icon_url = db.Column(db.Text)
+    options = db.Column(JSON)
+    expiry = db.Column(db.BigInteger)
+    slack_message_id = db.Column(db.String(255))
+    raw_data = db.Column(JSON)  # Complete original data
+    needs_manual_categorization = db.Column(db.Boolean, default=False)
+    fetched_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    def is_expired(self):
+        """Check if this pending market has been waiting for approval too long."""
+        if not self.fetched_at:
+            return False
+        
+        cutoff = datetime.utcnow() - timedelta(days=PENDING_MARKET_MAX_AGE_DAYS)
+        return self.fetched_at < cutoff
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            'poly_id': self.poly_id,
+            'question': self.question,
+            'category': self.category,
+            'banner_url': self.banner_url,
+            'icon_url': self.icon_url,
+            'options': self.options,
+            'expiry': self.expiry,
+            'slack_message_id': self.slack_message_id,
+            'needs_manual_categorization': self.needs_manual_categorization,
+            'fetched_at': self.fetched_at.isoformat() if self.fetched_at else None,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+class ApprovalLog(db.Model):
+    """
+    Model for logging approval events for pending markets.
+    """
+    __tablename__ = 'approvals_log'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    poly_id = db.Column(db.String(255), nullable=False)
+    slack_msg_id = db.Column(db.String(255))
+    reviewer = db.Column(db.String(255))
+    decision = db.Column(db.String(50))  # 'approved' or 'rejected'
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    def to_dict(self):
+        """Convert model to dictionary."""
+        return {
+            'id': self.id,
+            'poly_id': self.poly_id,
+            'slack_msg_id': self.slack_msg_id,
+            'reviewer': self.reviewer,
+            'decision': self.decision,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
 class ProcessedMarket(db.Model):
