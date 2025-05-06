@@ -157,6 +157,7 @@ class PendingMarket(db.Model):
             'expiry': self.expiry,
             'slack_message_id': self.slack_message_id,
             'needs_manual_categorization': self.needs_manual_categorization,
+            'posted': self.posted,
             'fetched_at': self.fetched_at.isoformat() if self.fetched_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
