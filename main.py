@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 # Import modules
 from pipeline import PolymarketPipeline
-from models import db, Market, ApprovalEvent, PipelineRun
+from models import db, Market, ApprovalEvent, PipelineRun, PendingMarket
 
 # Create Flask app
 app = Flask(__name__)
