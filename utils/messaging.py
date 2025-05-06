@@ -101,7 +101,9 @@ def get_message_reactions(message_id: str) -> List[Dict[str, Any]]:
         )
         
         if response.get("ok") and response.get("message"):
-            return response.get("message", {}).get("reactions", [])
+            reactions = response.get("message", {}).get("reactions", [])
+            logger.info(f"Got {len(reactions)} reactions for message {message_id}: {reactions}")
+            return reactions
         else:
             logger.warning(f"No reactions found for message {message_id}")
             return []

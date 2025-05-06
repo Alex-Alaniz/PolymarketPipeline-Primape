@@ -58,20 +58,32 @@ def check_market_approvals() -> Tuple[int, int, int]:
         # Get reactions for this message
         reactions = get_message_reactions(market.message_id)
         
+        # Debug reactions
+        logger.info(f"Processing reactions for market {market.condition_id} (message {market.message_id})")
+        logger.info(f"Got {len(reactions)} reactions: {reactions}")
+        
         # Check for approval (white_check_mark) or rejection (x) reactions
         has_approval = False
         has_rejection = False
         approver = None
         
         for reaction in reactions:
-            if reaction.get("name") == "white_check_mark":
+            logger.info(f"Processing reaction: {reaction}")
+            reaction_name = reaction.get("name", "")
+            logger.info(f"Reaction name: '{reaction_name}'")
+            
+            if reaction_name == "white_check_mark":
                 has_approval = True
                 # Get first user who reacted as approver
                 approver = reaction.get("users", ["unknown"])[0]
-            elif reaction.get("name") == "x":
+                logger.info(f"Found approval reaction from user {approver}")
+            elif reaction_name == "x":
                 has_rejection = True
                 # Get first user who reacted as rejector
                 approver = reaction.get("users", ["unknown"])[0]
+                logger.info(f"Found rejection reaction from user {approver}")
+                
+        logger.info(f"Final result: has_approval={has_approval}, has_rejection={has_rejection}, approver={approver}")
         
         # Process based on reactions
         if has_approval and not has_rejection:
