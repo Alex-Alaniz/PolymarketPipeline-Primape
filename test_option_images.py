@@ -1,93 +1,167 @@
-#!/usr/bin/env python3
-
 """
-Test script to verify option-specific images in multi-option markets.
-"""
+Test Option Images Processing for Multi-Option Markets
 
-import sys
+This script tests the image handling for multi-option markets like Champions League
+and Europa League, ensuring each option has its own appropriate image.
+"""
 import json
 import logging
-from typing import Dict, List, Any, Optional
-from utils.messaging import post_market_for_approval
+import os
+import sys
+from typing import Dict, List, Any
 
-# Set up logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("test_option_images")
+import requests
+from loguru import logger
 
-def create_test_market_with_option_images():
-    """Create a test multi-option market with option-specific images."""
+from utils.market_transformer import MarketTransformer
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger.remove()
+logger.add(sys.stdout, level="INFO")
+
+def fetch_test_markets() -> List[Dict[str, Any]]:
+    """
+    Fetch a specific set of test markets that includes Champions League and Europa League.
     
-    # Sample options with their images
-    options = [
-        "Arsenal",
-        "Barcelona",
-        "Inter Milan",
-        "Paris Saint-Germain"
+    Returns:
+        List of market data dictionaries from Polymarket API
+    """
+    logger.info("Fetching test markets from Polymarket API...")
+    
+    # Use these queries that are likely to have multi-option markets
+    queries = [
+        {"q": "Champions League Winner", "cat": "soccer"},
+        {"q": "Europa League Winner", "cat": "soccer"},
+        {"q": "Stanley Cup", "cat": "hockey"}
     ]
     
-    # Sample option-specific images
-    option_images = {
-        "Arsenal": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
-        "Barcelona": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-barcelona-win-the-uefa-champions-league-Krl4_iYrHb5t.png",
-        "Inter Milan": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-inter-milan-win-the-uefa-champions-league-qLXmECEH1IMR.png",
-        "Paris Saint-Germain": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-paris-saint-germain-win-the-uefa-champions-league-NxlXl1qZffuf.png"
-    }
+    all_markets = []
+    url = "https://gamma-api.polymarket.com/markets"
     
-    # Event image/banner
-    event_image = "https://polymarket-upload.s3.us-east-2.amazonaws.com/champions-league-winner-2025-F-QYbKsrHt_E.jpg"
-    
-    # Create test market data
-    market_data = {
-        "id": "test_market_images",
-        "conditionId": "test_condition_id",
-        "question": "Champions League Winner 2025",
-        "endDate": "2025-06-01T00:00:00Z",
-        "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/champions-league-winner-2025-F-QYbKsrHt_E.jpg",
-        "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-arsenal-win-the-uefa-champions-league-uNdX5G_OD3RZ.png",
-        "event_image": event_image,
-        "event_category": "Sports",
-        "is_multiple_option": True,
-        "outcomes": json.dumps(options),
-        "option_images": json.dumps(option_images),
-        "original_market_ids": ["id1", "id2", "id3", "id4"],
-    }
-    
-    return market_data
+    try:
+        for query in queries:
+            params = {
+                "limit": 20,
+                **query
+            }
+            
+            response = requests.get(url, params=params)
+            response.raise_for_status()
+            markets = response.json()
+            logger.info(f"Fetched {len(markets)} markets for query: {query['q']}")
+            all_markets.extend(markets)
+        
+        logger.info(f"Combined total: {len(all_markets)} markets")
+        return all_markets
+        
+    except Exception as e:
+        logger.error(f"Error fetching markets: {str(e)}")
+        return []
 
-def post_test_market() -> Optional[str]:
-    """Post a test market to Slack and verify option-specific images."""
-    # Create test market
-    market_data = create_test_market_with_option_images()
+def process_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Process markets using the MarketTransformer to create multi-option markets.
     
-    # Log market details
-    logger.info(f"Posting test market: {market_data['question']}")
-    logger.info(f"Category: {market_data.get('event_category', '')}")
-    logger.info(f"Options: {json.loads(market_data['outcomes'])}")
-    logger.info(f"Option images: {json.loads(market_data['option_images'])}")
+    Args:
+        markets: List of market data dictionaries from Polymarket API
+        
+    Returns:
+        List of transformed market dictionaries
+    """
+    logger.info("Processing markets with MarketTransformer...")
+    transformer = MarketTransformer()
+    transformed_markets = transformer.transform_markets(markets)
     
-    # Post to Slack
-    message_id = post_market_for_approval(market_data)
+    logger.info(f"Transformed {len(transformed_markets)} markets")
+    return transformed_markets
+
+def analyze_option_images(transformed_markets: List[Dict[str, Any]]):
+    """
+    Analyze the option images in transformed markets.
     
-    if message_id:
-        logger.info(f"Successfully posted test market with message ID: {message_id}")
-        return message_id
-    else:
-        logger.error("Failed to post test market")
-        return None
+    Args:
+        transformed_markets: List of transformed market dictionaries
+    """
+    logger.info("Analyzing option images in transformed markets...")
+    
+    # Counters for statistics
+    total_multi_option_markets = 0
+    total_options = 0
+    options_with_event_image = 0
+    options_with_unique_image = 0
+    options_without_image = 0
+    
+    for market in transformed_markets:
+        if market.get("is_multiple_option"):
+            total_multi_option_markets += 1
+            market_title = market.get("question")
+            logger.info(f"\n{'='*40}")
+            logger.info(f"MULTI-OPTION MARKET: {market_title}")
+            logger.info(f"{'='*40}")
+            
+            # Get outcomes
+            outcomes = json.loads(market.get("outcomes", "[]"))
+            total_options += len(outcomes)
+            
+            # Get option images
+            option_images = json.loads(market.get("option_images", "{}"))
+            
+            # Check event image
+            event_image = market.get("event_image")
+            if event_image:
+                logger.info(f"Event banner: {event_image}")
+            
+            # Check for "Another team" or similar options
+            another_team_options = [opt for opt in outcomes if "another" in opt.lower()]
+            if another_team_options:
+                logger.info(f"Found 'Another team' type options: {another_team_options}")
+            
+            # Analyze each option and its image
+            logger.info("\nOPTIONS:")
+            for i, option in enumerate(outcomes):
+                image_url = option_images.get(option)
+                if image_url:
+                    if image_url == event_image:
+                        logger.warning(f"Option {i+1}: ✗ '{option}' USES EVENT IMAGE")
+                        options_with_event_image += 1
+                    else:
+                        logger.info(f"Option {i+1}: ✓ '{option}' has unique image")
+                        options_with_unique_image += 1
+                else:
+                    logger.error(f"Option {i+1}: ! '{option}' has NO IMAGE")
+                    options_without_image += 1
+            
+            logger.info("-" * 40)
+    
+    # Print summary statistics
+    logger.info("\n\nSUMMARY STATISTICS:")
+    logger.info(f"Total multi-option markets: {total_multi_option_markets}")
+    logger.info(f"Total options: {total_options}")
+    logger.info(f"Options with unique image: {options_with_unique_image} ({options_with_unique_image/total_options*100:.1f}%)")
+    logger.info(f"Options using event image: {options_with_event_image} ({options_with_event_image/total_options*100:.1f}%)")
+    logger.info(f"Options without image: {options_without_image} ({options_without_image/total_options*100:.1f}%)")
 
 def main():
-    """Main test function."""
-    message_id = post_test_market()
+    """Main function to run the option images test"""
+    logger.info("Starting option images test...")
     
-    if message_id:
-        logger.info("✅ Test passed: Market posted with option-specific images")
-        return 0
-    else:
-        logger.error("❌ Test failed: Could not post market")
-        return 1
+    # Fetch test markets
+    markets = fetch_test_markets()
+    if not markets:
+        logger.error("No markets found, exiting")
+        return
+    
+    # Process markets
+    transformed_markets = process_markets(markets)
+    if not transformed_markets:
+        logger.error("No transformed markets, exiting")
+        return
+    
+    # Analyze option images
+    analyze_option_images(transformed_markets)
+    
+    logger.info("Option images test completed")
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()
