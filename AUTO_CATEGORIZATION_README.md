@@ -25,7 +25,7 @@ Note: "all" is not a valid category but only a UI filter option. "news" is used 
    - Uses OpenAI GPT-4o-mini model with temperature=0
    - Processes market questions and assigns a single category
    - Implements retry mechanism with exponential backoff
-   - Includes fallback to "all" category if API fails or returns invalid category
+   - Includes fallback to "news" category if API fails or returns invalid category
 
 2. **Pending Markets Database** (`models.py`)
    - `PendingMarket` model stores markets before approval

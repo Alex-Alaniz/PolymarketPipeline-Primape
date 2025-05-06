@@ -1,105 +1,133 @@
 #!/usr/bin/env python3
 
 """
-Test Auto-Categorization
+Test script for auto-categorization functionality.
 
-This script tests the auto-categorization of markets using the GPT-4o-mini model.
-It categorizes a few sample markets and prints the results.
+This script tests the market categorization feature to ensure:
+1. Markets are correctly categorized into one of the valid categories
+2. "all" is never used as a category
+3. The fallback category is "news" when categorization fails
 """
 
-import os
 import sys
 import json
 import logging
-from typing import Dict, List, Any
+from datetime import datetime
+from random import sample
 
-from utils.market_categorizer import categorize_market
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("test_categorization")
+# Import categorizer
+from utils.market_categorizer import categorize_market, categorize_markets, VALID_CATEGORIES
 
-# Sample market questions to test categorization
-SAMPLE_MARKETS = [
-    "Will Bitcoin price exceed $100,000 by December 2025?",
-    "Who will win the 2025 Super Bowl?",
-    "Will Donald Trump win the 2024 US Presidential Election?",
-    "Will Tesla stock price increase by more than 20% in 2025?",
-    "Will ChatGPT have more than 500 million monthly active users by end of 2025?",
-    "Will Apple release a foldable iPhone in 2025?",
-    "Will Taylor Swift win a Grammy Award in 2026?",
-    "Will a human set foot on Mars before 2030?",
-    "Will Ethereum merge to Proof-of-Stake successfully in 2025?",
-    "Will there be a recession in the United States in 2025?",
-]
+# Import flask app for database context
+from main import app
 
-def test_market_categorization():
-    """
-    Test the categorization of sample markets.
-    """
-    logger.info("Testing market categorization with GPT-4o-mini")
+
+def test_individual_categorization():
+    """Test that individual market questions are categorized correctly"""
     
-    results = []
+    # Sample market questions covering different categories
+    sample_questions = [
+        "Will Donald Trump win the 2024 US Presidential Election?",  # politics
+        "Will Bitcoin exceed $100,000 before the end of 2025?",      # crypto
+        "Will the Golden State Warriors win the 2025 NBA Finals?",   # sports
+        "Will Apple's market cap exceed $4 trillion in 2025?",       # business
+        "Will Taylor Swift release a new album in 2025?",            # culture
+        "Will there be a peace agreement in Ukraine by 2026?",       # news
+        "Will SpaceX successfully land humans on Mars by 2030?",     # tech
+    ]
     
-    for i, question in enumerate(SAMPLE_MARKETS):
-        logger.info(f"Categorizing market {i+1}: {question}")
-        
-        # Attempt to categorize the market
+    logger.info("Testing individual market categorization...")
+    
+    # Test each question
+    for question in sample_questions:
         category = categorize_market(question)
+        logger.info(f"Question: {question}")
+        logger.info(f"Category: {category}")
         
-        # Store result
-        result = {
-            "question": question,
-            "category": category
-        }
-        results.append(result)
+        # Verify the category is valid
+        assert category in VALID_CATEGORIES, f"Invalid category: {category}"
         
-        logger.info(f"Market \"{question}\" categorized as: {category}")
+        # Verify the category is never 'all'
+        assert category != 'all', "Category should never be 'all'"
         
-    # Print summary
-    logger.info("\nCategorization Results:")
-    for i, result in enumerate(results):
-        logger.info(f"{i+1}. \"{result['question']}\" => {result['category']}")
+        # Add a separator for clarity
+        logger.info("-" * 40)
+    
+    logger.info("Individual categorization tests passed!")
+
+
+def test_batch_categorization():
+    """Test that a batch of markets are categorized correctly"""
+    
+    # Create a batch of fake market data
+    markets = [
+        {"question": "Will Donald Trump win the 2024 US Presidential Election?"},
+        {"question": "Will Bitcoin exceed $100,000 before the end of 2025?"},
+        {"question": "Will the Golden State Warriors win the 2025 NBA Finals?"},
+        {"question": "Will Apple's market cap exceed $4 trillion in 2025?"},
+        {"question": "Will Taylor Swift release a new album in 2025?"},
+        {"question": "Will there be a peace agreement in Ukraine by 2026?"},
+        {"question": "Will SpaceX successfully land humans on Mars by 2030?"},
+    ]
+    
+    logger.info("Testing batch market categorization...")
+    
+    # Categorize the markets
+    categorized_markets = categorize_markets(markets)
+    
+    # Verify each market has a category
+    for market in categorized_markets:
+        assert 'ai_category' in market, "Market missing ai_category field"
+        assert market['ai_category'] in VALID_CATEGORIES, f"Invalid category: {market['ai_category']}"
+        assert market['ai_category'] != 'all', "Category should never be 'all'"
         
-    return results
+        logger.info(f"Question: {market['question']}")
+        logger.info(f"Category: {market['ai_category']}")
+        logger.info("-" * 40)
+    
+    logger.info("Batch categorization tests passed!")
+
+
+def test_fallback_behavior():
+    """Test that the fallback behavior is correct"""
+    
+    # Create a market with an empty question to force fallback
+    empty_market = {"question": ""}
+    
+    logger.info("Testing fallback behavior...")
+    
+    # Categorize the market
+    categorized_markets = categorize_markets([empty_market])
+    
+    # Verify the fallback category is 'news'
+    assert categorized_markets[0]['ai_category'] == 'news', "Fallback category should be 'news'"
+    assert categorized_markets[0].get('needs_manual_categorization', False) is True, "Market should be flagged for manual review"
+    
+    logger.info(f"Empty question fallback category: {categorized_markets[0]['ai_category']}")
+    logger.info(f"Needs manual review flag: {categorized_markets[0].get('needs_manual_categorization')}")
+    logger.info("Fallback behavior test passed!")
+
 
 def main():
-    """
-    Main function to run the test.
-    """
-    # Import Flask app to get application context
-    from main import app
-    
-    # Use application context for database operations
-    with app.app_context():
-        try:
-            # Run the test
-            results = test_market_categorization()
-            
-            # Print success message
-            print(f"\nSuccessfully categorized {len(results)} sample markets")
-            
-            # Group by category
-            categories = {}
-            for result in results:
-                category = result["category"] or "undefined"
-                if category not in categories:
-                    categories[category] = []
-                categories[category].append(result["question"])
-                
-            # Print category breakdown
-            print("\nCategory Breakdown:")
-            for category, questions in categories.items():
-                print(f"{category}: {len(questions)} markets")
-                
-            return 0
-            
-        except Exception as e:
-            logger.error(f"Error testing categorization: {str(e)}")
-            return 1
+    """Main test function"""
+    try:
+        # Run the tests
+        test_individual_categorization()
+        test_batch_categorization()
+        test_fallback_behavior()
+        
+        logger.info("All auto-categorization tests passed!")
+        return 0
+    except Exception as e:
+        logger.error(f"Test failed: {str(e)}")
+        return 1
+
 
 if __name__ == "__main__":
-    sys.exit(main())
+    # Use the app context
+    with app.app_context():
+        sys.exit(main())
