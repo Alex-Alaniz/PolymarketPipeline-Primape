@@ -983,6 +983,153 @@ def pipeline_flow():
     """
     return html
 
+@app.route('/pending-markets')
+def pending_markets():
+    """Show the pending markets with their categories."""
+    TEMPLATE = """
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Pending Markets</title>
+        <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                line-height: 1.6;
+                max-width: 1000px;
+                margin: 0 auto;
+                padding: 20px;
+                background-color: var(--bs-dark);
+                color: var(--bs-light);
+            }
+            h1, h2, h3 {
+                color: var(--bs-light);
+                text-align: center;
+                margin-bottom: 30px;
+            }
+            .container {
+                background-color: var(--bs-dark-bg-subtle);
+                border-radius: 8px;
+                padding: 20px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            }
+            table {
+                width: 100%;
+                border-collapse: collapse;
+                margin: 20px 0;
+            }
+            th, td {
+                padding: 12px 15px;
+                text-align: left;
+                border-bottom: 1px solid var(--bs-border-color);
+            }
+            th {
+                background-color: var(--bs-dark);
+                font-weight: bold;
+            }
+            tr:hover {
+                background-color: rgba(255, 255, 255, 0.05);
+            }
+            .badge {
+                display: inline-block;
+                padding: 5px 10px;
+                border-radius: 50px;
+                font-size: 14px;
+                font-weight: bold;
+                text-align: center;
+                margin-right: 5px;
+            }
+            .badge-politics { background-color: #9C27B0; color: white; }
+            .badge-crypto { background-color: #FF9800; color: black; }
+            .badge-sports { background-color: #4CAF50; color: white; }
+            .badge-business { background-color: #2196F3; color: white; }
+            .badge-culture { background-color: #E91E63; color: white; }
+            .badge-news { background-color: #795548; color: white; }
+            .badge-tech { background-color: #607D8B; color: white; }
+            .badge-all { background-color: #9E9E9E; color: white; }
+            .button {
+                background-color: var(--bs-primary);
+                color: white;
+                padding: 10px 15px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-size: 16px;
+                text-decoration: none;
+                display: inline-block;
+                margin-top: 20px;
+            }
+            .status-info {
+                background-color: var(--bs-dark);
+                padding: 15px;
+                border-radius: 8px;
+                margin-bottom: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Pending Markets</h1>
+            
+            <div class="status-info">
+                <h3>Markets Awaiting Approval</h3>
+                <p>These markets have been categorized by GPT-4o-mini and are waiting for human approval in Slack.</p>
+                <p>Total pending markets: <strong>{{ markets|length }}</strong></p>
+                <a href="/" class="button">Back to Pipeline Dashboard</a>
+            </div>
+            
+            {% if markets %}
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Question</th>
+                            <th>Category</th>
+                            <th>Options</th>
+                            <th>Posted to Slack</th>
+                            <th>Fetched</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for market in markets %}
+                            <tr>
+                                <td>{{ market.question }}</td>
+                                <td>
+                                    <span class="badge badge-{{ market.category }}">
+                                        {{ market.category }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if market.options %}
+                                        {% set options = market.options|tojson|safe %}
+                                        {{ options }}
+                                    {% else %}
+                                        Yes/No
+                                    {% endif %}
+                                </td>
+                                <td>{{ "Yes" if market.slack_message_id else "No" }}</td>
+                                <td>{{ market.fetched_at.strftime('%Y-%m-%d %H:%M') }}</td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            {% else %}
+                <div class="alert alert-info">
+                    <p>No pending markets found. Run the pipeline to fetch and categorize new markets.</p>
+                </div>
+            {% endif %}
+        </div>
+    </body>
+    </html>
+    """
+    
+    with app.app_context():
+        # Get all pending markets
+        pending_markets = PendingMarket.query.all()
+        
+    return render_template_string(TEMPLATE, markets=pending_markets)
+
 # This allows running the script directly
 if __name__ == "__main__":
     # If running directly, start the pipeline
