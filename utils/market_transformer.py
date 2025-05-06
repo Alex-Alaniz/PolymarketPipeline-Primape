@@ -100,11 +100,36 @@ class MarketTransformer:
             # Extract entity from the question for multi-option markets
             entity = None
             if "Will " in question:
-                # Basic entity extraction - everything between "Will " and " be/win"
+                # Try different extraction patterns in order of specificity
+                
+                # Pattern 1: Basic entity extraction - everything between "Will " and " be/win"
                 match = re.search(r"Will\s+(.*?)\s+(be|win)\s+", question, re.IGNORECASE)
                 if match:
                     entity = match.group(1).strip()
-                    logger.info(f"Extracted entity '{entity}' from question: '{question}'")
+                    logger.info(f"Extracted entity '{entity}' from pattern 1: '{question}'")
+                
+                # Pattern 2: "Will X win Y" pattern
+                if not entity:
+                    match = re.search(r"Will\s+(.*?)\s+win\s+", question, re.IGNORECASE)
+                    if match:
+                        entity = match.group(1).strip()
+                        logger.info(f"Extracted entity '{entity}' from pattern 2: '{question}'")
+                
+                # Pattern 3: Title case words after "Will" (likely a proper noun)
+                if not entity:
+                    match = re.search(r"Will\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", question)
+                    if match:
+                        entity = match.group(1).strip()
+                        logger.info(f"Extracted entity '{entity}' from pattern 3: '{question}'")
+                
+                # Pattern 4: Just grab the part after "Will" until a preposition or end of line
+                if not entity:
+                    match = re.search(r"Will\s+(.*?)(?:\s+in\s+|\s+by\s+|\s+at\s+|\s+on\s+|\?|$)", question, re.IGNORECASE)
+                    if match:
+                        entity = match.group(1).strip()
+                        logger.info(f"Extracted entity '{entity}' from pattern 4: '{question}'")
+                
+                logger.info(f"Final extracted entity: '{entity}' from question: '{question}'")
             
             # Check if market has events and group by event ID
             events = market.get("events", [])
@@ -174,13 +199,38 @@ class MarketTransformer:
                         if entity:
                             entities.append(entity)
                     
-                    if not entities:
-                        # Fallback: try to extract entities from questions
+                    if not entities or len(entities) < len(market_group):
+                        # Fallback: try to extract entities from questions using multiple patterns
                         for _, question, _ in market_group:
+                            # Try multiple extraction patterns
+                            extracted = None
+                            
+                            # Pattern 1: Standard pattern
                             match = re.search(r"Will\s+(.*?)\s+(be|win)\s+", question, re.IGNORECASE)
                             if match:
-                                entity = match.group(1).strip()
-                                entities.append(entity)
+                                extracted = match.group(1).strip()
+                                
+                            # Pattern 2: "Will X win Y" pattern
+                            if not extracted:
+                                match = re.search(r"Will\s+(.*?)\s+win\s+", question, re.IGNORECASE)
+                                if match:
+                                    extracted = match.group(1).strip()
+                            
+                            # Pattern 3: Title case words after "Will" (likely a proper noun)
+                            if not extracted:
+                                match = re.search(r"Will\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)", question)
+                                if match:
+                                    extracted = match.group(1).strip()
+                            
+                            # Pattern 4: Just grab the part after "Will" until a preposition or end of line
+                            if not extracted:
+                                match = re.search(r"Will\s+(.*?)(?:\s+in\s+|\s+by\s+|\s+at\s+|\s+on\s+|\?|$)", question, re.IGNORECASE)
+                                if match:
+                                    extracted = match.group(1).strip()
+                            
+                            if extracted and extracted not in entities:
+                                logger.info(f"Fallback extraction found entity '{extracted}' from '{question}'")
+                                entities.append(extracted)
                     
                     # Create a multiple-option market
                     market_ids = [m[0].get("id") for m in market_group]
