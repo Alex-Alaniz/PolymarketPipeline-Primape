@@ -528,26 +528,54 @@ class MarketTransformer:
                     generic_option_keywords = ["another team", "other team", "field", "other", "barcelona"]
                     
                     # First, make sure ALL options have an image assigned - even if it's just the event image initially
+                    # Track which images we've already used for fallback to avoid duplicates
+                    used_fallback_images = set()
+                    
                     for option in unique_entities:
                         if option not in my_option_images or not my_option_images.get(option):
-                            # Try to find a specific image for this option first
+                            # Always try to find a specific image for this option first
                             found_image = False
+                            
+                            # Search for markets that specifically mention this option
                             for market_data, question, entity in market_group:
+                                # Exact match for this option in the question
                                 if option.lower() in question.lower() and market_data.get("image"):
                                     my_option_images[option] = market_data.get("image")
                                     logger.info(f"Assigned image to option '{option}' from matching market")
                                     found_image = True
                                     break
                             
-                            # If no specific image found, use an existing image from another option
+                            # If no specific image found for generic options like "Barcelona" or "Another team",
+                            # find an unused team image to avoid all generic options using the same image
                             if not found_image and len(my_option_images) > 0:
-                                # Use any existing option image as a fallback
+                                # Check if this is a generic option
+                                is_generic = any(keyword in option.lower() for keyword in generic_option_keywords)
+                                
+                                # For generic options, try to use a unique team image that hasn't been used as fallback yet
+                                available_images = []
+                                
                                 for existing_option, existing_image in my_option_images.items():
-                                    if existing_image and existing_option != option:
-                                        my_option_images[option] = existing_image
-                                        logger.info(f"Assigned image to option '{option}' from another option: '{existing_option}'")
-                                        found_image = True
-                                        break
+                                    if (existing_image and 
+                                        existing_option != option and 
+                                        existing_image != event_image and
+                                        existing_image not in used_fallback_images):
+                                        available_images.append((existing_option, existing_image))
+                                
+                                # If we have unused team images available, use one of them
+                                if available_images:
+                                    fallback_option, fallback_image = available_images[0]
+                                    my_option_images[option] = fallback_image
+                                    used_fallback_images.add(fallback_image)
+                                    logger.info(f"Assigned unique image to option '{option}' from another option '{fallback_option}'")
+                                    found_image = True
+                                # Otherwise, use any team image even if it's been used before
+                                else:
+                                    for existing_option, existing_image in my_option_images.items():
+                                        if existing_image and existing_option != option and existing_image != event_image:
+                                            my_option_images[option] = existing_image
+                                            logger.info(f"Assigned image to option '{option}' from another option '{existing_option}' (no unique images left)")
+                                            found_image = True
+                                            break
                             
                             # Last resort: use the event image
                             if not found_image and event_image:
@@ -629,24 +657,39 @@ class MarketTransformer:
                                     # Instead, always use one of the other team images
                                     other_non_event_images = []
                                     other_team_images = []
+                                    already_used_images = set(my_option_images.values())
                                     
                                     # Collect non-event images from other options first
                                     for existing_option, existing_image in my_option_images.items():
                                         if existing_image and existing_option != option:
                                             if existing_image != event_image:
                                                 # Prioritize images that are NOT the event image
-                                                other_non_event_images.append(existing_image)
-                                            other_team_images.append(existing_image)
+                                                # For "another team" or "Barcelona", try to use an image that isn't already assigned to another option
+                                                image_usage_count = list(my_option_images.values()).count(existing_image)
+                                                other_non_event_images.append((existing_option, existing_image, image_usage_count))
+                                            other_team_images.append((existing_option, existing_image))
                                     
-                                    # Prioritize using non-event images first
+                                    # Sort non-event images by usage count (prioritize least used images)
+                                    other_non_event_images.sort(key=lambda x: x[2])
+                                    
+                                    # Prioritize using non-event images that aren't already assigned to too many options
                                     if other_non_event_images:
-                                        my_option_images[option] = other_non_event_images[0]
-                                        logger.info(f"Using non-event team image for generic option '{option}': {other_non_event_images[0]}")
+                                        # Get the image that is used the least number of times
+                                        _, selected_image, usage_count = other_non_event_images[0]
+                                        my_option_images[option] = selected_image
+                                        logger.info(f"Using non-event team image for generic option '{option}': {selected_image} (used {usage_count} times)")
                                         found_specific_image = True
                                     # Fall back to any team image if necessary
                                     elif other_team_images:
-                                        my_option_images[option] = other_team_images[0]
-                                        logger.info(f"Using team image for generic option '{option}': {other_team_images[0]}")
+                                        # If we have multiple team images, try to distribute them evenly
+                                        img_counts = {}
+                                        for _, img in other_team_images:
+                                            img_counts[img] = img_counts.get(img, 0) + 1
+                                        
+                                        # Choose the least used image
+                                        least_used_img = min(img_counts.items(), key=lambda x: x[1])[0]
+                                        my_option_images[option] = least_used_img
+                                        logger.info(f"Using team image for generic option '{option}': {least_used_img}")
                                         found_specific_image = True
                                         
                                     # If still no image, try looking for explicit match in related markets
