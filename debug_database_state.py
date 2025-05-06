@@ -72,22 +72,34 @@ def check_pending_markets():
     total_count = PendingMarket.query.count()
     logger.info(f"Total PendingMarket entries: {total_count}")
     
-    # Count posted vs. unposted
-    posted_count = PendingMarket.query.filter(PendingMarket.slack_message_id != None).count()
-    unposted_count = PendingMarket.query.filter_by(slack_message_id=None).count()
+    # Count posted vs. unposted using the posted flag
+    posted_count = PendingMarket.query.filter_by(posted=True).count()
+    unposted_count = PendingMarket.query.filter_by(posted=False).count()
     logger.info(f"Posted pending markets: {posted_count}")
     logger.info(f"Unposted pending markets: {unposted_count}")
+    
+    # Count by slack_message_id presence
+    with_message_id = PendingMarket.query.filter(PendingMarket.slack_message_id != None).count()
+    without_message_id = PendingMarket.query.filter_by(slack_message_id=None).count()
+    logger.info(f"Markets with slack_message_id: {with_message_id}")
+    logger.info(f"Markets without slack_message_id: {without_message_id}")
+    
+    # Check for anomalies
+    posted_without_msg = PendingMarket.query.filter_by(posted=True).filter_by(slack_message_id=None).count()
+    unposted_with_msg = PendingMarket.query.filter_by(posted=False).filter(PendingMarket.slack_message_id != None).count()
+    logger.info(f"Anomaly - Posted without slack_message_id: {posted_without_msg}")
+    logger.info(f"Anomaly - Unposted with slack_message_id: {unposted_with_msg}")
     
     # Check a sample of pending markets
     pending_markets = PendingMarket.query.limit(5).all()
     logger.info(f"Sample of pending markets ({len(pending_markets)} of {total_count}):")
     for market in pending_markets:
-        logger.info(f"ID: {market.id}, Poly ID: {market.poly_id}")
+        logger.info(f"Poly ID: {market.poly_id}")
         logger.info(f"  - Question: {market.question}")
-        logger.info(f"  - Created: {market.created_at}")
         logger.info(f"  - Category: {market.category}")
-        logger.info(f"  - Slack message ID: {market.slack_message_id or 'None'}")
-        logger.info(f"  - Needs manual categorization: {market.needs_manual_categorization}")
+        logger.info(f"  - Posted: {market.posted}")
+        logger.info(f"  - Slack Message ID: {market.slack_message_id or 'None'}")
+        logger.info(f"  - Needs manual categorization: {market.needs_manual_categorization or False}")
     
     return total_count, posted_count, unposted_count
 
