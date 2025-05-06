@@ -30,7 +30,8 @@ logging.basicConfig(
 logger = logging.getLogger("fetch_categorize_markets")
 
 # Polymarket API base URL
-POLYMARKET_API_BASE = "https://strapi-matic.poly.market/api"
+# Updated to use gamma-api.polymarket.com which is more reliable
+POLYMARKET_API_BASE = "https://gamma-api.polymarket.com"
 
 # Number of markets to fetch and post per run
 MAX_MARKETS_TO_FETCH = 100  # Fetch a large batch to filter down
@@ -49,33 +50,36 @@ CATEGORY_EMOJI = {
 }
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def fetch_markets(page: int = 1, page_size: int = 100) -> List[Dict[str, Any]]:
+def fetch_markets(limit: int = 100) -> List[Dict[str, Any]]:
     """
-    Fetch markets from Polymarket API.
+    Fetch markets from Polymarket API using the Gamma Markets endpoint.
     
     Args:
-        page: Page number for pagination
-        page_size: Number of markets per page
+        limit: Maximum number of markets to fetch
         
     Returns:
         List of market data dictionaries
     """
     url = f"{POLYMARKET_API_BASE}/markets"
+    # Timestamp to avoid caching
+    timestamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
     params = {
-        "page": page,
-        "pageSize": page_size,
-        "sortBy": "creationDate",
-        "sortDirection": "desc"
+        "closed": "false",
+        "archived": "false",
+        "active": "true",
+        "limit": str(limit),
+        "include_detailed_events": "true",
+        "_t": timestamp
     }
     
     try:
-        logger.info(f"Fetching page {page} with page size {page_size}")
+        logger.info(f"Fetching up to {limit} markets from Polymarket Gamma API")
         response = requests.get(url, params=params)
         response.raise_for_status()
         
-        data = response.json()
-        markets = data.get("markets", [])
-        logger.info(f"Fetched {len(markets)} markets from page {page}")
+        # Gamma API returns the markets directly as a list
+        markets = response.json()
+        logger.info(f"Fetched {len(markets)} markets from Gamma API")
         
         return markets
         
@@ -434,8 +438,8 @@ def main():
     # Use application context for database operations
     with app.app_context():
         try:
-            # 1. Fetch markets from API
-            markets = fetch_markets(page=1, page_size=MAX_MARKETS_TO_FETCH)
+            # 1. Fetch markets from Gamma API
+            markets = fetch_markets(limit=MAX_MARKETS_TO_FETCH)
             
             # 2. Filter markets
             active_markets = filter_active_non_expired_markets(markets)
