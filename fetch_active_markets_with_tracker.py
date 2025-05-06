@@ -239,7 +239,7 @@ def format_market_message(market: Dict[str, Any]) -> str:
     # Parse outcomes which come as a JSON string
     try:
         if isinstance(outcomes_raw, str):
-            import json
+            # json is already imported at the top of the file
             outcomes = json.loads(outcomes_raw)
         else:
             outcomes = outcomes_raw
