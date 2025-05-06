@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 
 from models import db, Market, ProcessedMarket, ApprovalEvent
-from utils.messaging import get_channel_messages, get_message_reactions, post_message_to_slack
+from utils.messaging import get_channel_messages, get_message_reactions, post_message_to_slack, add_reaction
 # We'll create the apechain module later
 from utils.apechain import deploy_market_to_apechain
 
@@ -55,9 +55,18 @@ def post_markets_for_deployment_approval() -> List[Market]:
             message = format_deployment_message(market)
             
             # Post to Slack - pass the tuple directly
-            message_id = post_message_to_slack(message)
+            message_response = post_message_to_slack(message)
+            message_id = message_response.get('ts') if isinstance(message_response, dict) else None
             
             if message_id:
+                # Add initial reactions (✅ and ❌) for easier voting
+                # These will be ignored in the approval count since they're from the bot
+                add_reaction(message_id, "white_check_mark")
+                add_reaction(message_id, "x")
+                
+                # Small delay to ensure reactions are added
+                import time
+                time.sleep(0.5)
                 # Create approval event
                 event = ApprovalEvent(
                     market_id=market.id,
