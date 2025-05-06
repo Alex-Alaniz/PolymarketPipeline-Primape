@@ -573,12 +573,19 @@ class MarketTransformer:
                                         found_specific_market = True
                                         break
                                 
-                                # If we didn't find a specific market, but do have event data
-                                if not found_specific_market and event_data and event_data.get("image"):
-                                    # For "another team" type options, we should use a unique image
-                                    # from the event, but not one that's already used by another option
-                                    my_option_images[option] = event_data.get("image")
-                                    logger.info(f"Using event image for generic option '{option}': {my_option_images[option]}")
+                                # If we didn't find a specific market in the event, search all original markets
+                                if not found_specific_market:
+                                    # Expanded search across all original markets
+                                    for m in self.original_markets:
+                                        if option.lower() in m.get("question", "").lower() and m.get("image"):
+                                            my_option_images[option] = m.get("image")
+                                            logger.info(f"Found API image for '{option}' in full market list: {my_option_images[option]}")
+                                            found_specific_market = True
+                                            break
+                                            
+                                    # If still not found, log the issue but don't fall back to any default
+                                    if not found_specific_market:
+                                        logger.warning(f"Could not find specific API image for option '{option}' in any market")
                     
                     # Create a new market data dictionary
                     multiple_market = {
