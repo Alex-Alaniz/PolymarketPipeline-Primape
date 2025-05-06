@@ -52,13 +52,61 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
         "closed": "false",
         "archived": "false",
         "active": "true",
-        "limit": str(limit),
+        "limit": "200",  # Always fetch 200 for maximum coverage
         "include_detailed_events": "true"  # Get more detailed event information
     }
     
     all_markets = []
+    found_event_ids = set()  # Track event IDs to group multi-option markets better
     
-    # Fetch markets for each category
+    # First, fetch a large batch of markets without category filtering
+    try:
+        # Use the base parameters without category to get a more comprehensive list
+        logger.info(f"Fetching up to 200 markets from Polymarket API (all categories)")
+        response = requests.get(base_url, params=params)
+        
+        if response.status_code == 200:
+            all_category_markets = response.json()
+            logger.info(f"Successfully fetched {len(all_category_markets)} markets (all categories)")
+            
+            # Process each market
+            for market in all_category_markets:
+                # Track event IDs to help find related markets later
+                events = market.get("events", [])
+                if events:
+                    for event in events:
+                        if "id" in event:
+                            found_event_ids.add(event["id"])
+                
+                # Check if the market has events
+                if events:
+                    # Extract event category if available
+                    for event in events:
+                        if "category" in event:
+                            # Use the event's category
+                            market["event_category"] = event["category"]
+                            # Also store event images for reference
+                            market["event_image"] = event.get("image")
+                            market["event_icon"] = event.get("icon")
+                            
+                            # Check if the event has related questions that we can use for extraction
+                            if "questions" in event:
+                                market["event_questions"] = event["questions"]
+                            
+                            # Check if the event has more detailed outcome data
+                            if "outcomes" in event:
+                                market["event_outcomes"] = event["outcomes"]
+                            
+                            break
+            
+            all_markets.extend(all_category_markets)
+        else:
+            logger.error(f"Failed to fetch markets: Status {response.status_code}")
+            logger.error(f"Response: {response.text}")
+    except Exception as e:
+        logger.error(f"Error fetching markets: {str(e)}")
+    
+    # Now fetch markets for each category to ensure we don't miss anything
     for category, count in CATEGORIES.items():
         try:
             category_params = params.copy()
@@ -74,10 +122,12 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                 
                 # Process each market to extract event categories and images
                 for market in category_markets:
-                    # We no longer need the fetched_category for active markets
-                    # Instead, we'll only use event_category if available
+                    # Check if this market is already in our list (by ID)
+                    market_id = market.get("id")
+                    if market_id and any(m.get("id") == market_id for m in all_markets):
+                        continue  # Skip duplicate markets
                     
-                    # Check if the market has events
+                    # Process event data
                     events = market.get("events", [])
                     if events:
                         # Extract event category if available
@@ -97,11 +147,14 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                                 if "outcomes" in event:
                                     market["event_outcomes"] = event["outcomes"]
                                 
+                                # Track event ID
+                                if "id" in event:
+                                    found_event_ids.add(event["id"])
+                                
                                 break
                     
-                    # Don't set any category if there's no event category
-                
-                all_markets.extend(category_markets)
+                    # Add to our collection
+                    all_markets.append(market)
                 
                 logger.info(f"Successfully fetched {len(category_markets)} {category} markets")
             else:
