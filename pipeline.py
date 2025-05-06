@@ -31,6 +31,7 @@ from models import db, Market, ProcessedMarket, PipelineRun
 from filter_active_markets import fetch_markets, filter_active_markets
 from fetch_active_markets_with_tracker import post_new_markets, filter_new_markets
 from check_market_approvals import check_market_approvals
+from utils.market_transformer import MarketTransformer
 
 # Configure logging
 logging.basicConfig(
@@ -126,9 +127,10 @@ class PolymarketPipeline:
     def fetch_and_filter_markets(self):
         """
         Fetch markets from Polymarket API and filter active ones.
+        Then transform markets to combine related ones into multi-option markets.
         
         Returns:
-            list: Filtered market data
+            list: Filtered and transformed market data
         """
         logger.info("Fetching markets from Polymarket API")
         markets = fetch_markets()
@@ -155,8 +157,36 @@ class PolymarketPipeline:
         logger.info("Market category distribution:")
         for category, count in categories.items():
             logger.info(f"  - {category}: {count} markets")
+        
+        # Now transform markets to combine related ones into multi-option markets
+        logger.info("Transforming markets to combine related ones")
+        transformer = MarketTransformer()
+        transformed_markets = transformer.transform_markets(filtered_markets)
+        
+        # Check how many multi-option markets were created
+        multi_option_count = sum(1 for m in transformed_markets if m.get('is_multiple_option', False))
+        logger.info(f"Created {multi_option_count} multi-option markets")
+        
+        # Log a few examples of multi-option markets
+        logger.info("Examples of multi-option markets:")
+        multi_option_examples = [m for m in transformed_markets if m.get('is_multiple_option', False)]
+        for i, market in enumerate(multi_option_examples[:3]):  # Log up to 3 examples
+            logger.info(f"Multi-option market {i+1}:")
+            logger.info(f"  - Question: {market.get('question', 'Unknown')}")
+            logger.info(f"  - ID: {market.get('id')}")
+            outcomes_raw = market.get("outcomes", "[]")
+            try:
+                if isinstance(outcomes_raw, str):
+                    import json
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                logger.info(f"  - Options ({len(outcomes)}): {outcomes}")
+            except Exception as e:
+                logger.error(f"Error parsing outcomes: {str(e)}")
             
-        return filtered_markets
+        logger.info(f"Original markets count: {len(filtered_markets)}, transformed markets count: {len(transformed_markets)}")
+        return transformed_markets
     
     def post_markets_for_approval(self, markets):
         """
