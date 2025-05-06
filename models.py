@@ -22,8 +22,8 @@ class Market(db.Model):
     original_market_id = db.Column(db.String(255))
     options = db.Column(JSON)
     status = db.Column(db.String(50), default='new')
-    banner_path = db.Column(db.String(255))
-    banner_uri = db.Column(db.String(255))
+    banner_path = db.Column(db.Text)
+    banner_uri = db.Column(db.Text)
     icon_url = db.Column(db.String(255))  # Added icon URL for frontend mapping
     option_images = db.Column(JSON)  # JSON mapping of option name -> image URL
     apechain_market_id = db.Column(db.String(255))  # Added Apechain market ID for tracking
