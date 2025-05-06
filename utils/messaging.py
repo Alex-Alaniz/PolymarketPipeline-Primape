@@ -393,21 +393,22 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             }
         })
     
-    # Add event image as banner if available
+    # Add event image as banner if available (using accessory in section for inline display)
     event_image = market_data.get("event_image")
     if event_image:
         logger.info(f"Adding event image as banner: {event_image}")
-        blocks.append(
-            {
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Event Banner*"
+            },
+            "accessory": {
                 "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Event Banner"
-                },
                 "image_url": event_image,
                 "alt_text": "Event Banner"
             }
-        )
+        })
     
     # For multi-option markets, display options with their respective images
     if is_multiple:
@@ -436,42 +437,42 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             
         # Add each option with its image
         for i, option in enumerate(options):
-            # Option text section with numbering
-            blocks.append({
+            # Option text section with numbering and inline image if available
+            option_block = {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
                     "text": f"*Option {i+1}:* {option}"
                 }
-            })
+            }
             
-            # Option image if available
+            # Add image as an accessory if available (this makes it inline)
             if option in option_images and option_images[option]:
-                logger.info(f"Adding image for option '{option}': {option_images[option]}")
-                blocks.append({
+                logger.info(f"Adding inline image for option '{option}': {option_images[option]}")
+                option_block["accessory"] = {
                     "type": "image",
-                    "title": {
-                        "type": "plain_text",
-                        "text": f"Image for {option}"
-                    },
                     "image_url": option_images[option],
                     "alt_text": f"Image for {option}"
-                })
+                }
+            
+            # Add the option block to the message
+            blocks.append(option_block)
     else:
-        # For binary markets, just add the main market image
+        # For binary markets, add the main market image as an inline accessory
         if market_data.get("image"):
             logger.info(f"Adding market image URL: {market_data.get('image')}")
-            blocks.append(
-                {
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Market Image*"
+                },
+                "accessory": {
                     "type": "image",
-                    "title": {
-                        "type": "plain_text",
-                        "text": "Market Image"
-                    },
                     "image_url": market_data.get("image"),
                     "alt_text": "Market Image"
                 }
-            )
+            })
     
     # Add approval instructions
     blocks.append(

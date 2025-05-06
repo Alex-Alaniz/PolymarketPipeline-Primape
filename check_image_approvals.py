@@ -93,19 +93,47 @@ def check_image_approvals() -> Tuple[int, int, int]:
                                 market.image_approver = reaction.get('users', [None])[0]
                                 break
                         
-                        # Create URI for the image (assuming a direct path for now)
-                        # In a production environment, this would be a CDN or IPFS link
-                        image_filename = os.path.basename(market.image_path)
-                        market.image_uri = f"/images/{image_filename}"
+                        # Extract image URLs from the market data
+                        try:
+                            raw_data = market.raw_data
+                            if raw_data:
+                                # Get event image (banner)
+                                event_image = raw_data.get("event_image")
+                                market_image = raw_data.get("image")
+                                
+                                # Get option-specific images if it's a multi-option market
+                                option_images = {}
+                                if raw_data.get("is_multiple_option", False):
+                                    option_images_raw = raw_data.get("option_images", "{}")
+                                    if isinstance(option_images_raw, str):
+                                        option_images = json.loads(option_images_raw)
+                                    else:
+                                        option_images = option_images_raw
+                                
+                                # Update the main Market table if it exists
+                                main_market = Market.query.filter_by(id=market.condition_id).first()
+                                if main_market:
+                                    # Save event image as banner
+                                    if event_image:
+                                        main_market.banner_uri = event_image
+                                    elif market_image:
+                                        main_market.banner_uri = market_image
+                                    
+                                    # Save option images if it's multi-option
+                                    if option_images:
+                                        main_market.option_images = json.dumps(option_images)
+                                    
+                                    main_market.updated_at = datetime.utcnow()
+                                    
+                                    logger.info(f"Saved event banner and {len(option_images)} option images for market {market.condition_id}")
+                                else:
+                                    logger.warning(f"Main market {market.condition_id} not found, cannot update images")
+                            else:
+                                logger.warning(f"No raw data available for market {market.condition_id}, cannot extract images")
+                        except Exception as e:
+                            logger.error(f"Error extracting image data: {str(e)}")
                         
-                        # Update the main Market table if it exists
-                        main_market = Market.query.filter_by(id=market.condition_id).first()
-                        if main_market:
-                            main_market.banner_path = market.image_path
-                            main_market.banner_uri = market.image_uri
-                            main_market.updated_at = datetime.utcnow()
-                        
-                        logger.info(f"Image for market {market.condition_id} approved")
+                        logger.info(f"Images for market {market.condition_id} approved")
                         approved_count += 1
                         
                         # React to the message to acknowledge
