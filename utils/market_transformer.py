@@ -538,13 +538,45 @@ class MarketTransformer:
                             if option not in my_option_images or not my_option_images[option]:
                                 # For options like "Another team", "Barcelona", etc. find a specific image rather than using event image
                                 found_specific_image = False
-                                for market_data, question, entity in market_group:
-                                    # Use case insensitive checking to find mentions
-                                    if option.lower() in question.lower() and market_data.get("image"):
-                                        my_option_images[option] = market_data.get("image")
-                                        logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
+                                
+                                # Special case for "Another team" or similar generic options
+                                is_generic_option = (
+                                    "another" in option.lower() or 
+                                    "other" in option.lower() or
+                                    option.lower() == "barcelona"
+                                )
+                                
+                                if is_generic_option:
+                                    logger.info(f"Handling special case for generic option: '{option}'")
+                                    # For generic options, NEVER use the event image
+                                    # Instead, always use one of the other team images
+                                    other_images = []
+                                    for existing_option, existing_image in my_option_images.items():
+                                        if existing_image and existing_option != option:
+                                            other_images.append(existing_image)
+                                    
+                                    if other_images:
+                                        # Use the first available team image
+                                        my_option_images[option] = other_images[0]
+                                        logger.info(f"Using team image for generic option '{option}': {other_images[0]}")
                                         found_specific_image = True
-                                        break
+                                    else:
+                                        # Fallback to looking for explicit match in related markets
+                                        for market_data, question, entity in market_group:
+                                            if option.lower() in question.lower() and market_data.get("image"):
+                                                my_option_images[option] = market_data.get("image")
+                                                logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
+                                                found_specific_image = True
+                                                break
+                                else:
+                                    # Standard case - try to find an exact match
+                                    for market_data, question, entity in market_group:
+                                        # Use case insensitive checking to find mentions
+                                        if option.lower() in question.lower() and market_data.get("image"):
+                                            my_option_images[option] = market_data.get("image")
+                                            logger.info(f"Found specific image for '{option}' from related market: {market_data.get('image')}")
+                                            found_specific_image = True
+                                            break
                                 
                                 # If still no image found, use the team or entity image from one of the existing options
                                 if not found_specific_image and len(my_option_images) > 0:
@@ -556,10 +588,15 @@ class MarketTransformer:
                                             found_specific_image = True
                                             break
                                 
-                                # Only as a last resort use the event image
-                                if not found_specific_image and event_image:
+                                # Only as a last resort use the event image, and NEVER for "Another team" option
+                                if not found_specific_image and event_image and not is_generic_option:
                                     my_option_images[option] = event_image
                                     logger.info(f"Using event image for '{option}' as last resort: {event_image}")
+                                elif not found_specific_image and is_generic_option:
+                                    # For generic options like "Another team", if we still don't have an image,
+                                    # Use the main market image rather than the event image
+                                    my_option_images[option] = market_group[0][0].get("image", "")
+                                    logger.info(f"Using market image for generic option '{option}': {my_option_images[option]}")
                     
                     result.append((multiple_market, "multiple", event_title))
                 else:
