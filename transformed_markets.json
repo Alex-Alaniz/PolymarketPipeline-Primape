@@ -272,8 +272,8 @@
       "508146",
       "508145"
     ],
-    "outcomes": "[]",
-    "option_images": "{}",
+    "outcomes": "[\"Aston Villa\", \"Newcastle United\"]",
+    "option_images": "{\"Aston Villa\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-aston-villa-finish-in-the-top-4-of-epl-wzKDMfPZzEpD.png\", \"Newcastle United\": \"https://polymarket-upload.s3.us-east-2.amazonaws.com/will-newcastle-united-finish-in-the-top-4-of-epl-VjRlwfuLB5L8.png\"}",
     "is_multiple_option": true,
     "event_image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/premier-league-top-4-finishers-PpzlFqJlmAkA.png",
     "event_icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/premier-league-top-4-finishers-PpzlFqJlmAkA.png"
