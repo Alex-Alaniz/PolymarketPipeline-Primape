@@ -197,6 +197,7 @@ HTML_TEMPLATE = """
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
             <button id="check-approvals" class="button" style="background-color: var(--bs-success); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="checkMarketApprovals()">Check Market Approvals</button>
             <button id="post-unposted" class="button" style="background-color: var(--bs-purple); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="postUnpostedMarkets()">Post Next Batch</button>
+            <button id="flush-unposted" class="button" style="background-color: var(--bs-danger); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="flushUnpostedMarkets()">Flush Unposted Markets</button>
             <button id="run-deployment" class="button" style="background-color: var(--bs-warning); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="runDeploymentApprovals()">Check Deployment Approvals</button>
             <button id="sync-slack-db" class="button" style="background-color: var(--bs-info); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="syncSlackDb()">Sync Slack & DB</button>
             <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
@@ -348,6 +349,7 @@ HTML_TEMPLATE = """
                     document.getElementById('run-deployment').disabled = true;
                     document.getElementById('sync-slack-db').disabled = true;
                     document.getElementById('post-unposted').disabled = true;
+                    document.getElementById('flush-unposted').disabled = true;
                     // Refresh page after 2 seconds
                     setTimeout(() => {
                         window.location.reload();
@@ -360,6 +362,36 @@ HTML_TEMPLATE = """
                 console.error('Error:', error);
                 alert('An error occurred while posting unposted markets');
             });
+        }
+        
+        function flushUnpostedMarkets() {
+            if (confirm("WARNING: This will delete all unposted markets from the database. This action cannot be undone. Markets already posted to Slack will be preserved.\n\nDo you want to continue?")) {
+                fetch('/flush-unposted-markets', {
+                    method: 'POST',
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        document.getElementById('run-pipeline').disabled = true;
+                        document.getElementById('check-approvals').disabled = true;
+                        document.getElementById('run-deployment').disabled = true;
+                        document.getElementById('sync-slack-db').disabled = true;
+                        document.getElementById('post-unposted').disabled = true;
+                        document.getElementById('flush-unposted').disabled = true;
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to flush unposted markets: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while flushing unposted markets');
+                });
+            }
         }
         
         // Refresh the page every 5 seconds if the pipeline is running
@@ -899,6 +931,90 @@ def post_unposted_markets():
     return jsonify({
         "success": True,
         "message": "Process to post unposted markets started"
+    })
+
+@app.route('/flush-unposted-markets', methods=['POST'])
+def flush_unposted_markets():
+    """API endpoint to flush unposted markets from the database"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Another process is already running"
+        })
+    
+    # Define a function to run the flush process
+    def run_flush_unposted_markets():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting process to flush unposted markets...")
+            
+            # Import the flush module
+            from flush_unposted_markets import flush_unposted_markets, flush_pending_markets, show_database_stats
+            
+            with app.app_context():
+                # Show initial stats
+                print("Initial database state:")
+                show_database_stats()
+                
+                # Flush unposted markets
+                deleted_unposted = flush_unposted_markets()
+                print(f"Deleted {deleted_unposted} unposted markets from ProcessedMarket table")
+                
+                # Flush pending markets
+                deleted_pending = flush_pending_markets()
+                print(f"Deleted {deleted_pending} markets from PendingMarket table")
+                
+                # Show final stats
+                print("\nFinal database state:")
+                show_database_stats()
+                
+                # Final summary
+                print(f"\nSummary: Deleted {deleted_unposted} unposted markets and {deleted_pending} pending markets")
+                print("You can now run the pipeline to refetch and recategorize markets")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed"
+            
+            # Log process end
+            print("Flush unposted markets process completed")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Flush unposted markets process failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the process in a separate thread
+    thread = threading.Thread(target=run_flush_unposted_markets)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Process to flush unposted markets started"
     })
 
 @app.route('/runs')
