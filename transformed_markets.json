@@ -25,7 +25,7 @@
       "507300",
       "507305"
     ],
-    "outcomes": "[\"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\", \"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\", \"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\", \"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\", \"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\"]",
+    "outcomes": "[\"Arsenal\", \"Inter Milan\", \"Paris Saint-Germain\"]",
     "is_multiple_option": true
   },
   {
@@ -54,7 +54,7 @@
       "507396",
       "507413"
     ],
-    "outcomes": "[\"Real Madrid\", \"Barcelona\", \"another team\", \"Real Madrid\", \"Barcelona\", \"another team\", \"Real Madrid\", \"Barcelona\", \"another team\", \"Real Madrid\", \"Barcelona\", \"another team\", \"Real Madrid\", \"Barcelona\", \"another team\"]",
+    "outcomes": "[\"Real Madrid\", \"Barcelona\", \"another team\"]",
     "is_multiple_option": true
   },
   {
@@ -143,7 +143,7 @@
       "507687",
       "507688"
     ],
-    "outcomes": "[\"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\", \"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\", \"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\", \"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\", \"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\"]",
+    "outcomes": "[\"Erling Haaland\", \"Mohamed Salah\", \"Alexander Isak\", \"Ollie Watkins\", \"Julian Alvarez\", \"Heung-Min Son\", \"Kai Havertz\", \"Cole Palmer\", \"Dominic Solanke\", \"Luis Diaz\", \"Bukayo Saka\", \"Diogo Jota\", \"Nicolas Jackson\", \"Jamie Vardy\", \"another player\"]",
     "is_multiple_option": true
   },
   {
@@ -193,7 +193,7 @@
       "507868",
       "507876"
     ],
-    "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the New York Knicks\", \"the Oklahoma City Thunder\", \"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the New York Knicks\", \"the Oklahoma City Thunder\", \"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the New York Knicks\", \"the Oklahoma City Thunder\", \"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\"]",
+    "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Indiana Pacers\", \"the Minnesota Timberwolves\", \"the New York Knicks\", \"the Oklahoma City Thunder\"]",
     "is_multiple_option": true
   },
   {
@@ -216,7 +216,7 @@
       "507912",
       "507914"
     ],
-    "outcomes": "[\"Nikola Jokic\", \"Shai Gilgeous-Alexander\", \"Giannis Antetokounmpo\", \"Nikola Jokic\", \"Shai Gilgeous-Alexander\", \"Giannis Antetokounmpo\", \"Nikola Jokic\", \"Shai Gilgeous-Alexander\", \"Giannis Antetokounmpo\"]",
+    "outcomes": "[\"Nikola Jokic\", \"Shai Gilgeous-Alexander\", \"Giannis Antetokounmpo\"]",
     "is_multiple_option": true
   },
   {
@@ -242,7 +242,7 @@
       "508009",
       "508062"
     ],
-    "outcomes": "[\"Athletic Bilbao\", \"Manchester United\", \"Tottenham Hotspur\", \"Another team\", \"Athletic Bilbao\", \"Manchester United\", \"Tottenham Hotspur\", \"Another team\", \"Athletic Bilbao\", \"Manchester United\", \"Tottenham Hotspur\", \"Another team\"]",
+    "outcomes": "[\"Athletic Bilbao\", \"Manchester United\", \"Tottenham Hotspur\", \"Another team\"]",
     "is_multiple_option": true
   },
   {
@@ -283,7 +283,7 @@
       "508806",
       "508809"
     ],
-    "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Indiana Pacers\", \"the New York Knicks\", \"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Indiana Pacers\", \"the New York Knicks\"]",
+    "outcomes": "[\"the Boston Celtics\", \"the Cleveland Cavaliers\", \"the Indiana Pacers\", \"the New York Knicks\"]",
     "is_multiple_option": true
   },
   {
@@ -305,7 +305,7 @@
       "508821",
       "508823"
     ],
-    "outcomes": "[\"the Denver Nuggets\", \"the Golden State Warriors\", \"the Minnesota Timberwolves\", \"the Oklahoma City Thunder\", \"the Denver Nuggets\", \"the Golden State Warriors\", \"the Minnesota Timberwolves\", \"the Oklahoma City Thunder\"]",
+    "outcomes": "[\"the Denver Nuggets\", \"the Golden State Warriors\", \"the Minnesota Timberwolves\", \"the Oklahoma City Thunder\"]",
     "is_multiple_option": true
   },
   {
@@ -321,7 +321,7 @@
       "509090",
       "509090"
     ],
-    "outcomes": "[\"the Carolina Hurricanes\", \"the Carolina Hurricanes\"]",
+    "outcomes": "[\"the Carolina Hurricanes\"]",
     "is_multiple_option": true
   }
 ]

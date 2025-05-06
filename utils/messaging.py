@@ -10,8 +10,13 @@ import logging
 from typing import Dict, List, Any, Optional, Tuple
 from datetime import datetime
 
-from slack_sdk import WebClient
-from slack_sdk.errors import SlackApiError
+try:
+    from slack_sdk import WebClient
+    from slack_sdk.errors import SlackApiError
+except ImportError:
+    # For testing environments
+    WebClient = None
+    SlackApiError = Exception
 
 logger = logging.getLogger(__name__)
 

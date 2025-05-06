@@ -189,6 +189,18 @@ class MarketTransformer:
                     # Use the first market as a template
                     template_market = market_group[0][0]
                     
+                    # Deduplicate entities while preserving order
+                    unique_entities = []
+                    seen = set()
+                    for entity in entities:
+                        if entity not in seen:
+                            seen.add(entity)
+                            unique_entities.append(entity)
+                    
+                    logger.info(f"Creating multi-option market '{event_title}' with {len(unique_entities)} unique options from {len(entities)} total entities")
+                    for i, option in enumerate(unique_entities):
+                        logger.info(f"  Option {i+1}: {option}")
+                    
                     # Create a new market data dictionary
                     multiple_market = {
                         "id": f"group_{event_id}",
@@ -200,7 +212,7 @@ class MarketTransformer:
                         "icon": template_market.get("icon"),
                         "fetched_category": template_market.get("fetched_category", "general"),
                         "original_market_ids": market_ids,
-                        "outcomes": json.dumps(entities), # Store as JSON string
+                        "outcomes": json.dumps(unique_entities), # Store as JSON string
                         "is_multiple_option": True
                     }
                     
