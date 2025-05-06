@@ -30,7 +30,6 @@ logger = logging.getLogger(__name__)
 from main import app
 from models import db, ProcessedMarket
 from utils.messaging import post_message_to_slack, add_reaction
-from config import SLACK_CHANNEL_ID
 
 # Constants
 MAX_MARKETS_TO_POST = 20
@@ -64,7 +63,18 @@ def format_market_message(market: ProcessedMarket) -> Tuple[str, List[Dict[str, 
     if not category or category == 'all':
         category = 'news'  # Ensure fallback to news, not all
     
-    emoji = SLACK_EMOJI_MAP.get(category.lower(), ":globe_with_meridians:")
+    # Define emoji mapping for categories
+    emoji_map = {
+        'politics': ':ballot_box:',
+        'crypto': ':money_with_wings:',
+        'sports': ':basketball:',
+        'business': ':chart_with_upwards_trend:',
+        'culture': ':performing_arts:',
+        'news': ':newspaper:',
+        'tech': ':computer:',
+    }
+    
+    emoji = emoji_map.get(category.lower(), ":globe_with_meridians:")
     
     # Format expiry date if available
     expiry_text = ""
