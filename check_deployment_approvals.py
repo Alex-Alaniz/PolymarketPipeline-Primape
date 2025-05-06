@@ -81,74 +81,183 @@ def post_markets_for_deployment_approval() -> List[Market]:
     
     return posted_markets
 
-def format_deployment_message(market: Market) -> str:
+def format_deployment_message(market: Market) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Format a market message for deployment approval.
+    Format a market message for deployment approval with rich formatting.
     
     Args:
         market: Market model instance
         
     Returns:
-        str: Formatted message text
+        Tuple[str, List[Dict]]: Formatted message text and blocks
     """
-    # Create a detailed message with all relevant market information
-    message = f"*DEPLOYMENT APPROVAL NEEDED*\n\n"
-    message += f"*Market ID:* {market.id}\n"
-    message += f"*Question:* {market.question}\n"
-    message += f"*Category:* {market.category}\n"
-    message += f"*Type:* {market.type}\n"
-    message += f"*Expiry:* {datetime.fromtimestamp(market.expiry).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+    # Default text for fallback
+    message_text = f"*Market for Deployment Approval*\n\n*Question:* {market.question}"
     
-    # Add options if available
-    if market.options:
-        try:
-            # Handle the specific multi-level escaped format
-            option_text = "Unknown"
-            
-            # First, get the raw string representation
+    # Market type
+    market_type_text = "Multiple-Choice Market" if market.type == "multiple" else "Binary Market (Yes/No)"
+    
+    # Parse options from JSON
+    options = []
+    try:
+        if market.options:
             raw_options = str(market.options)
             logger.info(f"Raw options for market {market.id}: {raw_options}")
             
-            # Get a clean, readable format for the options
-            try:
-                # This cleans up the escape sequences
-                clean_str = raw_options.replace('\\"', '"').replace('\\\\', '\\')
-                # Remove any surrounding quotes
-                while clean_str.startswith('"') and clean_str.endswith('"'):
-                    clean_str = clean_str[1:-1]
-                    
-                # Try standard JSON parsing on the cleaned string
-                try:
-                    options_parsed = json.loads(clean_str)
-                    if isinstance(options_parsed, list):
-                        option_text = ", ".join(options_parsed)
-                    else:
-                        option_text = str(options_parsed)
-                except json.JSONDecodeError:
-                    # If still not valid JSON after cleaning, display as is
-                    option_text = clean_str
-            except Exception as e:
-                logger.warning(f"Error cleaning options: {str(e)}")
-                option_text = raw_options
+            # Clean up the string for parsing
+            clean_str = raw_options.replace('\\"', '"').replace('\\\\', '\\')
+            # Remove any surrounding quotes
+            while clean_str.startswith('"') and clean_str.endswith('"'):
+                clean_str = clean_str[1:-1]
                 
-            message += f"*Options:* {option_text}\n"
-            
-        except Exception as e:
-            logger.error(f"Error formatting options for market {market.id}: {str(e)}")
-            # Add raw format for debugging
-            message += f"*Options (raw):* {repr(market.options)}\n"
+            # Parse the options
+            try:
+                options_parsed = json.loads(clean_str)
+                if isinstance(options_parsed, list):
+                    options = options_parsed
+            except json.JSONDecodeError:
+                logger.warning(f"Failed to parse options JSON for market {market.id}")
+    except Exception as e:
+        logger.error(f"Error parsing options for market {market.id}: {str(e)}")
     
-    # Add links to banner and icon if available
-    if market.banner_uri:
-        message += f"*Banner:* {market.banner_uri}\n"
-    if market.icon_url:
-        message += f"*Icon:* {market.icon_url}\n"
+    # Parse banner_uri from JSON to extract images
+    event_image = None
+    market_image = None
+    event_icon = None
+    option_images = {}
+    
+    try:
+        if market.banner_uri:
+            # Try to parse the banner_uri as JSON
+            banner_data = json.loads(market.banner_uri) if isinstance(market.banner_uri, str) else market.banner_uri
+            
+            # Extract image URLs
+            event_image = banner_data.get("event_image")
+            market_image = banner_data.get("market_image")
+            event_icon = banner_data.get("event_icon")
+            
+            logger.info(f"Extracted images for market {market.id}: event_image={event_image}, market_image={market_image}")
+    except Exception as e:
+        logger.error(f"Error parsing banner_uri for market {market.id}: {str(e)}")
+    
+    # Similarly for option_images
+    try:
+        if market.option_images:
+            option_images = json.loads(market.option_images) if isinstance(market.option_images, str) else market.option_images
+            logger.info(f"Parsed option images for {len(option_images)} options")
+    except Exception as e:
+        logger.error(f"Error parsing option_images for market {market.id}: {str(e)}")
+    
+    # Create rich message blocks
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": f"Market for Deployment Approval"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Question:* {market.question}"
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Category:* {market.category or 'Uncategorized'}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Expiry:* {datetime.fromtimestamp(market.expiry).strftime('%Y-%m-%d %H:%M:%S UTC')}"
+                }
+            ]
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Type:* {market_type_text}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*ID:* {market.id}"
+                }
+            ]
+        }
+    ]
+    
+    # Add options section
+    if options:
+        options_text = "*Options:*\n"
+        for i, option in enumerate(options):
+            options_text += f"  {i+1}. {option}\n"
+        
+        logger.info(f"Adding options section with {len(options)} options")
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": options_text
+            }
+        })
+    
+    # Add event image as banner if available
+    if event_image:
+        logger.info(f"Adding event image as banner: {event_image}")
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Event Banner*"
+            },
+            "accessory": {
+                "type": "image",
+                "image_url": event_image,
+                "alt_text": "Event Banner"
+            }
+        })
+    
+    # Add option-specific images if this is a multi-option market
+    if market.type == "multiple" and options and option_images:
+        for option in options:
+            if option in option_images:
+                option_image_url = option_images[option]
+                if option_image_url:
+                    logger.info(f"Adding image for option '{option}': {option_image_url}")
+                    
+                    # Add image block for this option
+                    option_block = {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Option:* {option}"
+                        },
+                        "accessory": {
+                            "type": "image",
+                            "image_url": option_image_url,
+                            "alt_text": f"Image for {option}"
+                        }
+                    }
+                    blocks.append(option_block)
     
     # Add instructions for approval/rejection
-    message += "\nPlease review this market carefully before deployment to Apechain.\n"
-    message += "React with :white_check_mark: to approve or :x: to reject."
+    blocks.append(
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "Please review this market carefully before deployment to Apechain.\nReact with :white_check_mark: to approve or :x: to reject."
+            }
+        }
+    )
     
-    return message
+    return message_text, blocks
 
 def check_deployment_approvals() -> Tuple[int, int, int]:
     """

@@ -7,7 +7,7 @@ This module provides functions for posting messages to Slack and handling reacti
 import os
 import json
 import logging
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Dict, List, Any, Optional, Tuple, Union
 from datetime import datetime
 
 try:
@@ -509,17 +509,23 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
         return None
 
 
-def post_message_to_slack(message: str) -> Optional[str]:
+def post_message_to_slack(message: Union[str, Tuple[str, List[Dict[str, Any]]]]) -> Optional[str]:
     """
-    Post a simple text message to Slack.
+    Post a message to Slack, supporting both simple text and rich blocks formatting.
     
     Args:
-        message: Message text to post
+        message: Either a simple string or a tuple of (text, blocks)
         
     Returns:
         Message timestamp (ts) if successful, None otherwise
     """
-    response = post_message(slack_channel_id, message)
+    # Check if we have rich blocks formatting
+    if isinstance(message, tuple) and len(message) == 2:
+        text, blocks = message
+        response = post_message(slack_channel_id, text, blocks)
+    else:
+        # Simple text message
+        response = post_message(slack_channel_id, message)
     
     if response.get("ok"):
         return response.get("ts")
