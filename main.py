@@ -936,7 +936,10 @@ def post_unposted_markets():
 @app.route('/flush-unposted-markets', methods=['POST'])
 def flush_unposted_markets():
     """API endpoint to flush unposted markets from the database"""
+    print("===> Flush unposted markets route called")
+    
     if pipeline_status["running"]:
+        print("===> Pipeline is already running, returning error")
         return jsonify({
             "success": False,
             "message": "Another process is already running"
@@ -1007,11 +1010,13 @@ def flush_unposted_markets():
             sys.stdout = old_stdout
             sys.stderr = old_stderr
     
+    print("===> Starting flush unposted markets thread")
     # Start the process in a separate thread
     thread = threading.Thread(target=run_flush_unposted_markets)
     thread.daemon = True
     thread.start()
     
+    print("===> Returning success response")
     return jsonify({
         "success": True,
         "message": "Process to flush unposted markets started"
