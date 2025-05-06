@@ -52,7 +52,8 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
         "closed": "false",
         "archived": "false",
         "active": "true",
-        "limit": str(limit)
+        "limit": str(limit),
+        "include_detailed_events": "true"  # Get more detailed event information
     }
     
     all_markets = []
@@ -87,6 +88,15 @@ def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
                                 # Also store event images for reference
                                 market["event_image"] = event.get("image")
                                 market["event_icon"] = event.get("icon")
+                                
+                                # Check if the event has related questions that we can use for extraction
+                                if "questions" in event:
+                                    market["event_questions"] = event["questions"]
+                                
+                                # Check if the event has more detailed outcome data
+                                if "outcomes" in event:
+                                    market["event_outcomes"] = event["outcomes"]
+                                
                                 break
                     
                     # Don't set any category if there's no event category
@@ -274,7 +284,9 @@ def save_filtered_markets(markets: List[Dict[str, Any]], filename: str = "active
             "image": market.get("image"),
             "icon": market.get("icon"),
             "event_image": market.get("event_image"),
-            "event_icon": market.get("event_icon")
+            "event_icon": market.get("event_icon"),
+            "event_questions": market.get("event_questions"),  # Include event questions data
+            "event_outcomes": market.get("event_outcomes")  # Include event outcomes data
         }
         for market in markets
     ]

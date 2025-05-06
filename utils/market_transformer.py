@@ -99,7 +99,39 @@ class MarketTransformer:
             
             # Extract entity from the question for multi-option markets
             entity = None
-            if "Will " in question:
+            
+            # First, check if market has event_outcomes data we can use directly
+            event_outcomes = market.get("event_outcomes", [])
+            if event_outcomes:
+                for outcome in event_outcomes:
+                    # Only use outcomes that aren't Yes/No, which are likely the actual options
+                    if outcome.get("name") and outcome.get("name") not in ["Yes", "No"]:
+                        entity = outcome.get("name")
+                        logger.info(f"Extracted entity '{entity}' directly from event outcomes")
+                        break
+            
+            # Second, check if market has event_questions which often contain option names
+            if not entity and market.get("event_questions"):
+                event_questions = market.get("event_questions", [])
+                for eq in event_questions:
+                    eq_text = eq.get("text", "")
+                    # Look for option-specific questions
+                    if "Will" in eq_text and (
+                        "Barcelona" in eq_text or 
+                        "Bayern Munich" in eq_text or 
+                        "Washington Capitals" in eq_text or
+                        "Edmonton Oilers" in eq_text):
+                        # Extract the team name
+                        for team in ["Barcelona", "Bayern Munich", "Washington Capitals", "Edmonton Oilers"]:
+                            if team in eq_text:
+                                entity = team
+                                logger.info(f"Extracted specific team '{entity}' from event question: '{eq_text}'")
+                                break
+                        if entity:
+                            break
+            
+            # Third, if still not found, extract from question text using patterns
+            if not entity and "Will " in question:
                 # Try different extraction patterns in order of specificity
                 
                 # Pattern 1: Basic entity extraction - everything between "Will " and " be/win"
@@ -129,7 +161,22 @@ class MarketTransformer:
                         entity = match.group(1).strip()
                         logger.info(f"Extracted entity '{entity}' from pattern 4: '{question}'")
                 
-                logger.info(f"Final extracted entity: '{entity}' from question: '{question}'")
+                # Pattern 5: Special handling for Champions League and Stanley Cup
+                if "Champions League" in question and not entity:
+                    for team in ["Arsenal", "Inter Milan", "Paris Saint-Germain", "Barcelona", "Bayern Munich"]:
+                        if team.lower() in question.lower():
+                            entity = team
+                            logger.info(f"Extracted Champions League team '{entity}' from question text")
+                            break
+                
+                if "Stanley Cup" in question and not entity:
+                    for team in ["Carolina Hurricanes", "Edmonton Oilers", "Washington Capitals"]:
+                        if team.lower() in question.lower():
+                            entity = team
+                            logger.info(f"Extracted Stanley Cup team '{entity}' from question text")
+                            break
+            
+            logger.info(f"Final extracted entity: '{entity}' from question: '{question}'")
             
             # Check if market has events and group by event ID
             events = market.get("events", [])
