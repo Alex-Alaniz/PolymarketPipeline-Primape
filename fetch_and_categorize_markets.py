@@ -346,14 +346,14 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
             }
         })
         
-    # Add image if available
-    if market.banner_url:
+    # Add image if available and not empty
+    if market.banner_url and market.banner_url.strip():
         blocks.append({
             "type": "image",
             "image_url": market.banner_url,
             "alt_text": "Market banner"
         })
-    elif market.icon_url:
+    elif market.icon_url and market.icon_url.strip():
         blocks.append({
             "type": "image",
             "image_url": market.icon_url,

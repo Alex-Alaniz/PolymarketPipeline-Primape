@@ -27,8 +27,8 @@ TEST_MARKET = {
     "poly_id": "test_market_001",
     "question": "Will Bitcoin exceed $100,000 by end of 2025?",
     "category": "crypto",
-    "banner_url": "https://via.placeholder.com/800x400.png?text=Bitcoin+Price+Prediction",
-    "icon_url": "https://via.placeholder.com/64x64.png?text=BTC",
+    "banner_url": "",  # Empty for testing to avoid image download issues
+    "icon_url": "",    # Empty for testing to avoid image download issues
     "options": json.dumps(["Yes", "No"]),
     "expiry": int((datetime.utcnow() + timedelta(days=365)).timestamp()),
     "needs_manual_categorization": False,
@@ -37,8 +37,8 @@ TEST_MARKET = {
         "endDate": (datetime.utcnow() + timedelta(days=365)).isoformat() + "Z",
         "outcomes": ["Yes", "No"],
         "conditionId": "test_market_001",
-        "image": "https://via.placeholder.com/800x400.png?text=Bitcoin+Price+Prediction",
-        "icon": "https://via.placeholder.com/64x64.png?text=BTC",
+        "image": "",  # Empty for testing to avoid image download issues
+        "icon": "",   # Empty for testing to avoid image download issues
         "active": True,
         "isResolved": False,
         "ai_category": "crypto"
