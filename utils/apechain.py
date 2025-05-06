@@ -38,14 +38,18 @@ CONTRACT_ABI = [
 # Initialize Web3 provider
 def get_web3():
     """Get Web3 instance."""
-    # Polygon RPC URL
-    polygon_rpc_url = os.environ.get("POLYGON_RPC_URL", "https://polygon-rpc.com")
+    # ApeChain RPC URL
+    apechain_rpc_url = os.environ.get("APECHAIN_RPC_URL")
+    if not apechain_rpc_url:
+        logger.error("APECHAIN_RPC_URL environment variable not set")
+        return None
+        
     try:
-        w3 = Web3(Web3.HTTPProvider(polygon_rpc_url))
+        w3 = Web3(Web3.HTTPProvider(apechain_rpc_url))
         if not w3.is_connected():
-            logger.error(f"Failed to connect to Polygon RPC at {polygon_rpc_url}")
+            logger.error(f"Failed to connect to ApeChain RPC at {apechain_rpc_url}")
             return None
-        logger.info(f"Connected to Polygon network: {w3.client_version}")
+        logger.info(f"Connected to ApeChain network: {w3.client_version}")
         return w3
     except Exception as e:
         logger.error(f"Error initializing Web3: {str(e)}")
@@ -157,7 +161,7 @@ def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
             'nonce': w3.eth.get_transaction_count(account_address),
             'gas': 3000000,  # Adjust gas as needed
             'gasPrice': w3.eth.gas_price,
-            'chainId': 137,  # Polygon mainnet
+            'chainId': w3.eth.chain_id,  # Use the chain ID from the connected network
         })
         
         # Sign and send transaction
