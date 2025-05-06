@@ -393,67 +393,85 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
             }
         })
     
-    # Add market image if available
-    if market_data.get("image"):
-        logger.info(f"Adding market image URL: {market_data.get('image')}")
-        blocks.append(
-            {
-                "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Market Image"
-                },
-                "image_url": market_data.get("image"),
-                "alt_text": "Market Image"
-            }
-        )
-    
-    # Add event image if available and different from market image
+    # Add event image as banner if available
     event_image = market_data.get("event_image")
-    if event_image and event_image != market_data.get("image"):
-        logger.info(f"Adding event image URL: {event_image}")
+    if event_image:
+        logger.info(f"Adding event image as banner: {event_image}")
         blocks.append(
             {
                 "type": "image",
                 "title": {
                     "type": "plain_text",
-                    "text": "Event Image"
+                    "text": "Event Banner"
                 },
                 "image_url": event_image,
-                "alt_text": "Event Image"
+                "alt_text": "Event Banner"
             }
         )
     
-    # Add market icon if available and different from images
-    if market_data.get("icon") and market_data.get("icon") != market_data.get("image") and market_data.get("icon") != event_image:
-        logger.info(f"Adding market icon URL: {market_data.get('icon')}")
-        blocks.append(
-            {
-                "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Market Icon"
-                },
-                "image_url": market_data.get("icon"),
-                "alt_text": "Market Icon"
-            }
-        )
-        
-    # Add event icon if available and different from other images
-    event_icon = market_data.get("event_icon")
-    if event_icon and event_icon != market_data.get("image") and event_icon != market_data.get("icon") and event_icon != event_image:
-        logger.info(f"Adding event icon URL: {event_icon}")
-        blocks.append(
-            {
-                "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Event Icon"
-                },
-                "image_url": event_icon,
-                "alt_text": "Event Icon"
-            }
-        )
+    # For multi-option markets, display options with their respective images
+    if is_multiple:
+        # Get option-specific images
+        option_images = {}
+        try:
+            option_images_raw = market_data.get("option_images", "{}")
+            if isinstance(option_images_raw, str):
+                option_images = json.loads(option_images_raw)
+            else:
+                option_images = option_images_raw
+            logger.info(f"Parsed option images for {len(option_images)} options")
+        except Exception as e:
+            logger.error(f"Error parsing option images: {str(e)}")
+            
+        # Get outcomes again to ensure we have the same order
+        options = []
+        try:
+            outcomes_raw = market_data.get("outcomes", "[]")
+            if isinstance(outcomes_raw, str):
+                options = json.loads(outcomes_raw)
+            else:
+                options = outcomes_raw
+        except Exception as e:
+            logger.error(f"Error re-parsing outcomes for images: {str(e)}")
+            
+        # Add each option with its image
+        for i, option in enumerate(options):
+            # Option text section with numbering
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Option {i+1}:* {option}"
+                }
+            })
+            
+            # Option image if available
+            if option in option_images and option_images[option]:
+                logger.info(f"Adding image for option '{option}': {option_images[option]}")
+                blocks.append({
+                    "type": "image",
+                    "title": {
+                        "type": "plain_text",
+                        "text": f"Image for {option}"
+                    },
+                    "image_url": option_images[option],
+                    "alt_text": f"Image for {option}"
+                })
+    else:
+        # For binary markets, just add the main market image
+        if market_data.get("image"):
+            logger.info(f"Adding market image URL: {market_data.get('image')}")
+            blocks.append(
+                {
+                    "type": "image",
+                    "title": {
+                        "type": "plain_text",
+                        "text": "Market Image"
+                    },
+                    "image_url": market_data.get("image"),
+                    "alt_text": "Market Image"
+                }
+            )
     
     # Add approval instructions
     blocks.append(

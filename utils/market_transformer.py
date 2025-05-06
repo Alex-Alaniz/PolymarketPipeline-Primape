@@ -201,6 +201,20 @@ class MarketTransformer:
                     for i, option in enumerate(unique_entities):
                         logger.info(f"  Option {i+1}: {option}")
                     
+                    # Create a dictionary to map options to their market data
+                    option_to_market = {}
+                    option_to_image = {}
+                    for (market_data, question, entity) in market_group:
+                        if entity in unique_entities:
+                            option_to_market[entity] = market_data
+                            # Save image for this option
+                            option_to_image[entity] = market_data.get("image")
+                    
+                    # Extract event data if available
+                    event_data = None
+                    if template_market.get("events") and len(template_market.get("events")) > 0:
+                        event_data = template_market["events"][0]
+                    
                     # Create a new market data dictionary
                     multiple_market = {
                         "id": f"group_{event_id}",
@@ -208,13 +222,21 @@ class MarketTransformer:
                         "conditionId": condition_ids[0] if condition_ids else "",
                         "slug": template_market.get("slug", ""),
                         "endDate": template_market.get("endDate"),
-                        "image": template_market.get("image"),
+                        "image": template_market.get("image"),  # Main market image (from first market)
                         "icon": template_market.get("icon"),
                         "fetched_category": template_market.get("fetched_category", "general"),
                         "original_market_ids": market_ids,
                         "outcomes": json.dumps(unique_entities), # Store as JSON string
+                        "option_images": json.dumps(option_to_image), # Map of option -> image URL
                         "is_multiple_option": True
                     }
+                    
+                    # Add event data if available
+                    if event_data:
+                        multiple_market["event_image"] = event_data.get("image")
+                        multiple_market["event_icon"] = event_data.get("icon")
+                        if "category" in event_data:
+                            multiple_market["event_category"] = event_data["category"]
                     
                     result.append((multiple_market, "multiple", event_title))
                 else:
