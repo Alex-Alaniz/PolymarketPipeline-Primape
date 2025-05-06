@@ -197,6 +197,7 @@ HTML_TEMPLATE = """
             <button id="run-pipeline" class="button" {% if status.running %}disabled{% endif %} onclick="runPipeline()">Run Pipeline</button>
             <button id="check-approvals" class="button" style="background-color: var(--bs-success); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="checkMarketApprovals()">Check Market Approvals</button>
             <button id="run-deployment" class="button" style="background-color: var(--bs-warning); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="runDeploymentApprovals()">Check Deployment Approvals</button>
+            <button id="sync-slack-db" class="button" style="background-color: var(--bs-info); margin-left: 10px;" {% if status.running %}disabled{% endif %} onclick="syncSlackDb()">Sync Slack & DB</button>
             <a href="/pipeline-flow" class="button" style="background-color: var(--bs-secondary); margin-left: 10px; text-decoration: none;">View Pipeline Flow</a>
         </div>
         
@@ -291,6 +292,7 @@ HTML_TEMPLATE = """
                     document.getElementById('run-pipeline').disabled = true;
                     document.getElementById('check-approvals').disabled = true;
                     document.getElementById('run-deployment').disabled = true;
+                    document.getElementById('sync-slack-db').disabled = true;
                     // Refresh page after 2 seconds
                     setTimeout(() => {
                         window.location.reload();
@@ -302,6 +304,32 @@ HTML_TEMPLATE = """
             .catch(error => {
                 console.error('Error:', error);
                 alert('An error occurred while starting the deployment approval process');
+            });
+        }
+        
+        function syncSlackDb() {
+            fetch('/sync-slack-db', {
+                method: 'POST',
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('status').textContent = 'running';
+                    document.getElementById('run-pipeline').disabled = true;
+                    document.getElementById('check-approvals').disabled = true;
+                    document.getElementById('run-deployment').disabled = true;
+                    document.getElementById('sync-slack-db').disabled = true;
+                    // Refresh page after 2 seconds
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to start Slack-DB synchronization: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while synchronizing Slack and database');
             });
         }
         
@@ -509,6 +537,74 @@ def start_deployment_approvals():
     return jsonify({
         "success": True,
         "message": "Deployment approval process started"
+    })
+
+@app.route('/sync-slack-db', methods=['POST'])
+def sync_slack_db():
+    """API endpoint to synchronize Slack and database"""
+    if pipeline_status["running"]:
+        return jsonify({
+            "success": False,
+            "message": "Another process is already running"
+        })
+    
+    # Define a function to sync Slack and DB
+    def run_slack_db_sync():
+        # Redirect stdout and stderr to our log capture
+        log_capture = LogCapture()
+        old_stdout = sys.stdout
+        old_stderr = sys.stderr
+        sys.stdout = log_capture
+        sys.stderr = log_capture
+        
+        try:
+            # Update UI status
+            pipeline_status["running"] = True
+            pipeline_status["start_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "running"
+            
+            # Log process start
+            print("Starting Slack-Database Synchronization...")
+            
+            # Import the sync module
+            import sync_slack_db
+            
+            # Run the synchronization process
+            with app.app_context():
+                synced, updated, cleaned = sync_slack_db.main()
+                print(f"Synchronization complete: {synced} synced, {updated} updated, {cleaned} cleaned")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "completed"
+            
+            # Log process end
+            print("Slack-DB synchronization completed successfully")
+            
+        except Exception as e:
+            # Log any exceptions
+            error_message = str(e)
+            print(f"Slack-DB synchronization failed with exception: {error_message}")
+            
+            # Update UI status
+            pipeline_status["running"] = False
+            pipeline_status["end_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            pipeline_status["status"] = "failed"
+        
+        finally:
+            # Restore stdout and stderr
+            sys.stdout = old_stdout
+            sys.stderr = old_stderr
+    
+    # Start the sync process in a separate thread
+    thread = threading.Thread(target=run_slack_db_sync)
+    thread.daemon = True
+    thread.start()
+    
+    return jsonify({
+        "success": True,
+        "message": "Slack-DB synchronization started"
     })
 
 @app.route('/check-market-approvals', methods=['POST'])

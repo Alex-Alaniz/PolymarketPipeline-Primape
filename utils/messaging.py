@@ -1,7 +1,7 @@
 """
 Slack messaging utilities.
 
-This module provides functions for posting messages to Slack and handling reactions.
+This module provides functions and classes for posting messages to Slack and handling reactions.
 """
 
 import os
@@ -35,6 +35,125 @@ else:
     # In test mode, we'll use mock functions
     slack_client = None
     logger.info("Running in test mode, Slack client not initialized")
+
+
+class MessagingClient:
+    """
+    Wrapper class for Slack client with additional functionality.
+    
+    This class provides a convenient interface for working with Slack,
+    including methods for posting messages, checking reactions, and
+    updating message formatting.
+    """
+    
+    def __init__(self, token: Optional[str] = None, channel_id: Optional[str] = None):
+        """
+        Initialize the messaging client.
+        
+        Args:
+            token: Slack bot token (defaults to environment variable)
+            channel_id: Slack channel ID (defaults to environment variable)
+        """
+        self.token = token or slack_token
+        self.channel_id = channel_id or slack_channel_id
+        
+        # Initialize the client if we have a token and not in test mode
+        if self.token and not is_test_environment():
+            self.client = WebClient(token=self.token)
+        else:
+            # In test mode, we'll use mock functions
+            self.client = None
+            logger.info("Running in test mode, Slack client not initialized")
+    
+    def post_message(self, text: str, blocks: Optional[List[Dict[str, Any]]] = None, 
+                    channel_id: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Post a message to a Slack channel.
+        
+        Args:
+            text: Plain text message content
+            blocks: Rich layout blocks (optional)
+            channel_id: Channel to post to (defaults to configured channel)
+            
+        Returns:
+            Dict with response containing the message timestamp (ts)
+        """
+        # If in test mode, use mock implementation
+        if is_test_environment():
+            from test_utils.mock_slack import post_message as mock_post_message
+            return mock_post_message(channel_id or self.channel_id, text, blocks)
+        
+        try:
+            # Use provided channel or default
+            channel = channel_id or self.channel_id
+                
+            if not channel:
+                logger.error("No Slack channel ID provided")
+                return {"ok": False, "error": "No channel ID provided"}
+                
+            # Post message to Slack
+            response = self.client.chat_postMessage(
+                channel=channel,
+                text=text,
+                blocks=blocks if blocks else None
+            )
+            
+            logger.info(f"Posted message to Slack channel {channel}, ts: {response.get('ts')}")
+            return response.data
+            
+        except SlackApiError as e:
+            logger.error(f"Error posting message to Slack: {str(e)}")
+            return {"ok": False, "error": str(e)}
+    
+    def get_channel_history(self, limit: int = 100, 
+                           oldest: Optional[str] = None, 
+                           latest: Optional[str] = None,
+                           cursor: Optional[str] = None) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+        """
+        Get message history from the Slack channel with pagination support.
+        
+        Args:
+            limit: Maximum number of messages to retrieve per page
+            oldest: Start of time range (Unix timestamp)
+            latest: End of time range (Unix timestamp)
+            cursor: Pagination cursor for subsequent calls
+            
+        Returns:
+            Tuple of (messages, next_cursor)
+        """
+        # If in test mode, use mock implementation
+        if is_test_environment():
+            from test_utils.mock_slack import get_channel_messages as mock_get_messages
+            return mock_get_messages(limit), None
+        
+        try:
+            # Build params
+            params = {
+                "channel": self.channel_id,
+                "limit": limit
+            }
+            
+            if oldest:
+                params["oldest"] = oldest
+            if latest:
+                params["latest"] = latest
+            if cursor:
+                params["cursor"] = cursor
+            
+            # Get channel history
+            response = self.client.conversations_history(**params)
+            
+            messages = response.get("messages", [])
+            next_cursor = response.get("response_metadata", {}).get("next_cursor")
+            
+            logger.info(f"Got {len(messages)} messages from Slack channel")
+            logger.debug(f"Has more: {bool(next_cursor)}")
+            
+            return messages, next_cursor
+            
+        except SlackApiError as e:
+            logger.error(f"Error getting channel history from Slack: {str(e)}")
+            return [], None
 
 
 def post_message(channel_id: Optional[str], text: str, blocks: Optional[List[Dict[str, Any]]] = None) -> Dict[str, Any]:
