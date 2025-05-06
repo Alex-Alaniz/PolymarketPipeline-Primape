@@ -40,6 +40,28 @@ def check_market_approvals() -> Tuple[int, int, int]:
         ProcessedMarket.approved == None
     ).all()
     
+    # If no pending markets, check if there are any markets with message_id that haven't been marked as posted
+    # This helps ensure we don't miss any markets that were manually posted
+    if not pending_markets:
+        logger.info("No explicitly pending markets found, checking for markets with message_id but not marked as posted")
+        possibly_pending = ProcessedMarket.query.filter(
+            ProcessedMarket.message_id.isnot(None),
+            ProcessedMarket.posted.is_(False)
+        ).all()
+        
+        if possibly_pending:
+            logger.info(f"Found {len(possibly_pending)} markets with message_id but not marked as posted")
+            for market in possibly_pending:
+                market.posted = True
+                logger.info(f"Marked market {market.condition_id} as posted")
+            db.session.commit()
+            
+            # Refresh the pending markets query
+            pending_markets = ProcessedMarket.query.filter(
+                ProcessedMarket.posted == True,
+                ProcessedMarket.approved == None
+            ).all()
+    
     # Define timeout period (7 days)
     timeout_days = 7
     timeout_date = datetime.utcnow() - timedelta(days=timeout_days)

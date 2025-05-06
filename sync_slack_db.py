@@ -189,7 +189,9 @@ def extract_market_data_from_message(message: Dict[str, Any]) -> Optional[Dict[s
     Returns:
         Market data dictionary or None
     """
-    # Try to extract from attachments first
+    logger.debug(f"Extracting market data from message: {message.get('ts')}")
+    
+    # Try to extract from attachments first - most reliable method
     if message.get('attachments'):
         for attachment in message['attachments']:
             # Look for fields with condition_id
@@ -197,6 +199,7 @@ def extract_market_data_from_message(message: Dict[str, Any]) -> Optional[Dict[s
                 for field in attachment['fields']:
                     if field.get('title') == 'Condition ID':
                         condition_id = field.get('value')
+                        logger.debug(f"Found condition_id in attachment fields: {condition_id}")
                         # Build minimal market data
                         market_data = {
                             'condition_id': condition_id,
@@ -204,9 +207,12 @@ def extract_market_data_from_message(message: Dict[str, Any]) -> Optional[Dict[s
                         }
                         return market_data
     
-    # Try to extract from text
+    # Try to extract from text - less reliable but good fallback
     text = message.get('text', '')
+    
+    # Pattern 1: "Condition ID: XXX"
     if 'Condition ID:' in text:
+        logger.debug("Found 'Condition ID:' pattern in text")
         # Try to parse structured text
         lines = text.split('\n')
         condition_id = None
@@ -217,14 +223,62 @@ def extract_market_data_from_message(message: Dict[str, Any]) -> Optional[Dict[s
                 question = line.replace('*Question:*', '').strip()
             elif 'Condition ID:' in line:
                 condition_id = line.split('Condition ID:')[1].strip()
+                # Remove any trailing whitespace, quotes, or special chars
+                condition_id = condition_id.strip("'\"` \t\n\r")
         
         if condition_id:
+            logger.debug(f"Extracted condition_id from text: {condition_id}")
             return {
                 'condition_id': condition_id,
                 'question': question or 'Unknown Market'
             }
     
+    # Pattern 2: Look for markdown formatted links with question/ID pattern
+    # Example: <https://polymarket.com/event/question-text|Condition ID: xxx>
+    if '<https://polymarket.com/event/' in text:
+        logger.debug("Found polymarket URL pattern in text")
+        import re
+        # Match polymarket URL pattern
+        pattern = r'<https://polymarket\.com/event/[^|>]+\|([^>]+)>'
+        matches = re.findall(pattern, text)
+        
+        for match in matches:
+            # Check if this contains a condition ID
+            if 'Condition ID:' in match:
+                parts = match.split('Condition ID:')
+                if len(parts) > 1:
+                    condition_id = parts[1].strip()
+                    logger.debug(f"Extracted condition_id from URL: {condition_id}")
+                    return {
+                        'condition_id': condition_id,
+                        'question': parts[0].strip() or 'Unknown Market'
+                    }
+    
+    # Pattern 3: Look for JSON data that might be stored in the message
+    try:
+        if 'raw_data' in text and '{' in text and '}' in text:
+            logger.debug("Found potential JSON data in text")
+            # Extract JSON part 
+            import re
+            json_pattern = r'\{[^\}]+\}'
+            json_matches = re.findall(json_pattern, text)
+            
+            for json_str in json_matches:
+                try:
+                    data = json.loads(json_str)
+                    if data.get('condition_id') or data.get('id'):
+                        logger.debug(f"Extracted condition_id from JSON: {data.get('condition_id') or data.get('id')}")
+                        return {
+                            'condition_id': data.get('condition_id') or data.get('id'),
+                            'question': data.get('question') or 'Unknown Market'
+                        }
+                except:
+                    pass
+    except:
+        logger.debug("Error parsing potential JSON in message")
+    
     # Could not extract market data
+    logger.debug("Could not extract market data from message")
     return None
 
 def update_approval_status_from_reactions(market: ProcessedMarket, reactions: List[Dict[str, Any]]) -> None:
@@ -376,7 +430,12 @@ def update_pending_deployment_message(message_id: str, market: ProcessedMarket) 
 def main():
     """
     Main function to synchronize Slack and database.
+    
+    Returns:
+        Tuple[int, int, int]: Counts of (synced, updated, cleaned) messages
     """
+    synced, updated, cleaned = 0, 0, 0
+    
     try:
         logger.info("Starting Slack-Database synchronization")
         
@@ -393,9 +452,11 @@ def main():
         
     except Exception as e:
         logger.error(f"Error during synchronization: {str(e)}")
-        return 1
+        # Still return counts, but they will be zeros in case of error
     
-    return 0
+    return synced, updated, cleaned
 
 if __name__ == "__main__":
-    sys.exit(main())
+    result = main()
+    # Return 0 for success when called directly from the command line
+    sys.exit(0 if result and isinstance(result, tuple) else 1)

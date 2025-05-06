@@ -571,8 +571,19 @@ def sync_slack_db():
             
             # Run the synchronization process
             with app.app_context():
-                synced, updated, cleaned = sync_slack_db.main()
-                print(f"Synchronization complete: {synced} synced, {updated} updated, {cleaned} cleaned")
+                try:
+                    # Get the result from the main function
+                    result = sync_slack_db.main()
+                    
+                    # Check if result is a tuple with 3 elements (synced, updated, cleaned)
+                    if isinstance(result, tuple) and len(result) == 3:
+                        synced, updated, cleaned = result
+                        print(f"Synchronization complete: {synced} synced, {updated} updated, {cleaned} cleaned")
+                    else:
+                        # For backward compatibility, handle non-tuple return
+                        print("Synchronization completed successfully")
+                except Exception as e:
+                    print(f"Error during synchronization: {str(e)}")
             
             # Update UI status
             pipeline_status["running"] = False
