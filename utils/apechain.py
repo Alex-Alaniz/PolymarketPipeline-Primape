@@ -1,253 +1,211 @@
-#!/usr/bin/env python3
-
 """
-Apechain Smart Contract Integration
+Apechain utilities for interacting with the Apechain blockchain.
 
-This module provides utilities for interacting with the Apechain smart contract,
-particularly for deploying approved markets to the blockchain.
+This module provides functions for deploying markets to Apechain,
+querying market data from the blockchain, and handling transactions.
 """
 
 import os
 import json
 import logging
-from typing import Dict, Any, List, Optional, Tuple
-from datetime import datetime, timedelta
-import time
+from typing import Dict, List, Any, Optional, Tuple
 from web3 import Web3
-from web3.exceptions import ContractLogicError
+import time
 
-logger = logging.getLogger("apechain")
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Apechain contract address and ABI
-CONTRACT_ADDRESS = "0x5Eb0aFd6CED124348eD44BDB955E26Ccb8fA613C"
-CONTRACT_ABI = [
-    {
-        "inputs": [
-            {"internalType": "string", "name": "_question", "type": "string"},
-            {"internalType": "string[]", "name": "_options", "type": "string[]"},
-            {"internalType": "uint256", "name": "_duration", "type": "uint256"}
-        ],
-        "name": "createMarket",
-        "outputs": [{"internalType": "uint256", "name": "", "type": "uint256"}],
-        "stateMutability": "nonpayable",
-        "type": "function",
-        "signature": "0xfbc529cb"
-    }
-]
+# Connect to Apechain RPC
+APECHAIN_RPC_URL = os.environ.get('APECHAIN_RPC_URL')
+WALLET_PRIVATE_KEY = os.environ.get('WALLET_PRIVATE_KEY')
+WALLET_ADDRESS = os.environ.get('WALLET_ADDRESS')
 
-# Initialize Web3 provider
-def get_web3():
-    """Get Web3 instance."""
-    # ApeChain RPC URL
-    apechain_rpc_url = os.environ.get("APECHAIN_RPC_URL")
-    if not apechain_rpc_url:
-        logger.error("APECHAIN_RPC_URL environment variable not set")
-        return None
-        
-    try:
-        w3 = Web3(Web3.HTTPProvider(apechain_rpc_url))
-        if not w3.is_connected():
-            logger.error(f"Failed to connect to ApeChain RPC at {apechain_rpc_url}")
-            return None
-        logger.info(f"Connected to ApeChain network: {w3.client_version}")
-        return w3
-    except Exception as e:
-        logger.error(f"Error initializing Web3: {str(e)}")
-        return None
+if not APECHAIN_RPC_URL:
+    logger.warning("Missing Apechain RPC URL. Set APECHAIN_RPC_URL environment variable.")
 
-def get_contract():
-    """Get contract instance."""
-    w3 = get_web3()
-    if not w3:
-        return None
-    
-    try:
-        contract = w3.eth.contract(
-            address=Web3.to_checksum_address(CONTRACT_ADDRESS),
-            abi=CONTRACT_ABI
-        )
-        logger.info(f"Contract instance created for address: {CONTRACT_ADDRESS}")
-        return contract
-    except Exception as e:
-        logger.error(f"Error creating contract instance: {str(e)}")
-        return None
+# Initialize Web3 connection
+w3 = Web3(Web3.HTTPProvider(APECHAIN_RPC_URL)) if APECHAIN_RPC_URL else None
 
-def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
+# Load ABI files
+PREDICTOR_ABI_PATH = './abi/predictor.json'
+MARKET_ABI_PATH = './abi/market.json'
+
+def load_abi(file_path: str) -> List[Dict[str, Any]]:
     """
-    Deploy a market to Apechain smart contract.
+    Load an ABI file.
     
     Args:
-        market: Market model instance
+        file_path: Path to the ABI JSON file
         
     Returns:
-        Tuple containing:
-        - Apechain market ID (str) or None if failed
-        - Transaction hash (str) or None if failed
+        ABI list
     """
-    if not market or not market.question:
-        logger.error("Invalid market: missing required data")
-        return None, None
-    
-    # Parse market options with better error handling
     try:
-        logger.info(f"Parsing options from market {market.id}: {repr(market.options)}")
-        
-        if isinstance(market.options, str):
-            try:
-                options = json.loads(market.options)
-                logger.info(f"Successfully parsed JSON options: {options}")
-            except json.JSONDecodeError as e:
-                logger.warning(f"JSON decode error for options string: {e}, using default options")
-                options = ["Yes", "No"]
-        else:
-            options = market.options
-            logger.info(f"Using non-string options directly: {options}")
-        
-        # Validate the options are in the correct format for the smart contract
-        if not options:
-            logger.warning("Empty options, using default")
-            options = ["Yes", "No"]
-        elif not isinstance(options, list):
-            logger.warning(f"Options not a list ({type(options)}), using default")
-            options = ["Yes", "No"]
-        else:
-            # Ensure all options are strings
-            options = [str(option) for option in options]
-            logger.info(f"Final validated options: {options}")
+        with open(file_path, 'r') as f:
+            abi = json.load(f)
+        return abi
     except Exception as e:
-        logger.error(f"Unexpected error parsing options: {str(e)}")
-        options = ["Yes", "No"]  # Default if parsing fails
+        logger.error(f"Error loading ABI file {file_path}: {str(e)}")
+        return []
+
+# Load ABIs if files exist
+predictor_abi = load_abi(PREDICTOR_ABI_PATH) if os.path.exists(PREDICTOR_ABI_PATH) else []
+market_abi = load_abi(MARKET_ABI_PATH) if os.path.exists(MARKET_ABI_PATH) else []
+
+# Predictor contract address (the factory for creating markets)
+PREDICTOR_ADDRESS = '0xPredictorContractAddress'  # Replace with actual address
+
+def create_market(question: str, options: List[str], end_time: int, category: str) -> Optional[str]:
+    """
+    Create a new prediction market on Apechain.
     
-    # Calculate duration from expiry
-    if market.expiry:
-        # Calculate duration from now until expiry
-        now = datetime.utcnow()
-        expiry = datetime.fromtimestamp(market.expiry)
-        duration = expiry - now
-        duration_seconds = max(int(duration.total_seconds()), 86400)  # At least 1 day
-    else:
-        # Default to 30 days if no expiry provided
-        duration_seconds = 30 * 24 * 60 * 60
-    
-    # Get contract instance
-    contract = get_contract()
-    if not contract:
-        logger.error("Failed to get contract instance")
-        return None, None
-    
-    # Get account details for the transaction
-    private_key = os.environ.get("WALLET_PRIVATE_KEY")
-    account_address = os.environ.get("WALLET_ADDRESS")
-    
-    if not private_key or not account_address:
-        logger.error("Wallet credentials not configured")
-        return None, None
-    
-    w3 = get_web3()
-    if not w3:
-        logger.error("Failed to connect to blockchain")
-        return None, None
+    Args:
+        question: Market question
+        options: List of options
+        end_time: Expiry timestamp in seconds
+        category: Market category
         
-    account_address = Web3.to_checksum_address(account_address)
+    Returns:
+        Transaction hash if successful, None otherwise
+    """
+    if not w3 or not WALLET_PRIVATE_KEY:
+        logger.error("Web3 connection not initialized or wallet private key missing")
+        return None
     
     try:
+        # Build predictor contract
+        predictor_contract = w3.eth.contract(address=PREDICTOR_ADDRESS, abi=predictor_abi)
+        
         # Build transaction
-        tx = contract.functions.createMarket(
-            market.question,
-            options,
-            duration_seconds
+        nonce = w3.eth.get_transaction_count(WALLET_ADDRESS)
+        tx = predictor_contract.functions.createMarket(
+            question, 
+            options, 
+            end_time, 
+            category
         ).build_transaction({
-            'from': account_address,
-            'nonce': w3.eth.get_transaction_count(account_address),
-            'gas': 3000000,  # Adjust gas as needed
+            'gas': 8000000,
             'gasPrice': w3.eth.gas_price,
-            'chainId': w3.eth.chain_id,  # Use the chain ID from the connected network
+            'nonce': nonce,
         })
         
         # Sign and send transaction
-        try:
-            signed_tx = w3.eth.account.sign_transaction(tx, private_key)
-            # Check how the signed transaction looks
-            logger.info(f"Signed transaction: {dir(signed_tx)}")
-            
-            # Get the raw transaction - naming might be different in different web3 versions
-            raw_tx = None
-            if hasattr(signed_tx, 'rawTransaction'):
-                raw_tx = signed_tx.rawTransaction
-            elif hasattr(signed_tx, 'raw_transaction'):
-                raw_tx = signed_tx.raw_transaction
-            elif hasattr(signed_tx, 'raw'):
-                raw_tx = signed_tx.raw
-            
-            if not raw_tx:
-                logger.error("Could not find raw transaction in signed transaction object")
-                return None, None
-                
-            tx_hash = w3.eth.send_raw_transaction(raw_tx)
-            tx_hash_hex = tx_hash.hex()
-            logger.info(f"Transaction sent with hash: {tx_hash_hex}")
-        except Exception as e:
-            logger.error(f"Error during transaction signing or sending: {str(e)}")
-            # Include more detailed error info
-            logger.error(f"Transaction data: {tx}")
-            return None, None
+        signed_tx = w3.eth.account.sign_transaction(tx, WALLET_PRIVATE_KEY)
+        tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
         
-        # Wait for transaction receipt
-        logger.info(f"Waiting for transaction receipt: {tx_hash_hex}")
-        receipt = w3.eth.wait_for_transaction_receipt(tx_hash, timeout=180)
+        logger.info(f"Created market with transaction hash: {tx_hash.hex()}")
         
-        # Check transaction status
-        if receipt.status == 1:
-            # Parse transaction logs to get market ID
-            try:
-                # Try to parse logs if the contract ABI has event definitions
-                try:
-                    # Check if the contract ABI has MarketCreated event
-                    if hasattr(contract.events, 'MarketCreated'):
-                        logs = contract.events.MarketCreated().process_receipt(receipt)
-                        if logs and len(logs) > 0:
-                            market_id = logs[0]['args']['marketId']
-                            logger.info(f"Market deployed to Apechain. Market ID: {market_id}")
-                            return str(market_id), tx_hash_hex
-                    else:
-                        logger.info("Contract ABI doesn't include MarketCreated event, using transaction hash as market ID")
-                except Exception as e:
-                    logger.warning(f"Error processing contract events: {str(e)}")
-                
-                # If we can't parse logs or there's no event definition, use transaction hash as ID
-                logger.info(f"Market created with transaction hash: {tx_hash_hex}")
-                return tx_hash_hex, tx_hash_hex
-            except Exception as e:
-                logger.warning(f"Error parsing transaction logs: {str(e)}")
-                # Return transaction hash as identifier if we can't get the market ID
-                return tx_hash_hex, tx_hash_hex
-        else:
-            logger.error(f"Transaction failed: {receipt}")
-            return None, None
-            
-    except ContractLogicError as e:
-        error_msg = str(e)
-        logger.error(f"Contract logic error: {error_msg}")
-        return None, None
+        return tx_hash.hex()
+    
     except Exception as e:
-        error_msg = str(e)
-        logger.error(f"Error deploying market: {error_msg}")
-        return None, None
+        logger.error(f"Error creating market: {str(e)}")
+        return None
 
-def get_market_status(market_id: str) -> Dict[str, Any]:
+def get_deployed_market_id_from_tx(tx_hash: str) -> Optional[str]:
     """
-    Get the status of a market from Apechain.
+    Get the market ID from a transaction hash.
     
     Args:
-        market_id: Apechain market ID
+        tx_hash: Transaction hash of the market creation
         
     Returns:
-        Dictionary with market status information
+        Market ID if found, None otherwise
     """
-    # This would be implemented to query the contract for market status
-    # For now, just return a placeholder
-    return {
-        "id": market_id,
-        "status": "active",
-        "timestamp": datetime.utcnow().isoformat()
-    }
+    if not w3:
+        logger.error("Web3 connection not initialized")
+        return None
+    
+    try:
+        # Wait for transaction receipt
+        receipt = None
+        for _ in range(10):  # Retry a few times
+            try:
+                receipt = w3.eth.get_transaction_receipt(tx_hash)
+                if receipt:
+                    break
+            except:
+                time.sleep(2)  # Wait and retry
+        
+        if not receipt:
+            logger.error(f"Transaction receipt not found for hash: {tx_hash}")
+            return None
+        
+        # Check if transaction was successful
+        if receipt.status != 1:
+            logger.error(f"Transaction failed: {tx_hash}")
+            return None
+        
+        # Find market creation event in the logs
+        predictor_contract = w3.eth.contract(address=PREDICTOR_ADDRESS, abi=predictor_abi)
+        
+        # Look for MarketCreated event in the logs
+        logs = predictor_contract.events.MarketCreated().process_receipt(receipt)
+        
+        if not logs:
+            logger.error(f"No MarketCreated events found in transaction: {tx_hash}")
+            return None
+        
+        # Get market ID from the event (this depends on your contract's event structure)
+        market_id = logs[0].args.marketId  # Adjust the field name based on your contract
+        
+        logger.info(f"Found market ID {market_id} from transaction {tx_hash}")
+        return str(market_id)
+    
+    except Exception as e:
+        logger.error(f"Error getting market ID from transaction {tx_hash}: {str(e)}")
+        return None
+
+def get_market_info(market_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Get market information from Apechain.
+    
+    Args:
+        market_id: Market ID on Apechain
+        
+    Returns:
+        Dictionary of market information if successful, None otherwise
+    """
+    if not w3:
+        logger.error("Web3 connection not initialized")
+        return None
+    
+    try:
+        # Get market address from predictor contract
+        predictor_contract = w3.eth.contract(address=PREDICTOR_ADDRESS, abi=predictor_abi)
+        market_address = predictor_contract.functions.markets(int(market_id)).call()
+        
+        if not market_address or market_address == '0x0000000000000000000000000000000000000000':
+            logger.error(f"Market address not found for ID: {market_id}")
+            return None
+        
+        # Get market details
+        market_contract = w3.eth.contract(address=market_address, abi=market_abi)
+        
+        # Get market data (adjust these function calls based on your contract)
+        question = market_contract.functions.question().call()
+        category = market_contract.functions.category().call()
+        end_time = market_contract.functions.endTime().call()
+        num_options = market_contract.functions.numOptions().call()
+        
+        # Get options
+        options = []
+        for i in range(num_options):
+            option = market_contract.functions.options(i).call()
+            options.append(option)
+        
+        # Construct market info
+        market_info = {
+            'id': market_id,
+            'address': market_address,
+            'question': question,
+            'category': category,
+            'end_time': end_time,
+            'options': options
+        }
+        
+        return market_info
+    
+    except Exception as e:
+        logger.error(f"Error getting market info for ID {market_id}: {str(e)}")
+        return None

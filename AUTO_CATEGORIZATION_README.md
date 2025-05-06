@@ -1,93 +1,147 @@
-# Auto-Categorization for Polymarket Pipeline
+# Polymarket Pipeline Auto-Categorization Implementation Guide
 
-This document explains the auto-categorization feature added to the Polymarket pipeline. The feature automatically assigns one of seven predefined categories to each market before it's posted to Slack for approval.
+## Overview
 
-## Categories
+This guide explains how to implement the simplified version of the Polymarket pipeline with automatic categorization using GPT-4o-mini. The implementation maintains what worked well in our first pipeline run while adding categories and capturing option images.
 
-Markets are assigned to one of the following categories:
+## Implementation Steps
 
-| Category | Emoji | Description |
-|----------|-------|-------------|
-| politics | :ballot_box: | Political elections, policy decisions, government actions |
-| crypto | :coin: | Cryptocurrency prices, blockchain events, token launches |
-| sports | :sports_medal: | Sports events, tournaments, championships, team/player performance |
-| business | :chart_with_upwards_trend: | Corporate news, stock prices, economic indicators |
-| culture | :performing_arts: | Entertainment, music, movies, art, celebrities |
-| news | :newspaper: | Current events, breaking news, world affairs |
-| tech | :computer: | Technology releases, scientific discoveries, breakthroughs |
-Note: "all" is not a valid category but only a UI filter option. "news" is used as the default category for markets that don't fit other categories.
+### Step 1: Install Required Dependencies
 
-## Implementation Details
-
-### Technical Components
-
-1. **Market Categorizer** (`utils/market_categorizer.py`)
-   - Uses OpenAI GPT-4o-mini model with temperature=0
-   - Processes market questions and assigns a single category
-   - Implements retry mechanism with exponential backoff
-   - Includes fallback to "news" category if API fails or returns invalid category
-
-2. **Pending Markets Database** (`models.py`)
-   - `PendingMarket` model stores markets before approval
-   - `category` field stores the assigned category
-   - `ApprovalLog` tracks approval/rejection events
-
-3. **Market Fetching and Posting** (`fetch_and_categorize_markets.py`)
-   - Fetches markets from Polymarket API
-   - Filters active, non-expired markets
-   - Sends market questions to categorizer
-   - Stores categorized markets in database
-   - Posts to Slack with category badge
-
-4. **Approval Processing** (`check_pending_market_approvals.py`)
-   - Checks for approvals/rejections in Slack
-   - Moves approved markets to main Market table
-   - Records decision in approval log
-
-### Workflow
-
-1. Markets are fetched from Polymarket API
-2. Each market is categorized using GPT-4o-mini
-3. Categorized markets are stored in the pending_markets table
-4. Markets are posted to Slack with category badge
-5. Human reviewers approve or reject with reactions
-6. Approved markets move to the next stage of the pipeline
-
-## Performance and Cost Considerations
-
-- GPT-4o-mini costs approximately $0.0002 per market
-- Average categorization time is about 300-400ms per market
-- Retry mechanism handles transient API failures
-- Default fallback to "news" category ensures pipeline continues even if categorization fails
-- Markets that require manual review are flagged with needs_manual_categorization=True
-
-## Example Usage
-
-To run the auto-categorization pipeline:
+Ensure you have all required dependencies installed:
 
 ```bash
-# Run the full pipeline with auto-categorization
-python new_pipeline.py
-
-# Just fetch and categorize new markets
-python fetch_and_categorize_markets.py
-
-# Check for approvals on pending markets
-python check_pending_market_approvals.py
-
-# Test auto-categorization on sample markets
-python test_auto_categorization.py
+pip install flask flask-sqlalchemy openai slack-sdk tenacity
 ```
 
-## Integration with Existing Pipeline
+### Step 2: Reset the Database (Optional)
 
-The auto-categorization feature integrates with the existing pipeline while maintaining backward compatibility:
+If you want to start with a clean slate:
 
-1. Previously deployed markets remain intact
-2. New markets go through categorization before deployment
-3. The category field is added to the Market model for frontend integration
-4. Markets with uncertain categorization default to "news" with a flag for manual review
+```bash
+python reset_db_simplified.py
+```
 
-## Testing and Validation
+This will:
+- Drop all existing tables (you'll be asked to confirm with 'YES')
+- Create new tables without any event-based model complexity
+- Keep the tables structure that worked in the first pipeline
 
-The auto-categorization system has been tested with a variety of market questions and consistently produces appropriate categories. The `test_auto_categorization.py` script can be used to test the system with sample markets.
+### Step 3: Update Your Models
+
+Replace your existing models.py file:
+
+```bash
+cp models_updated.py models.py
+```
+
+The updated models include:
+- Market model with category field and option_images JSON field
+- PendingMarket model with category field and posted flag
+- ProcessedMarket with appropriate tracking fields
+
+### Step 4: Create Required Utility Files
+
+Make sure the utils directory exists:
+
+```bash
+mkdir -p utils
+```
+
+Copy the utility files:
+
+```bash
+cp utils/market_categorizer.py utils/
+cp utils/messaging.py utils/
+```
+
+### Step 5: Run the Pipeline
+
+The pipeline has these main steps:
+
+1. **Fetch and categorize markets**:
+   ```bash
+   python fetch_and_categorize_markets.py
+   ```
+   
+2. **Post unposted pending markets to Slack**:
+   ```bash
+   python post_unposted_pending_markets.py
+   ```
+   
+3. **Check market approvals**:
+   ```bash
+   python check_market_approvals.py
+   ```
+
+## Key Features
+
+1. **Automatic Categorization**: Markets are categorized using GPT-4o-mini into one of these categories:
+   - politics
+   - crypto
+   - sports
+   - business
+   - culture
+   - news
+   - tech
+   
+2. **Category Badges in Slack**: Markets are posted to Slack with emoji badges for their categories
+
+3. **Option Images**: Option images from the API are captured and stored in the option_images JSON field
+
+4. **Batch Processing**: Pending markets use a posted flag to enable batch processing
+
+## Database Structure
+
+The simplified database structure includes:
+
+- **markets**: Approved markets ready for deployment
+  - Contains category, banner_url, and option_images fields
+  
+- **pending_markets**: Markets awaiting approval
+  - Contains category, posted flag, and option_images fields
+  
+- **processed_markets**: Tracks all markets seen from the API
+  - Prevents reprocessing of the same markets
+
+- **approval_events**: Logs approval/rejection decisions
+
+## Testing
+
+1. To test the market fetching and categorization:
+
+```bash
+python fetch_and_categorize_markets.py
+```
+
+2. To test posting to Slack:
+
+```bash
+python post_unposted_pending_markets.py
+```
+
+3. To verify the database state:
+
+```bash
+python debug_database_state.py
+```
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **Missing dependencies**: Make sure all required packages are installed
+2. **Database connection errors**: Check your DATABASE_URL environment variable
+3. **Slack errors**: Ensure SLACK_BOT_TOKEN and SLACK_CHANNEL_ID are set correctly
+4. **OpenAI errors**: Verify your OPENAI_API_KEY is valid and set
+
+The LSP errors shown in the editor are due to the IDE not finding the imported packages - these will resolve once the dependencies are installed.
+
+## Next Steps
+
+After implementing this version:
+
+1. Test the full pipeline to ensure markets are properly categorized
+2. Make sure option images are correctly captured and stored
+3. Update any frontend integrations to use the category field
+4. Prepare for smart contract redeployment starting at MarketID 1
