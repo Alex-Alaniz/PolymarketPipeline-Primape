@@ -293,6 +293,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
     # Parse outcomes which come as a JSON string
     try:
         if isinstance(outcomes_raw, str):
+            # json is already imported at the top of the file
             outcomes = json.loads(outcomes_raw)
             logger.info(f"Parsed {len(outcomes)} outcomes from JSON string")
         else:
