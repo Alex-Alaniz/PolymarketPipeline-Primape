@@ -214,7 +214,7 @@ def post_market_for_approval(market_data: Dict[str, Any]) -> Optional[str]:
         outcomes = []
         try:
             if isinstance(outcomes_raw, str):
-                import json
+                # json is already imported at the top of the file
                 outcomes = json.loads(outcomes_raw)
                 logger.info(f"  - Parsed outcomes from JSON string: {outcomes}")
             else:
