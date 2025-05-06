@@ -25,6 +25,7 @@ class Market(db.Model):
     banner_path = db.Column(db.String(255))
     banner_uri = db.Column(db.String(255))
     icon_url = db.Column(db.String(255))  # Added icon URL for frontend mapping
+    option_images = db.Column(JSON)  # JSON mapping of option name -> image URL
     apechain_market_id = db.Column(db.String(255))  # Added Apechain market ID for tracking
     github_commit = db.Column(db.String(255))
     blockchain_tx = db.Column(db.String(255))
@@ -46,6 +47,7 @@ class Market(db.Model):
             'banner_path': self.banner_path,
             'banner_uri': self.banner_uri,
             'icon_url': self.icon_url,
+            'option_images': self.option_images,
             'apechain_market_id': self.apechain_market_id,
             'github_commit': self.github_commit,
             'blockchain_tx': self.blockchain_tx,
