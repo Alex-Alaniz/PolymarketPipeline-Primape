@@ -8,6 +8,7 @@ by sending all markets in a single API call to GPT-4o-mini.
 import json
 import logging
 import os
+import time
 from typing import Dict, List, Any, Tuple, Optional
 
 # Configure logging
@@ -16,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Import OpenAI client
 from openai import OpenAI
+
+# Import fallback categorizer
+from utils.fallback_categorizer import fallback_categorize, detect_event
 
 # Initialize OpenAI client
 openai_client = None
@@ -136,9 +140,11 @@ def batch_categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, An
                 logger.warning(f"Market at index {i} has no question, defaulting to 'news' category")
                 category = "news"
             else:
-                # Use keyword-based categorization
-                category = keyword_based_categorization(question)
-                logger.info(f"Used keyword categorization for market {i+1}/{total_markets}: '{question[:30]}...' as {category}")
+                # Use fallback categorization from the dedicated module
+                category = fallback_categorize(question)
+                # Also try to detect event relationship
+                event_id, event_name = detect_event(question)
+                logger.info(f"Used fallback categorization for market {i+1}/{total_markets}: '{question[:30]}...' as {category}")
             
             # Create a copy of the market with the category added
             market_copy = market.copy()
