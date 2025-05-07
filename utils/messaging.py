@@ -451,21 +451,40 @@ def format_market_with_images(market_data):
             }
         })
         
-        # Create a single section with all options listed inline
-        options_text = ""
+        # For each option, show the option name with its icon INLINE
+        option_images = market_data.get('option_images', {})
         for option in options:
-            # Format each option with its ID if available
-            option_id_text = f" (ID: {option_market_ids.get(option, 'Unknown')})" if option in option_market_ids else ""
-            options_text += f"• *{option}*{option_id_text}\n"
-        
-        # Add all options in a single section
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": options_text
-            }
-        })
+            option_text = f"*{option}*"
+            
+            # Get option image if available
+            option_image_url = None
+            if option in option_images and option_images[option]:
+                option_image_url = option_images[option]
+            
+            # If we have an image, display it inline with the option
+            if option_image_url and is_valid_url(option_image_url):
+                # Create a section with both text and image
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": option_text
+                    },
+                    "accessory": {
+                        "type": "image",
+                        "image_url": option_image_url,
+                        "alt_text": f"Option: {option}"
+                    }
+                })
+            else:
+                # If no image, just show the option text
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": option_text
+                    }
+                })
     else:
         # Regular market (binary Yes/No) - only show one banner image
         outcomes = []

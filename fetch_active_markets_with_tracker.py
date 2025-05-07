@@ -20,6 +20,7 @@ from typing import Dict, List, Any, Optional, Tuple
 from models import db, ProcessedMarket
 from filter_active_markets import fetch_markets, transform_markets, filter_active_markets
 from utils.messaging import post_markets_to_slack, format_market_with_images
+from utils.event_filter import filter_and_process_market_events
 
 # Configure logging
 logging.basicConfig(
@@ -604,11 +605,16 @@ def main():
             
         logger.info(f"Fetched {len(markets)} markets from Polymarket API")
         
+        # Filter events first - only include active, non-closed events
+        logger.info("Filtering events to only include active, non-closed ones")
+        markets_with_filtered_events = filter_and_process_market_events(markets)
+        logger.info(f"Processed {len(markets_with_filtered_events)} markets with event filtering")
+        
         # Filter active markets
-        active_markets = filter_active_non_expired_markets(markets)
+        active_markets = filter_active_non_expired_markets(markets_with_filtered_events)
         
         if not active_markets:
-            logger.error("No active markets found")
+            logger.error("No active markets found after filtering")
             return 1
             
         logger.info(f"Filtered to {len(active_markets)} active markets")
@@ -617,6 +623,15 @@ def main():
         logger.info("Transforming markets")
         transformed_markets = transform_markets(active_markets)
         logger.info(f"Transformed into {len(transformed_markets)} markets")
+        
+        # Log option images for debugging
+        for i, market in enumerate(transformed_markets[:3]):  # Check first 3 markets
+            if market.get('is_multiple_option', False):
+                logger.info(f"Multi-option market {i+1} options after transformation:")
+                option_images = market.get('option_images', {})
+                logger.info(f"  - Has {len(option_images)} option images")
+                for option, image in list(option_images.items())[:3]:  # Show first 3 options
+                    logger.info(f"  - Option: {option}, Image: {image[:30]}...")
         
         # Filter new markets
         new_markets = filter_new_markets(transformed_markets)
