@@ -29,6 +29,9 @@ from api_routes import api_bp
 # Create Flask app
 app = Flask(__name__)
 
+# Set secret key for CSRF protection
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "polymarket-pipeline-key")
+
 # Configure database
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
@@ -240,171 +243,193 @@ HTML_TEMPLATE = """
     </div>
     
     <script>
-        function runPipeline() {
-            fetch('/run-pipeline', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to start pipeline: ' + data.message);
+        // Helper function to add CSRF protection to all fetch requests
+        async function postWithRetry(url, maxRetries = 3) {
+            let retries = 0;
+            
+            while (retries < maxRetries) {
+                try {
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            // Add a custom header to help identify our requests
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        // Sending an empty body ensures it's a proper POST request
+                        body: JSON.stringify({})
+                    });
+                    
+                    if (!response.ok) {
+                        throw new Error(`Server responded with ${response.status}`);
+                    }
+                    
+                    return await response.json();
+                } catch (error) {
+                    console.error(`Attempt ${retries + 1} failed:`, error);
+                    retries++;
+                    
+                    if (retries >= maxRetries) {
+                        console.error('Maximum retries reached');
+                        throw error;
+                    }
+                    
+                    // Wait a bit longer between each retry
+                    await new Promise(resolve => setTimeout(resolve, retries * 500));
                 }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while starting the pipeline');
-            });
+            }
+        }
+        
+        function runPipeline() {
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('run-pipeline').disabled = true;
+            
+            postWithRetry('/run-pipeline')
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to start pipeline: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('run-pipeline').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while starting the pipeline. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('run-pipeline').disabled = false;
+                });
         }
         
         function checkMarketApprovals() {
-            fetch('/check-market-approvals', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    document.getElementById('check-approvals').disabled = true;
-                    document.getElementById('run-deployment').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to start market approval check: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while checking market approvals');
-            });
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('check-approvals').disabled = true;
+            
+            postWithRetry('/check-market-approvals')
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        document.getElementById('run-pipeline').disabled = true;
+                        document.getElementById('run-deployment').disabled = true;
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to start market approval check: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('check-approvals').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while checking market approvals. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('check-approvals').disabled = false;
+                });
         }
         
         function runDeploymentApprovals() {
-            fetch('/run-deployment-approvals', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    document.getElementById('check-approvals').disabled = true;
-                    document.getElementById('run-deployment').disabled = true;
-                    document.getElementById('sync-slack-db').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to start deployment approval process: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while starting the deployment approval process');
-            });
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('run-deployment').disabled = true;
+            
+            postWithRetry('/run-deployment-approvals')
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        document.getElementById('run-pipeline').disabled = true;
+                        document.getElementById('check-approvals').disabled = true;
+                        document.getElementById('sync-slack-db').disabled = true;
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to start deployment approval process: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('run-deployment').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while starting the deployment approval process. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('run-deployment').disabled = false;
+                });
         }
         
         function syncSlackDb() {
-            fetch('/sync-slack-db', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    document.getElementById('check-approvals').disabled = true;
-                    document.getElementById('run-deployment').disabled = true;
-                    document.getElementById('sync-slack-db').disabled = true;
-                    document.getElementById('post-unposted').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to start Slack-DB synchronization: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while synchronizing Slack and database');
-            });
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('sync-slack-db').disabled = true;
+            
+            postWithRetry('/sync-slack-db')
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        document.getElementById('run-pipeline').disabled = true;
+                        document.getElementById('check-approvals').disabled = true;
+                        document.getElementById('run-deployment').disabled = true;
+                        document.getElementById('post-unposted').disabled = true;
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to start Slack-DB synchronization: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('sync-slack-db').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while synchronizing Slack and database. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('sync-slack-db').disabled = false;
+                });
         }
         
         function postUnpostedMarkets() {
-            fetch('/post-unposted-markets', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    document.getElementById('check-approvals').disabled = true;
-                    document.getElementById('run-deployment').disabled = true;
-                    document.getElementById('sync-slack-db').disabled = true;
-                    document.getElementById('post-unposted').disabled = true;
-                    document.getElementById('post-unposted-pending').disabled = true;
-                    document.getElementById('flush-unposted').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to post unposted markets: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while posting unposted markets');
-            });
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('post-unposted').disabled = true;
+            
+            postWithRetry('/post-unposted-markets')
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('status').textContent = 'running';
+                        document.getElementById('run-pipeline').disabled = true;
+                        document.getElementById('check-approvals').disabled = true;
+                        document.getElementById('run-deployment').disabled = true;
+                        document.getElementById('sync-slack-db').disabled = true;
+                        document.getElementById('post-unposted-pending').disabled = true;
+                        document.getElementById('flush-unposted').disabled = true;
+                        // Refresh page after 2 seconds
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to post unposted markets: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('post-unposted').disabled = false;
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while posting unposted markets. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('post-unposted').disabled = false;
+                });
         }
         
         function postUnpostedPendingMarkets() {
-            fetch('/post-unposted-pending-markets', {
-                method: 'POST',
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    document.getElementById('status').textContent = 'running';
-                    document.getElementById('run-pipeline').disabled = true;
-                    document.getElementById('check-approvals').disabled = true;
-                    document.getElementById('run-deployment').disabled = true;
-                    document.getElementById('sync-slack-db').disabled = true;
-                    document.getElementById('post-unposted').disabled = true;
-                    document.getElementById('post-unposted-pending').disabled = true;
-                    document.getElementById('flush-unposted').disabled = true;
-                    // Refresh page after 2 seconds
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to post unposted pending markets: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while posting unposted pending markets');
-            });
-        }
-        
-        function flushUnpostedMarkets() {
-            if (confirm("WARNING: This will delete all unposted markets from the database. This action cannot be undone. Markets already posted to Slack will be preserved.\n\nDo you want to continue?")) {
-                fetch('/flush-unposted-markets', {
-                    method: 'POST',
-                })
-                .then(response => response.json())
+            // Disable the button immediately to prevent multiple clicks
+            document.getElementById('post-unposted-pending').disabled = true;
+            
+            postWithRetry('/post-unposted-pending-markets')
                 .then(data => {
                     if (data.success) {
                         document.getElementById('status').textContent = 'running';
@@ -413,20 +438,56 @@ HTML_TEMPLATE = """
                         document.getElementById('run-deployment').disabled = true;
                         document.getElementById('sync-slack-db').disabled = true;
                         document.getElementById('post-unposted').disabled = true;
-                        document.getElementById('post-unposted-pending').disabled = true;
                         document.getElementById('flush-unposted').disabled = true;
                         // Refresh page after 2 seconds
                         setTimeout(() => {
                             window.location.reload();
                         }, 2000);
                     } else {
-                        alert('Failed to flush unposted markets: ' + data.message);
+                        alert('Failed to post unposted pending markets: ' + data.message);
+                        // Re-enable the button if there's an error
+                        document.getElementById('post-unposted-pending').disabled = false;
                     }
                 })
                 .catch(error => {
                     console.error('Error:', error);
-                    alert('An error occurred while flushing unposted markets');
+                    alert('An error occurred while posting unposted pending markets. Please try again.');
+                    // Re-enable the button if there's an error
+                    document.getElementById('post-unposted-pending').disabled = false;
                 });
+        }
+        
+        function flushUnpostedMarkets() {
+            if (confirm("WARNING: This will delete all unposted markets from the database. This action cannot be undone. Markets already posted to Slack will be preserved.\n\nDo you want to continue?")) {
+                // Disable the button immediately to prevent multiple clicks
+                document.getElementById('flush-unposted').disabled = true;
+                
+                postWithRetry('/flush-unposted-markets')
+                    .then(data => {
+                        if (data.success) {
+                            document.getElementById('status').textContent = 'running';
+                            document.getElementById('run-pipeline').disabled = true;
+                            document.getElementById('check-approvals').disabled = true;
+                            document.getElementById('run-deployment').disabled = true;
+                            document.getElementById('sync-slack-db').disabled = true;
+                            document.getElementById('post-unposted').disabled = true;
+                            document.getElementById('post-unposted-pending').disabled = true;
+                            // Refresh page after 2 seconds
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 2000);
+                        } else {
+                            alert('Failed to flush unposted markets: ' + data.message);
+                            // Re-enable the button if there's an error
+                            document.getElementById('flush-unposted').disabled = false;
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while flushing unposted markets. Please try again.');
+                        // Re-enable the button if there's an error
+                        document.getElementById('flush-unposted').disabled = false;
+                    });
             }
         }
         
