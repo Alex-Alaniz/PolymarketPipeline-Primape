@@ -2,7 +2,7 @@
 Database models for the Polymarket pipeline.
 
 This module defines the database models used by the pipeline,
-including markets, approval events, and pipeline runs.
+including markets, events, approval events, and pipeline runs.
 """
 
 import os
@@ -16,6 +16,27 @@ from flask_sqlalchemy import SQLAlchemy
 db = SQLAlchemy()
 
 # Define models
+
+class Event(db.Model):
+    """
+    Event model for storing market events.
+    
+    An event represents a category or grouping of markets, such as "UEFA Champions League" 
+    which might have multiple markets like "Will Arsenal win?", "Will Barcelona win?", etc.
+    """
+    __tablename__ = 'events'
+    
+    id = db.Column(db.String(255), primary_key=True)
+    name = db.Column(db.Text, nullable=False)
+    description = db.Column(db.Text)
+    category = db.Column(db.String(50), nullable=False, default='news')
+    sub_category = db.Column(db.String(100))
+    banner_url = db.Column(db.Text)  # URL of the event banner image
+    icon_url = db.Column(db.Text)  # URL of the event icon image
+    source_id = db.Column(db.String(255))  # Original ID from the source (e.g., Polymarket)
+    raw_data = db.Column(db.JSON)  # Complete original data
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 class Market(db.Model):
     """
     Market model for storing market data.
