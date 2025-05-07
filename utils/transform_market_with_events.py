@@ -270,3 +270,27 @@ def transform_markets_batch(markets_data: List[Dict[str, Any]]) -> Tuple[List[Di
     events_list = list(events.values())
     
     return events_list, transformed_markets
+
+def transform_with_events(market_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Transform a single market with event detection.
+    
+    This is the main function to be called from external modules.
+    It transforms a market from Polymarket API format to our internal format,
+    with proper event detection and option extraction.
+    
+    Args:
+        market_data: Raw market data from Polymarket API
+        
+    Returns:
+        Transformed market data with event information
+    """
+    # Extract event and transform market
+    event_data, transformed_market = transform_market_for_apechain(market_data)
+    
+    # Add event information to the transformed market
+    transformed_market['event_id'] = event_data['id']
+    transformed_market['event_name'] = event_data['name']
+    transformed_market['event_category'] = event_data.get('category', 'uncategorized')
+    
+    return transformed_market
