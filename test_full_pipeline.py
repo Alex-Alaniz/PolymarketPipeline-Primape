@@ -114,7 +114,7 @@ def clear_test_records():
             
             # Delete related approval events
             for market in test_markets:
-                ApprovalEvent.query.filter_by(entity_id=market.id).delete()
+                ApprovalEvent.query.filter_by(market_id=market.id).delete()
             
             # Delete records
             for market in test_markets:
@@ -338,9 +338,9 @@ def deploy_market_to_apechain(market):
 
 def track_market_id(market, tx_hash):
     """Track the market ID from Apechain after deployment."""
-    # Wait for transaction to be mined
-    logger.info("Waiting for transaction to be mined...")
-    time.sleep(10)  # Adjust as needed based on blockchain confirmation times
+    # In testing, we don't need to wait for real transaction mining
+    logger.info("Simulating transaction mining wait...")
+    time.sleep(1)  # Short wait for testing
     
     # Get market ID from transaction
     market_id = get_deployed_market_id_from_tx(tx_hash)
@@ -542,9 +542,9 @@ def run_single_session_pipeline():
             logger.info(f"Deployed market to Apechain with transaction: {tx_hash}")
             
             # Step 7: Track market ID
-            # Wait for transaction to be mined
-            logger.info("Waiting for transaction to be mined...")
-            time.sleep(10)  # Adjust as needed based on blockchain confirmation times
+            # In testing, we don't need to wait for real transaction mining
+            logger.info("Simulating transaction mining wait...")
+            time.sleep(1)  # Short wait for testing
             
             # Get market ID from transaction
             market_id = get_deployed_market_id_from_tx(tx_hash)
