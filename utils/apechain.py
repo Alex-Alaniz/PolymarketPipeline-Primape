@@ -144,12 +144,23 @@ def create_market(question: str, options: List[str], end_time: int, category: st
             signed_tx = w3.eth.account.sign_transaction(tx, private_key)
             logger.info("Transaction signed successfully")
             
-            tx_hash = w3.eth.send_raw_transaction(signed_tx.rawTransaction)
+            # In web3.py v7+, the raw_transaction attribute is used instead of rawTransaction
+            if hasattr(signed_tx, 'raw_transaction'):
+                raw_tx = signed_tx.raw_transaction
+            elif hasattr(signed_tx, 'rawTransaction'):
+                raw_tx = signed_tx.rawTransaction
+            else:
+                logger.error("Could not find raw transaction in signed transaction object")
+                logger.debug(f"Available attributes: {dir(signed_tx)}")
+                return None
+                
+            tx_hash = w3.eth.send_raw_transaction(raw_tx)
             logger.info(f"Created market with transaction hash: {tx_hash.hex()}")
             
             return tx_hash.hex()
         except Exception as sign_error:
             logger.error(f"Error signing/sending transaction: {str(sign_error)}")
+            logger.debug(f"SignedTransaction object properties: {dir(signed_tx) if 'signed_tx' in locals() else 'Not available'}")
             return None
     
     except Exception as e:
