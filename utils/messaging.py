@@ -311,9 +311,29 @@ def format_market_with_images(market_data):
     # Basic market information
     question = market_data.get('question', 'Unknown Market')
     category = market_data.get('category', 'uncategorized')
-    expiry = market_data.get('expiry_time', 'Unknown')
+    
+    # Look for expiry date in all possible fields
+    expiry = "Unknown"
+    if 'expiry_time' in market_data:
+        expiry = market_data.get('expiry_time')
+    elif 'endDate' in market_data:
+        expiry = market_data.get('endDate')
+    elif 'end_date' in market_data:
+        expiry = market_data.get('end_date')
+    elif 'expiryTime' in market_data:
+        expiry = market_data.get('expiryTime')
+    
     event_name = market_data.get('event_name', '')
     event_id = market_data.get('event_id', '')
+    
+    # Format expiry date nicely if it's a timestamp
+    if isinstance(expiry, int) or (isinstance(expiry, str) and expiry.isdigit()):
+        try:
+            from datetime import datetime
+            expiry_date = datetime.fromtimestamp(int(expiry) / 1000 if int(expiry) > 1000000000000 else int(expiry))
+            expiry = expiry_date.strftime('%Y-%m-%d %H:%M UTC')
+        except Exception as e:
+            logger.error(f"Error formatting expiry date: {e}")
     
     # Start with a text fallback message
     text_message = f"*New {'Event' if is_event else 'Market'} for Approval*\n"

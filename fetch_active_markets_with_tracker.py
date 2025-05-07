@@ -438,6 +438,14 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
             is_event = market.get('is_multiple_option', False)
             market['is_event'] = is_event
             
+            # Make sure we have the expiry date - look in various fields
+            if 'endDate' in market:
+                market['expiry_time'] = market['endDate']
+            elif 'end_date' in market:
+                market['expiry_time'] = market['end_date']
+            elif 'expiryTime' in market:
+                market['expiry_time'] = market['expiryTime']
+                
             # Process option images
             option_images = {}
             if is_event:
@@ -449,11 +457,14 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                     else:
                         outcomes = outcomes_raw
                     
+                    logger.info(f"Processing multi-option market with {len(outcomes)} options")
+                    
                     # Extract option images from the market data
                     for option in outcomes:
                         option_key = str(option)
                         if 'option_images' in market and option_key in market['option_images']:
                             option_images[option_key] = market['option_images'][option_key]
+                            logger.info(f"Found image for option: {option_key}")
                     
                     # Save option market IDs if available
                     option_market_ids = {}
@@ -467,6 +478,14 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 # For binary markets, use Yes/No if available
                 if 'option_images' in market:
                     option_images = market['option_images']
+                    logger.info(f"Binary market with option images: {list(option_images.keys())}")
+                else:
+                    # Create default Yes/No options
+                    logger.info("Adding default Yes/No options for binary market")
+                    option_images = {
+                        "Yes": market.get("image_url", ""),
+                        "No": market.get("image_url", "")
+                    }
             
             # Make sure option_images is set in the market data
             market['option_images'] = option_images
@@ -474,8 +493,16 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
             # Extract event banner and icon if available
             if 'event_image' in market:
                 logger.info(f"Market has event banner image: {market['event_image'][:50]}...")
+            elif 'image_url' in market:
+                market['event_image'] = market['image_url']
+                logger.info(f"Using image_url as event banner: {market['event_image'][:50]}...")
+                
             if 'event_icon' in market:
                 logger.info(f"Market has event icon: {market['event_icon'][:50]}...")
+            elif 'icon_url' in market:
+                market['event_icon'] = market['icon_url']
+                logger.info(f"Using icon_url as event icon: {market['event_icon'][:50]}...")
+                
             if 'option_images' in market:
                 logger.info(f"Market has {len(market['option_images'])} option images")
             
