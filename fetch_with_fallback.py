@@ -177,9 +177,18 @@ def main():
             
             for market_data in categorized_markets:
                 try:
-                    # Extract key data
-                    market_id = market_data.get('conditionId') or market_data.get('id')
-                    question = market_data.get('question')
+                    # Extract key data - handle string values as well as dict
+                    if isinstance(market_data, dict):
+                        market_id = market_data.get('conditionId') or market_data.get('id')
+                        question = market_data.get('question', '')
+                    else:
+                        logger.error(f"Unexpected market_data type: {type(market_data)}")
+                        continue
+                        
+                    # Skip if missing critical data
+                    if not market_id or not question:
+                        logger.error(f"Market missing ID or question: {market_data}")
+                        continue
                     
                     # Skip if already in database (safety check)
                     if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
@@ -189,8 +198,23 @@ def main():
                     category = market_data.get('ai_category', 'news')
                     needs_manual = market_data.get('needs_manual_categorization', True)
                     
-                    # Transform options
-                    options, option_images = transform_market_options(market_data)
+                    # Transform options - handle sample data structure which might not have proper outcomes
+                    try:
+                        options, option_images = transform_market_options(market_data)
+                    except Exception as e:
+                        logger.warning(f"Error transforming options: {str(e)}")
+                        # Create fallback options for sample data
+                        if 'options' not in market_data:
+                            # For binary markets (Yes/No)
+                            options = [
+                                {"value": "Yes", "displayName": "Yes"},
+                                {"value": "No", "displayName": "No"}
+                            ]
+                            option_images = {"Yes": None, "No": None}
+                        else:
+                            # Try to use existing options field if it's already formatted
+                            options = market_data.get('options', [])
+                            option_images = market_data.get('option_images', {})
                     
                     # Create pending market entry
                     pending_market = PendingMarket(
@@ -225,7 +249,9 @@ def main():
                     logger.info(f"Stored market '{question[:50]}...' with category '{category}'")
                     
                 except Exception as e:
-                    logger.error(f"Error storing market {market_data.get('id')}: {str(e)}")
+                    market_id_display = market_id if isinstance(market_id, str) else "unknown"
+                    logger.error(f"Error storing market {market_id_display}: {str(e)}")
+                    logger.error(f"Error details: {type(e).__name__}")
                     db.session.rollback()
                     continue
                 
