@@ -1,176 +1,158 @@
 #!/usr/bin/env python3
-"""
-Track and update Apechain market IDs after deployment.
 
-This script checks for markets that have been deployed to Apechain
-but don't have their market ID saved in the database. It then
-queries the blockchain to get the market ID and updates the database.
-This ensures proper frontend mapping of banner images and option icons.
+"""
+Track Market IDs After Deployment
+
+This script checks for markets that have been successfully deployed to Apechain
+but don't yet have their Apechain market IDs recorded in the database. It retrieves
+their market IDs from the blockchain and updates the database accordingly.
+
+This is useful if a deployment transaction was successful but the script terminated
+before the market ID could be retrieved and recorded.
 """
 
 import os
-import sys
-import json
 import logging
+import json
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import Dict, List, Any, Optional, Tuple
 
-# Flask setup for database context
-from flask import Flask
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-}
-
-# Local imports
+import flask
 from models import db, Market, PipelineRun
-import utils.apechain
-from utils.apechain import get_deployed_market_id_from_tx, get_market_info
+from utils.apechain import get_deployed_market_id_from_tx
 
-# Initialize app
-db.init_app(app)
-
-# Setup logging
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(),
-        logging.FileHandler("track_market_ids.log")
-    ]
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('track_market_ids')
+logger = logging.getLogger("track_market_id")
 
 def create_pipeline_run():
     """Create a new pipeline run record in the database."""
-    pipeline_run = PipelineRun(
-        start_time=datetime.utcnow(),
-        status="running"
-    )
-    db.session.add(pipeline_run)
-    db.session.commit()
-    
-    logger.info(f"Created pipeline run with ID {pipeline_run.id}")
-    return pipeline_run
+    try:
+        pipeline_run = PipelineRun(
+            stage="track_deployed_markets",
+            status="running",
+            start_time=datetime.utcnow()
+        )
+        db.session.add(pipeline_run)
+        db.session.commit()
+        logger.info(f"Created pipeline run with ID {pipeline_run.id}")
+        return pipeline_run
+    except Exception as e:
+        logger.error(f"Error creating pipeline run: {str(e)}")
+        return None
 
-def update_pipeline_run(pipeline_run, status, markets_processed=0, markets_approved=0, 
-                       markets_rejected=0, markets_failed=0, markets_deployed=0, error=None):
+def update_pipeline_run(pipeline_run, status, markets_processed=0, markets_updated=0, 
+                       markets_failed=0, error=None):
     """Update the pipeline run record with results."""
-    pipeline_run.end_time = datetime.utcnow()
-    pipeline_run.status = status
-    pipeline_run.markets_processed = markets_processed
-    pipeline_run.markets_approved = markets_approved
-    pipeline_run.markets_rejected = markets_rejected
-    pipeline_run.markets_failed = markets_failed
-    pipeline_run.markets_deployed = markets_deployed
-    pipeline_run.error = error
-    
-    db.session.commit()
-    logger.info(f"Updated pipeline run {pipeline_run.id} with status {status}")
+    if not pipeline_run:
+        return
+        
+    try:
+        pipeline_run.status = status
+        pipeline_run.end_time = datetime.utcnow()
+        pipeline_run.markets_processed = markets_processed
+        pipeline_run.markets_approved = markets_updated  # reuse this field
+        pipeline_run.markets_failed = markets_failed
+        
+        if error:
+            pipeline_run.error_message = str(error)
+            
+        db.session.commit()
+        logger.info(f"Updated pipeline run {pipeline_run.id} with status {status}")
+    except Exception as e:
+        logger.error(f"Error updating pipeline run: {str(e)}")
 
-def get_markets_needing_id_update():
+def track_deployed_markets() -> Tuple[int, int, int]:
     """
-    Get markets that have been deployed but don't have their Apechain market ID stored.
+    Track markets that have been deployed to Apechain.
     
     Returns:
-        List of Market objects that need Apechain market ID updates
+        Tuple[int, int, int]: Count of (processed, updated, failed) markets
     """
-    # Find markets that have transaction hashes but no Apechain market ID
-    markets = Market.query.filter(
+    # Find markets that have blockchain_tx but no apechain_market_id
+    markets_to_track = Market.query.filter(
         Market.blockchain_tx.isnot(None),
-        (Market.apechain_market_id.is_(None) | (Market.apechain_market_id == ''))
+        Market.apechain_market_id.is_(None)
     ).all()
     
-    logger.info(f"Found {len(markets)} markets needing Apechain market ID updates")
-    return markets
-
-def update_market_ids(markets: List[Market]) -> int:
-    """
-    Update market IDs by querying the blockchain.
+    logger.info(f"Found {len(markets_to_track)} markets to track")
     
-    Args:
-        markets: List of Market objects to update
+    processed = 0
+    updated = 0
+    failed = 0
+    
+    for market in markets_to_track:
+        processed += 1
+        logger.info(f"Processing market {market.id} with transaction {market.blockchain_tx}")
         
-    Returns:
-        int: Number of markets successfully updated
-    """
-    updated_count = 0
-    
-    for market in markets:
         try:
-            if not market.blockchain_tx:
-                logger.warning(f"Market {market.id} has no blockchain transaction hash")
-                continue
+            # Get market ID from blockchain transaction
+            apechain_id = get_deployed_market_id_from_tx(market.blockchain_tx)
             
-            # Get Apechain market ID from transaction hash
-            market_id = get_deployed_market_id_from_tx(market.blockchain_tx)
-            
-            if not market_id:
-                logger.warning(f"Failed to get market ID for transaction {market.blockchain_tx}")
-                continue
-            
-            # Update market with the Apechain market ID
-            market.apechain_market_id = market_id
-            
-            # Also verify market info to make sure we can access it
-            market_info = utils.apechain.get_market_info(market_id)
-            if market_info:
-                logger.info(f"Successfully verified market info for market ID {market_id}")
-                logger.info(f"Market Question: {market_info.get('question')}")
-                logger.info(f"Market Category: {market_info.get('category')}")
-                logger.info(f"Market Options: {market_info.get('options')}")
+            if apechain_id:
+                # Update market with Apechain market ID
+                market.apechain_market_id = apechain_id
+                market.status = "deployed"
+                
+                logger.info(f"Updated market {market.id} with Apechain ID {apechain_id}")
+                updated += 1
             else:
-                logger.warning(f"Could not retrieve market info for market ID {market_id}")
-            
-            # Commit the changes
-            db.session.commit()
-            
-            logger.info(f"Updated market {market.id} with Apechain market ID {market_id}")
-            updated_count += 1
-            
+                # Failed to get market ID
+                logger.error(f"Failed to get Apechain market ID for transaction {market.blockchain_tx}")
+                failed += 1
         except Exception as e:
-            logger.error(f"Error updating market {market.id}: {str(e)}")
-            db.session.rollback()
+            logger.error(f"Error tracking market {market.id}: {str(e)}")
+            failed += 1
     
-    return updated_count
+    # Save all changes
+    db.session.commit()
+    
+    return processed, updated, failed
 
 def main():
     """
-    Main function to track and update Apechain market IDs.
+    Main function to track deployed markets.
     """
-    with app.app_context():
-        try:
-            # Create pipeline run record
-            pipeline_run = create_pipeline_run()
+    # Import Flask app to get application context
+    from main import app
+    
+    # Create pipeline run record
+    pipeline_run = create_pipeline_run()
+    
+    try:
+        # Use application context for database operations
+        with app.app_context():
+            processed, updated, failed = track_deployed_markets()
             
-            # Get markets needing ID updates
-            markets = get_markets_needing_id_update()
+            # Update pipeline run
+            if pipeline_run:
+                update_pipeline_run(
+                    pipeline_run,
+                    status="completed" if failed == 0 else "completed_with_errors",
+                    markets_processed=processed,
+                    markets_updated=updated,
+                    markets_failed=failed
+                )
             
-            if not markets:
-                logger.info("No markets need Apechain market ID updates")
-                update_pipeline_run(pipeline_run, "completed")
-                return 0
-            
-            # Update market IDs
-            updated_count = update_market_ids(markets)
-            
-            logger.info(f"Updated {updated_count} out of {len(markets)} markets with Apechain market IDs")
-            update_pipeline_run(
-                pipeline_run, 
-                "completed", 
-                markets_processed=len(markets),
-                markets_deployed=updated_count
-            )
-            
-            return 0
+            # Log results
+            print(f"Tracking results: {processed} processed, {updated} updated, {failed} failed")
         
-        except Exception as e:
-            logger.error(f"Error in main function: {str(e)}")
-            if 'pipeline_run' in locals():
-                update_pipeline_run(pipeline_run, "failed", error=str(e))
-            return 1
+        return 0
+    except Exception as e:
+        logger.error(f"Error in tracking script: {str(e)}")
+        
+        # Update pipeline run with error
+        if pipeline_run:
+            update_pipeline_run(
+                pipeline_run,
+                status="failed",
+                error=str(e)
+            )
+        
+        return 1
 
 if __name__ == "__main__":
-    sys.exit(main())
+    main()

@@ -385,30 +385,34 @@ def check_deployment_approvals() -> Tuple[int, int, int]:
         has_rejection = False
         approver = None
         
-        for reaction in reactions:
-            logger.info(f"Processing reaction: {reaction}")
-            reaction_name = reaction.get("name", "")
-            logger.info(f"Reaction name: '{reaction_name}'")
+        # Reactions are returned as a dict {reaction_name: [user_ids]}
+        for reaction_name, users in reactions.items():
+            logger.info(f"Processing reaction: {reaction_name}")
             
-            # Get users who reacted (excluding the bot)
-            users = [user for user in reaction.get("users", []) if user != BOT_USER_ID]
+            # Ensure users is a list
+            if not isinstance(users, list):
+                logger.warning(f"Expected list of users for reaction {reaction_name}, but got {type(users)}")
+                continue
+                
+            # Filter out bot user
+            non_bot_users = [user for user in users if user != BOT_USER_ID]
             
             # If only the bot reacted, skip this reaction
-            if not users:
+            if not non_bot_users:
                 logger.info(f"Skipping reaction '{reaction_name}' - only from bot user {BOT_USER_ID}")
                 continue
                 
-            logger.info(f"Non-bot users who reacted with '{reaction_name}': {users}")
+            logger.info(f"Non-bot users who reacted with '{reaction_name}': {non_bot_users}")
             
             if reaction_name == "white_check_mark" or reaction_name == "+1" or reaction_name == "thumbsup":
                 has_approval = True
                 # Get first non-bot user who reacted as approver
-                approver = users[0]
+                approver = non_bot_users[0]
                 logger.info(f"Found approval reaction from user {approver}")
             elif reaction_name == "x" or reaction_name == "-1" or reaction_name == "thumbsdown":
                 has_rejection = True
                 # Get first non-bot user who reacted as rejector
-                approver = users[0]
+                approver = non_bot_users[0]
                 logger.info(f"Found rejection reaction from user {approver}")
                 
         logger.info(f"Final result: has_approval={has_approval}, has_rejection={has_rejection}, approver={approver}")

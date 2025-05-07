@@ -9,8 +9,15 @@ import os
 import json
 import logging
 from typing import Dict, List, Any, Optional, Tuple
-from web3 import Web3
 import time
+
+# Import Web3 with better error handling
+try:
+    from web3 import Web3
+    web3_available = True
+except ImportError:
+    web3_available = False
+    logging.warning("Web3 package not found. Blockchain functions will be unavailable.")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -25,7 +32,14 @@ if not APECHAIN_RPC_URL:
     logger.warning("Missing Apechain RPC URL. Set APECHAIN_RPC_URL environment variable.")
 
 # Initialize Web3 connection
-w3 = Web3(Web3.HTTPProvider(APECHAIN_RPC_URL)) if APECHAIN_RPC_URL else None
+w3 = None
+if web3_available and APECHAIN_RPC_URL:
+    try:
+        w3 = Web3(Web3.HTTPProvider(APECHAIN_RPC_URL))
+        logger.info(f"Connected to Apechain RPC: {APECHAIN_RPC_URL}")
+    except Exception as e:
+        logger.error(f"Failed to initialize Web3 connection: {str(e)}")
+        w3 = None
 
 # Load ABI files
 PREDICTOR_ABI_PATH = './abi/predictor.json'
@@ -209,3 +223,92 @@ def get_market_info(market_id: str) -> Optional[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error getting market info for ID {market_id}: {str(e)}")
         return None
+
+def deploy_market_to_apechain(market) -> Tuple[Optional[str], Optional[str]]:
+    """
+    Deploy a market to Apechain.
+    
+    Args:
+        market: Market model instance
+        
+    Returns:
+        Tuple[str, str]: (market_id, transaction_hash) if successful, (None, None) otherwise
+    """
+    if not web3_available:
+        logger.error("Web3 package not available. Cannot deploy market.")
+        return None, None
+        
+    if not w3 or not WALLET_PRIVATE_KEY:
+        logger.error("Web3 connection not initialized or wallet private key missing")
+        return None, None
+    
+    try:
+        # Parse options
+        options = []
+        if market.options:
+            try:
+                if isinstance(market.options, str):
+                    options_data = json.loads(market.options)
+                    # Handle different options formats
+                    if isinstance(options_data, list):
+                        if options_data and isinstance(options_data[0], dict) and 'value' in options_data[0]:
+                            # Options in [{"id": "...", "value": "..."}, ...] format
+                            options = [opt.get('value', 'Unknown') for opt in options_data]
+                        else:
+                            # Options in ["Option1", "Option2", ...] format
+                            options = [str(opt) for opt in options_data]
+                            
+                elif isinstance(market.options, list):
+                    options = [str(opt) for opt in market.options]
+            except Exception as e:
+                logger.error(f"Error parsing options for market {market.id}: {str(e)}")
+                return None, None
+        
+        # Fallback to Yes/No if no options found
+        if not options:
+            logger.warning(f"No options found for market {market.id}, using Yes/No")
+            options = ["Yes", "No"]
+        
+        # Get expiry timestamp
+        if not market.expiry:
+            logger.error(f"No expiry timestamp found for market {market.id}")
+            return None, None
+        
+        # Get category (capitalize for consistency)
+        category = market.category
+        if not category:
+            logger.warning(f"No category found for market {market.id}, using 'Other'")
+            category = "Other"
+        
+        # Capitalize first letter of category
+        category = category[0].upper() + category[1:] if category else "Other"
+        
+        # Create market on Apechain
+        logger.info(f"Deploying market '{market.question}' to Apechain with {len(options)} options")
+        tx_hash = create_market(
+            question=market.question,
+            options=options,
+            end_time=market.expiry,
+            category=category
+        )
+        
+        if not tx_hash:
+            logger.error(f"Failed to create market on Apechain: {market.id}")
+            return None, None
+        
+        logger.info(f"Created market transaction: {tx_hash}")
+        
+        # Wait for transaction to be mined and get market ID
+        logger.info("Waiting for transaction to be mined...")
+        market_id = get_deployed_market_id_from_tx(tx_hash)
+        
+        if not market_id:
+            logger.error(f"Failed to get market ID from transaction: {tx_hash}")
+            return None, tx_hash
+        
+        logger.info(f"Successfully deployed market {market.id} to Apechain with ID {market_id}")
+        return market_id, tx_hash
+        
+    except Exception as e:
+        logger.error(f"Error deploying market {market.id} to Apechain: {str(e)}")
+        return None, None
