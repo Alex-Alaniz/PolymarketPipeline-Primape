@@ -15,7 +15,7 @@ from typing import Dict, List, Any, Optional, Tuple
 import json
 
 from models import db, Market, ProcessedMarket, ApprovalEvent
-from utils.messaging import get_channel_messages, get_message_reactions, post_message_to_slack, add_reaction
+from utils.messaging import get_channel_messages, get_message_reactions, post_formatted_message_to_slack as post_message_to_slack, add_reaction_to_message as add_reaction
 # We'll create the apechain module later
 from utils.apechain import deploy_market_to_apechain
 
@@ -39,6 +39,9 @@ def post_markets_for_deployment_approval() -> List[Market]:
     Returns:
         List[Market]: List of markets posted for deployment approval
     """
+    # Import the new deployment formatter
+    from utils.deployment_formatter import format_deployment_message as new_format_message
+    
     # Find markets that are approved but not yet posted for deployment
     markets_to_deploy = Market.query.filter(
         Market.status == "new",  # New status means approved but not yet deployed
@@ -51,11 +54,55 @@ def post_markets_for_deployment_approval() -> List[Market]:
     
     for market in markets_to_deploy:
         try:
-            # Format message with market details - now returns a tuple of (text, blocks)
-            message = format_deployment_message(market)
+            # Format message with market details using the new formatter
+            # Prepare options
+            options = []
+            if market.options:
+                try:
+                    if isinstance(market.options, str):
+                        options_data = json.loads(market.options)
+                        for opt in options_data:
+                            if isinstance(opt, dict) and 'value' in opt:
+                                options.append(opt['value'])
+                            else:
+                                options.append(str(opt))
+                    elif isinstance(market.options, list):
+                        for opt in market.options:
+                            if isinstance(opt, dict) and 'value' in opt:
+                                options.append(opt['value'])
+                            else:
+                                options.append(str(opt))
+                except Exception as e:
+                    logger.error(f"Error parsing options for market {market.id}: {str(e)}")
+                    options = ["Yes", "No"]  # Fallback
             
-            # Post to Slack - pass the tuple directly
-            message_id = post_message_to_slack(message)
+            # Prepare expiry date in human-readable format
+            if market.expiry:
+                try:
+                    expiry_str = datetime.fromtimestamp(market.expiry).strftime('%Y-%m-%d %H:%M:%S UTC')
+                except:
+                    expiry_str = str(market.expiry)
+            else:
+                expiry_str = "Unknown"
+            
+            # Determine market type
+            market_type = "Multiple-Choice Market" if market.type == "multiple" else "Binary Market (Yes/No)"
+            
+            # Format the message with the new formatter
+            message_text, blocks = new_format_message(
+                market_id=market.id,
+                question=market.question,
+                category=market.category or "News",
+                market_type=market_type,
+                options=options or ["Yes", "No"],
+                expiry=expiry_str,
+                banner_uri=market.banner_uri,
+                event_name=getattr(market, 'event_name', None),
+                event_id=getattr(market, 'event_id', None)
+            )
+            
+            # Post to Slack
+            message_id = post_message_to_slack(message_text, blocks=blocks)
             
             if message_id:
                 # Add initial reactions (✅ and ❌) for easier voting
