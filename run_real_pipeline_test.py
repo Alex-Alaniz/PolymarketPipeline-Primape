@@ -27,18 +27,10 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Import models and utils
 from models import db, PendingMarket, Market, ApprovalEvent, ProcessedMarket, PipelineRun
 from utils.market_categorizer import categorize_market
-
-# Import real messaging functions
-from utils.messaging import (
-    post_formatted_message_to_slack,
-    add_reaction_to_message,
-    get_message_reactions
-)
-
-# Import real Apechain functions
-from utils.apechain import create_market, get_deployed_market_id_from_tx
+from utils.messaging import post_formatted_message_to_slack, get_message_reactions, add_reaction_to_message
 from post_unposted_pending_markets import format_market_message
 from utils.deployment_formatter import format_deployment_message
+from utils.apechain import create_market, get_deployed_market_id_from_tx
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -50,19 +42,41 @@ db.init_app(app)
 def clear_test_records():
     """Clear any existing test records from database."""
     with app.app_context():
-        # Delete test markets and pending markets
-        test_markets = Market.query.filter(Market.question.like('TEST PIPELINE: %')).all()
-        test_pending_markets = PendingMarket.query.filter(PendingMarket.question.like('TEST PIPELINE: %')).all()
+        try:
+            # Clear related approval events first to avoid foreign key issues
+            test_markets = Market.query.filter(Market.question.like('TEST PIPELINE: %')).all()
+            market_ids = [market.id for market in test_markets]
+            
+            if market_ids:
+                # Execute SQL to delete approval events
+                db.session.execute("DELETE FROM approval_events WHERE market_id IN :ids", {"ids": tuple(market_ids) if len(market_ids) > 1 else "('"+market_ids[0]+"')"})
+            
+            # Delete test markets and pending markets
+            for market in test_markets:
+                db.session.delete(market)
+            
+            test_pending_markets = PendingMarket.query.filter(PendingMarket.question.like('TEST PIPELINE: %')).all()
+            for pending_market in test_pending_markets:
+                db.session.delete(pending_market)
+            
+            db.session.commit()
+            logger.info(f"Cleared {len(test_markets)} test markets and {len(test_pending_markets)} test pending markets")
         
-        for market in test_markets:
-            db.session.delete(market)
-        
-        for pending_market in test_pending_markets:
-            db.session.delete(pending_market)
-        
-        db.session.commit()
-        
-        logger.info(f"Cleared {len(test_markets)} test markets and {len(test_pending_markets)} test pending markets")
+        except Exception as e:
+            db.session.rollback()
+            logger.error(f"Error clearing test records: {str(e)}")
+            # Try alternate approach to clean records
+            try:
+                # Delete everything with direct SQL to bypass ORM issues
+                db.session.execute("DELETE FROM approval_events WHERE market_id IN (SELECT id FROM markets WHERE question LIKE 'TEST PIPELINE: %')")
+                db.session.execute("DELETE FROM markets WHERE question LIKE 'TEST PIPELINE: %'")
+                db.session.execute("DELETE FROM pending_markets WHERE question LIKE 'TEST PIPELINE: %'")
+                db.session.commit()
+                logger.info("Cleared test records using direct SQL approach")
+            except Exception as e2:
+                db.session.rollback()
+                logger.error(f"Failed to clear test records: {str(e2)}")
+                raise
 
 def create_test_pending_market():
     """Create a test pending market for the pipeline."""
@@ -142,9 +156,10 @@ def approve_pending_market(pending_market, message_id):
         # Create approval event
         approval_event = ApprovalEvent(
             market_id=pending_market.poly_id,
-            event_type="market_approval",
-            user_id="test_user",
-            timestamp=datetime.now()
+            stage="initial",
+            status="approved",
+            message_id=message_id,
+            created_at=datetime.now()
         )
         
         db.session.add(market)
@@ -157,7 +172,19 @@ def approve_pending_market(pending_market, message_id):
 def post_deployment_approval(market):
     """Post a market for deployment approval."""
     # Format the deployment message
-    text, blocks = format_deployment_message(market)
+    from datetime import datetime
+    expiry_date = datetime.fromtimestamp(market.expiry).strftime("%Y-%m-%d %H:%M UTC") if market.expiry else "Unknown"
+    market_type = "Binary Market (Yes/No)" if len(market.options) == 2 else f"Multiple Choice ({len(market.options)} options)"
+    
+    text, blocks = format_deployment_message(
+        market_id=market.id,
+        question=market.question,
+        category=market.category or "uncategorized",
+        market_type=market_type,
+        options=market.options,
+        expiry=expiry_date,
+        banner_uri=market.banner_uri
+    )
     
     # Post to Slack and get message ID
     message_id = post_formatted_message_to_slack(text, blocks)
@@ -192,9 +219,10 @@ def approve_deployment(market, message_id):
         # Create approval event
         approval_event = ApprovalEvent(
             market_id=market.id,
-            event_type="deployment_approval",
-            user_id="test_user",
-            timestamp=datetime.now()
+            stage="final",
+            status="approved",
+            message_id=message_id,
+            created_at=datetime.now()
         )
         
         db.session.add(approval_event)
