@@ -109,7 +109,32 @@ def categorize_market(question: str, description: Optional[str] = None) -> Tuple
     
     except Exception as e:
         logger.error(f"Error categorizing market: {str(e)}")
-        return "news", True  # Default to news with manual flag on error
+        # Default to a more specific error message and flag for manual review
+        error_type = str(e).lower()
+        
+        # If the error is due to OpenAI API connectivity, log clearly
+        if "openai" in error_type or "api" in error_type or "connection" in error_type:
+            logger.error("OpenAI API connectivity issue - check API key and network")
+            
+        # Default to politics for Biden, crypto for Bitcoin, etc. based on keywords
+        # This ensures that even in failure cases we get diverse categories
+        question_lower = question.lower() if question else ""
+        
+        if "biden" in question_lower or "president" in question_lower or "election" in question_lower:
+            logger.info(f"Using keyword fallback for '{question[:30]}...' - politics")
+            return "politics", True
+        elif "bitcoin" in question_lower or "eth" in question_lower or "crypto" in question_lower:
+            logger.info(f"Using keyword fallback for '{question[:30]}...' - crypto")
+            return "crypto", True
+        elif "team" in question_lower or "game" in question_lower or "match" in question_lower:
+            logger.info(f"Using keyword fallback for '{question[:30]}...' - sports")
+            return "sports", True
+        elif "stock" in question_lower or "company" in question_lower or "price" in question_lower:
+            logger.info(f"Using keyword fallback for '{question[:30]}...' - business")
+            return "business", True
+        else:
+            # Last resort fallback
+            return "news", True
 
 def categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -153,9 +178,33 @@ def categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
             
         except Exception as e:
             logger.error(f"Error categorizing market at index {i}: {str(e)}")
-            # Add with default category
+            
+            # Extract question for keyword matching
+            question = market.get('question', '')
+            
+            # Add with smart fallback category based on keywords
             market_copy = market.copy()
-            market_copy['ai_category'] = 'news'
+            
+            # Default to politics for Biden, crypto for Bitcoin, etc. based on keywords
+            question_lower = question.lower() if question else ""
+            
+            if question and ("biden" in question_lower or "president" in question_lower or "election" in question_lower):
+                logger.info(f"Using keyword fallback for market {i+1} - politics")
+                market_copy['ai_category'] = 'politics'
+            elif question and ("bitcoin" in question_lower or "eth" in question_lower or "crypto" in question_lower):
+                logger.info(f"Using keyword fallback for market {i+1} - crypto")
+                market_copy['ai_category'] = 'crypto'
+            elif question and ("team" in question_lower or "game" in question_lower or "match" in question_lower):
+                logger.info(f"Using keyword fallback for market {i+1} - sports")
+                market_copy['ai_category'] = 'sports'
+            elif question and ("stock" in question_lower or "company" in question_lower or "price" in question_lower):
+                logger.info(f"Using keyword fallback for market {i+1} - business")
+                market_copy['ai_category'] = 'business'
+            else:
+                # Last resort fallback
+                logger.info(f"Using default fallback for market {i+1} - news")
+                market_copy['ai_category'] = 'news'
+                
             market_copy['needs_manual_categorization'] = True
             categorized_markets.append(market_copy)
     
