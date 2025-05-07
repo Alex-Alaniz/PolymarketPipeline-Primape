@@ -1,151 +1,119 @@
-# Polymarket Pipeline Event-Based Model Implementation Guide
+# Event Model Implementation Guide
+
+This guide explains how the event relationship model works within the Polymarket pipeline and provides guidance on maintaining and extending it.
 
 ## Overview
 
-This guide outlines the steps to update the pipeline with our new event-based model. The event-based model properly handles the relationship between events (like "UEFA Champions League") and their associated markets (like "Will Arsenal win?").
+Events in the pipeline represent logical groupings of related markets. For example, all markets related to the "FIFA World Cup 2026" would share the same event ID and name. This allows the frontend to group related markets together and helps users find related predictions.
 
-## Why This Update is Needed
+## Database Structure
 
-The current model is missing proper event tracking, which causes several issues:
-1. We're losing events in the data transformation process
-2. Market IDs are being treated as events, causing confusion
-3. Banner images and icons are not correctly associated with events and markets
-4. Category filtering doesn't connect properly to the frontend
+Events are represented by two fields in both the `markets` and `pending_markets` tables:
 
-## Implementation Steps
+1. `event_id` - A unique identifier for the event (string)
+2. `event_name` - A human-readable name for the event (string)
 
-### Step 1: Create Backup (Optional but Recommended)
+There is no separate events table - the relationship is maintained by these fields being identical across related markets.
 
-```bash
-pg_dump -U $PGUSER -d $PGDATABASE > polymarket_backup_$(date +%Y%m%d).sql
+## How Events Are Used
+
+1. **Grouping Related Markets**: Markets that share the same `event_id` are considered related.
+2. **Categorization**: Events typically belong to a single category, making it easier to browse.
+3. **Frontend Display**: The frontend can use event relationships to show related markets together.
+4. **Pipeline Processing**: The pipeline maintains event relationships throughout all stages.
+
+## Implementation Details
+
+### Event ID Format
+
+Event IDs follow a simple format: `event_CATEGORY_IDENTIFIER` where:
+- `CATEGORY` is the primary category (sports, politics, crypto, etc.)
+- `IDENTIFIER` is a unique identifier for the event (can include dates, names, etc.)
+
+Examples:
+- `event_sports_001`
+- `event_worldcup_2026`
+- `event_crypto_001`
+- `event_uselection_2028`
+
+### Creating Event Relationships
+
+When markets are fetched from Polymarket, they must be analyzed to determine if they belong to existing events or require new events. This process happens during the categorization phase, typically using these approaches:
+
+1. **Keyword Matching**: Identify markets that mention specific events (e.g., "World Cup", "Champions League")
+2. **Entity Recognition**: Extract entities like competitions, elections, or conferences
+3. **Temporal Grouping**: Group markets with similar timeframes
+4. **Manual Assignment**: Allow manual assignment of events in the approval process
+
+### Maintaining Event Relationships
+
+Event relationships are maintained throughout the pipeline:
+
+1. **Pending Markets**: Initial event assignment when markets are categorized
+2. **Approval Process**: Event relationships are preserved when moving from pending_markets to markets table
+3. **Deployment**: Event information is retained in the deployed markets
+
+### Utility Scripts
+
+Several scripts help manage and inspect event relationships:
+
+1. `check_events.py`: Shows markets grouped by events
+2. `check_shared_events.py`: Finds events with multiple markets
+3. `inspect_events.py`: Detailed inspection of specific events
+4. `add_event_fields_migration.py`: Ensures database tables have event fields
+
+## Best Practices
+
+1. **Consistency**: Use consistent event IDs and names across related markets
+2. **Meaningful Names**: Make event names descriptive and human-readable
+3. **Category Alignment**: Events should generally align with a single category
+4. **Relationship Preservation**: Ensure event relationships are preserved in all pipeline stages
+5. **Validation**: Regularly check for orphaned or inconsistent event relationships
+
+## Database Migration
+
+If you need to add event fields to tables, use the provided migration script:
+
+```
+python add_event_fields_migration.py
 ```
 
-### Step 2: Reset and Setup the New Database Schema
+## Diagnosing Issues
 
-We've created a script to drop all existing tables and create new ones with the proper event-market relationship:
+If you encounter problems with event relationships:
 
-```bash
-python reset_and_setup_events_model.py
+1. Check if event fields exist in both tables using the migration script
+2. Inspect event relationships using the provided utility scripts
+3. Verify that market approval preserves event fields
+4. Ensure both event_id and event_name are being properly set
+
+## Implementation Example
+
+```python
+# Example of setting event relationship during categorization
+def categorize_market(market_data):
+    question = market_data["question"]
+    
+    # Detect World Cup markets
+    if "world cup" in question.lower() and "2026" in question:
+        event_id = "event_worldcup_2026"
+        event_name = "FIFA World Cup 2026"
+    # Detect Champions League markets
+    elif "champions league" in question.lower() and "2025" in question:
+        event_id = "event_champions_league_2025"
+        event_name = "Champions League 2025-2026"
+    else:
+        event_id = None
+        event_name = None
+    
+    # Create pending market with event relationship
+    pending_market = PendingMarket(
+        poly_id=market_data["id"],
+        question=question,
+        category=detect_category(question),
+        event_id=event_id,
+        event_name=event_name
+    )
+    
+    return pending_market
 ```
-
-This will:
-- Drop all existing tables (you'll be asked to confirm with 'YES')
-- Create the new schema with proper event-market relationships
-- Set up the initial database structure
-
-### Step 3: Replace Key Files
-
-Replace these files with their updated versions:
-
-1. Replace `models.py` with `models_updated.py`:
-
-```bash
-cp models_updated.py models.py
-```
-
-2. Add our new transform utility:
-
-```bash
-mkdir -p utils
-cp utils/transform_market_with_events.py utils/
-```
-
-3. Replace the main application file:
-
-```bash
-cp main_updated.py main.py
-```
-
-4. Use the new pipeline script:
-
-```bash
-cp run_pipeline_with_events.py run_pipeline.py
-```
-
-### Step 4: Run the Updated Pipeline
-
-Start the application with the new model:
-
-```bash
-gunicorn --bind 0.0.0.0:5000 --reuse-port --reload main:app
-```
-
-Then navigate to the web interface and test the functionality:
-
-1. Click "Run Pipeline" to fetch markets and extract events
-2. Once markets are fetched, click "Post Pending Batch" to post them to Slack
-3. Check Slack for the new format with event information
-4. Process approvals as usual
-
-## Database Schema Changes
-
-The main changes to the database schema are:
-
-1. **New Events Table**:
-   - Stores information about events like "UEFA Champions League"
-   - Contains banner images for the event level
-   - Has a category for frontend filtering
-
-2. **Updated Markets Table**:
-   - Now references an event via `event_id` foreign key
-   - Better handling of options and option images
-
-3. **Updated PendingMarket Table**:
-   - Added event_name and event_id fields
-   - Added option_images JSON field
-
-## Testing the New Model
-
-To verify the new model is working correctly:
-
-1. Check that events are being correctly extracted:
-   ```sql
-   SELECT id, name, category FROM events LIMIT 10;
-   ```
-
-2. Verify markets are linked to events:
-   ```sql
-   SELECT m.id, m.question, e.name as event_name, m.event_id 
-   FROM markets m JOIN events e ON m.event_id = e.id LIMIT 10;
-   ```
-
-3. Confirm option images are being saved:
-   ```sql
-   SELECT id, question, option_images FROM markets 
-   WHERE option_images IS NOT NULL LIMIT 5;
-   ```
-
-## Troubleshooting
-
-If you encounter issues:
-
-1. **Database Connection Problems**:
-   - Verify environment variables (DATABASE_URL, PGHOST, etc.)
-   - Check PostgreSQL is running
-
-2. **Missing Events**:
-   - Check the event extraction logic in `utils/transform_market_with_events.py`
-   - Verify the events table has entries
-
-3. **Slack Integration**:
-   - Confirm SLACK_BOT_TOKEN and SLACK_CHANNEL are set correctly
-   - Check the bot has proper permissions
-
-4. **Reset Process Failed**:
-   - You can run the SQL commands manually:
-   ```sql
-   DROP TABLE IF EXISTS events CASCADE;
-   DROP TABLE IF EXISTS markets CASCADE;
-   /* ... other tables ... */
-   ```
-
-## Next Steps
-
-After implementing this updated model:
-
-1. Complete end-to-end tests of the pipeline
-2. Update any remaining scripts to use the event-based model
-3. Deploy the smart contract with proper category mappings
-4. Monitor the system for a few days to ensure stability
-
-The event-based model provides a more accurate representation of the Polymarket data and will support proper frontend filtering and display.
