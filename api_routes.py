@@ -77,13 +77,13 @@ def get_market_data(market_id):
     Get market data for a given market ID (Apechain market ID).
     
     This endpoint provides the category, banner, and option images for a market
-    for display in the frontend.
+    for display in the frontend. Also includes related markets in the same event.
     
     Args:
         market_id: Apechain market ID
         
     Returns:
-        JSON response with market data including category and images
+        JSON response with market data including category, images, and related markets
     """
     try:
         # Find the market by Apechain market ID
@@ -104,9 +104,29 @@ def get_market_data(market_id):
             "status": market.status,
             "banner_uri": market.banner_uri,
             "option_images": market.option_images,
+            "event_id": market.event_id,
+            "event_name": market.event_name,
             "created_at": market.created_at.isoformat() if market.created_at else None,
             "updated_at": market.updated_at.isoformat() if market.updated_at else None
         }
+        
+        # Add related markets from the same event if available
+        related_markets = []
+        if market.event_id:
+            related = Market.query.filter(
+                Market.event_id == market.event_id,
+                Market.id != market.id,
+                Market.status == 'deployed'
+            ).all()
+            
+            for rel_market in related:
+                related_markets.append({
+                    "id": rel_market.id,
+                    "apechain_market_id": rel_market.apechain_market_id,
+                    "question": rel_market.question
+                })
+        
+        market_data["related_markets"] = related_markets
         
         return jsonify({
             "status": "success",
@@ -168,6 +188,8 @@ def get_markets():
                 "category": market.category,
                 "status": market.status,
                 "banner_uri": market.banner_uri,
+                "event_id": market.event_id,
+                "event_name": market.event_name,
                 "created_at": market.created_at.isoformat() if market.created_at else None,
                 "updated_at": market.updated_at.isoformat() if market.updated_at else None
             }
