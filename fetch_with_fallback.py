@@ -72,8 +72,37 @@ def main():
             # Create pipeline run record
             pipeline_run = create_pipeline_run()
             
-            # Step 1: Fetch markets from API
-            markets = fetch_markets(limit=50)
+            # Step 1: Fetch markets from API with retries for network issues
+            try:
+                # Make multiple attempts to fetch markets
+                max_retries = 3
+                retry_delay = 2  # seconds
+                
+                for attempt in range(1, max_retries + 1):
+                    try:
+                        logger.info(f"Attempt {attempt}/{max_retries} to fetch markets from API")
+                        markets = fetch_markets(limit=50)
+                        
+                        if markets:
+                            logger.info(f"Successfully fetched {len(markets)} markets on attempt {attempt}")
+                            break
+                        else:
+                            logger.warning(f"No markets returned on attempt {attempt}")
+                    except Exception as e:
+                        logger.warning(f"Network error on attempt {attempt}: {str(e)}")
+                        if attempt < max_retries:
+                            import time
+                            time.sleep(retry_delay)
+                            retry_delay *= 2  # Exponential backoff
+                        else:
+                            raise  # Re-raise the last exception if all retries failed
+                else:
+                    # This executes if the for loop completes without a break
+                    markets = None
+                    logger.error(f"Failed to fetch markets after {max_retries} attempts")
+            except Exception as e:
+                logger.error(f"Error fetching markets from API: {str(e)}")
+                markets = None
             
             if not markets:
                 logger.error("Failed to fetch markets from API")
