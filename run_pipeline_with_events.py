@@ -53,7 +53,9 @@ logging.basicConfig(
 logger = logging.getLogger('pipeline')
 
 # Constants
-MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 "
+# API configuration
+MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
+POLYMARKET_API_KEY = os.environ.get("POLYMARKET_API_KEY", "")
 MARKETS_QUERY = """
 query FetchMarkets($first: Int!, $skip: Int!) {
   markets(
@@ -115,20 +117,45 @@ def fetch_markets(limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
             }
         }
         
-        # Make request to API
-        response = requests.post(MARKET_API_URL, json=payload)
-        response.raise_for_status()
+        # Set up headers with API key if available
+        headers = {}
+        if POLYMARKET_API_KEY:
+            headers["X-API-KEY"] = POLYMARKET_API_KEY
         
-        data = response.json()
-        if "errors" in data:
-            logger.error(f"GraphQL errors: {data['errors']}")
+        # Try with REST API endpoint first (with query parameters)
+        try:
+            logger.info(f"Fetching markets from REST API endpoint")
+            rest_response = requests.get(MARKET_API_URL, headers=headers)
+            rest_response.raise_for_status()
+            
+            rest_data = rest_response.json()
+            # If we have valid data, use it
+            if rest_data and isinstance(rest_data, list):
+                logger.info(f"Successfully fetched {len(rest_data)} markets from REST API")
+                return rest_data
+            else:
+                logger.warning(f"REST API returned invalid data format, trying GraphQL endpoint")
+        except Exception as e:
+            logger.warning(f"REST API request failed: {str(e)}, trying GraphQL endpoint")
+        
+        # Fall back to GraphQL API if REST fails
+        try:
+            graphql_url = "https://gamma-api.polymarket.com/query"
+            response = requests.post(graphql_url, json=payload, headers=headers)
+            response.raise_for_status()
+            
+            data = response.json()
+            if "errors" in data:
+                logger.error(f"GraphQL errors: {data['errors']}")
+                return []
+            
+            markets = data.get('data', {}).get('markets', [])
+            logger.info(f"Fetched {len(markets)} markets from Gamma API (skip={skip})")
+            return markets
+        except Exception as e:
+            logger.error(f"GraphQL API request failed: {str(e)}")
             return []
         
-        markets = data.get('data', {}).get('markets', [])
-        logger.info(f"Fetched {len(markets)} markets from Gamma API (skip={skip})")
-        
-        return markets
-    
     except Exception as e:
         logger.error(f"Error fetching markets from API: {str(e)}")
         return []
