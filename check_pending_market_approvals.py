@@ -284,22 +284,55 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
             "has_icon_url": bool(icon_url)
         }
         
-        market = Market(
-            id=market_id,
-            question=pending_market.question,
-            type="multiple" if is_multiple else "binary",
-            category=category,
-            sub_category=raw_data.get("subCategory"),
-            expiry=expiry_timestamp,
-            original_market_id=raw_data.get("id") if not is_multiple else json.dumps(raw_data.get("original_market_ids", [])),
-            options=json.dumps(options) if isinstance(options, list) else options,
-            status="new",
-            icon_url=icon_url,
-            # Store banner URL
-            banner_uri=banner_url,
-            # For debugging/tracing
-            banner_path=json.dumps(debug_info)
-        )
+        # Check if we have event fields in the pending market
+        event_id = None
+        event_name = None
+        
+        # First, check if fields exist in PendingMarket model
+        try:
+            if hasattr(pending_market, 'event_id') and pending_market.event_id:
+                event_id = pending_market.event_id
+                logger.info(f"Found event_id in pending market: {event_id}")
+            
+            if hasattr(pending_market, 'event_name') and pending_market.event_name:
+                event_name = pending_market.event_name
+                logger.info(f"Found event_name in pending market: {event_name}")
+        except Exception as e:
+            logger.warning(f"Error accessing event fields on pending market: {str(e)}")
+        
+        # Next, check if event data exists in raw_data
+        if not event_id and raw_data.get('event_id'):
+            event_id = raw_data.get('event_id')
+            logger.info(f"Found event_id in raw data: {event_id}")
+            
+        if not event_name and raw_data.get('event_name'):
+            event_name = raw_data.get('event_name')
+            logger.info(f"Found event_name in raw data: {event_name}")
+        
+        # Create market with event fields if they exist
+        market_fields = {
+            'id': market_id,
+            'question': pending_market.question,
+            'type': "multiple" if is_multiple else "binary",
+            'category': category,
+            'sub_category': raw_data.get("subCategory"),
+            'expiry': expiry_timestamp,
+            'original_market_id': raw_data.get("id") if not is_multiple else json.dumps(raw_data.get("original_market_ids", [])),
+            'options': json.dumps(options) if isinstance(options, list) else options,
+            'status': "new",
+            'icon_url': icon_url,
+            'banner_uri': banner_url,
+            'banner_path': json.dumps(debug_info)
+        }
+        
+        # Add event fields if they exist
+        if event_id:
+            market_fields['event_id'] = event_id
+        if event_name:
+            market_fields['event_name'] = event_name
+            
+        # Create the market object
+        market = Market(**market_fields)
         
         db.session.add(market)
         db.session.commit()
