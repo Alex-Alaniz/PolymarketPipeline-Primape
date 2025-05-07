@@ -39,8 +39,27 @@ from utils.messaging import (
     slack_client,
     SLACK_CHANNEL_ID
 )
-from utils.apechain import create_market as deploy_to_apechain
-from utils.apechain import get_deployed_market_id_from_tx
+# Import real apechain functions but replace with mock for testing
+from utils.apechain import create_market, get_deployed_market_id_from_tx as real_get_market_id
+
+# Create mock functions for testing
+def deploy_to_apechain(question, options, end_time, category):
+    """
+    Mock function for deploying markets to Apechain.
+    Used in testing to bypass blockchain interaction.
+    """
+    logger.info(f"Mock deployment for market: {question}")
+    # Return a fake transaction hash for testing
+    return f"0x{os.urandom(32).hex()}"
+
+def get_deployed_market_id_from_tx(tx_hash):
+    """
+    Mock function to get market ID from transaction hash.
+    Used in testing to bypass blockchain interaction.
+    """
+    logger.info(f"Mock market ID lookup for tx: {tx_hash}")
+    # Return a fake market ID (integer as string)
+    return "1"
 from post_unposted_pending_markets import format_market_message
 from utils.deployment_formatter import format_deployment_message
 
@@ -167,16 +186,14 @@ def approve_pending_market(pending_market, message_id):
             id=fresh_pending_market.poly_id,
             question=fresh_pending_market.question,
             category=fresh_pending_market.category,
-            source="test_pipeline",
             expiry=fresh_pending_market.expiry,
             status="approved", 
             options=[opt["value"] for opt in fresh_pending_market.options],
             banner_uri=fresh_pending_market.banner_url,
-            icon_uri=fresh_pending_market.icon_url,
+            icon_url=fresh_pending_market.icon_url,
             option_images=fresh_pending_market.option_images,
             created_at=datetime.utcnow(),
-            updated_at=datetime.utcnow(),
-            approved_at=datetime.utcnow()
+            updated_at=datetime.utcnow()
         )
         db.session.add(market)
         db.session.commit()
@@ -403,16 +420,14 @@ def run_single_session_pipeline():
                 id=pending_market.poly_id,
                 question=pending_market.question,
                 category=pending_market.category,
-                source="test_pipeline",
                 expiry=pending_market.expiry,
                 status="approved", 
                 options=[opt["value"] for opt in pending_market.options],
                 banner_uri=pending_market.banner_url,
-                icon_uri=pending_market.icon_url,
+                icon_url=pending_market.icon_url,
                 option_images=pending_market.option_images,
                 created_at=datetime.utcnow(),
-                updated_at=datetime.utcnow(),
-                approved_at=datetime.utcnow()
+                updated_at=datetime.utcnow()
             )
             db.session.add(market)
             db.session.commit()
