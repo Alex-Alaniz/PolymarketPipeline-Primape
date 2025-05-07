@@ -35,7 +35,9 @@ from utils.market_categorizer import categorize_market
 from utils.messaging import (
     post_formatted_message_to_slack, 
     add_reaction_to_message,
-    get_message_reactions
+    get_message_reactions,
+    slack_client,
+    SLACK_CHANNEL_ID
 )
 from utils.apechain import create_market as deploy_to_apechain
 from utils.apechain import get_deployed_market_id_from_tx
@@ -312,15 +314,15 @@ def track_market_id(market, tx_hash):
         logger.info(f"Updated market with Apechain market ID: {market_id}")
         return market_id
 
-def main():
-    """Main function for testing the full pipeline."""
-    try:
-        logger.info("Starting test of full pipeline flow")
-        
-        # Clear any existing test records
-        clear_test_records()
-        
-        with app.app_context():
+def run_single_session_pipeline():
+    """Run the entire pipeline within a single database session."""
+    logger.info("Starting test of full pipeline flow")
+    
+    # Clear any existing test records
+    clear_test_records()
+    
+    with app.app_context():
+        try:
             # Create a pipeline run record
             pipeline_run = PipelineRun(
                 status="running",
@@ -329,104 +331,216 @@ def main():
             db.session.add(pipeline_run)
             db.session.commit()
             
-            try:
-                # Step 1: Create test pending market
-                pending_market = create_test_pending_market()
-                if not pending_market:
-                    logger.error("Failed to create test pending market")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to create test pending market"
-                    db.session.commit()
-                    return 1
+            # Step 1: Create test pending market in database
+            test_id = f"test-{int(datetime.now().timestamp())}"
+            test_question = "TEST PIPELINE: Will Bitcoin reach $100k before the end of 2025?"
+            test_category = "crypto"
+            test_options = ["Yes", "No"]
+            test_expiry = int((datetime.now() + timedelta(days=365)).timestamp() * 1000)
+            
+            # Create options structure
+            option_list = [{"id": str(i+1), "value": option} for i, option in enumerate(test_options)]
+            
+            # Create test market
+            pending_market = PendingMarket(
+                poly_id=test_id,
+                question=test_question,
+                category=test_category,
+                banner_url="https://example.com/banner.jpg",
+                icon_url="https://example.com/icon.jpg",
+                options=option_list,
+                option_images={option: f"https://example.com/{option.lower()}.jpg" for option in test_options},
+                expiry=test_expiry,
+                raw_data={"source": "test_pipeline"},
+                needs_manual_categorization=False,
+                posted=False,
+                fetched_at=datetime.utcnow()
+            )
+            db.session.add(pending_market)
+            db.session.commit()
+            logger.info(f"Created test pending market: {pending_market.question}")
+            
+            # Step 2: Post to Slack
+            # Format the message
+            message_text, blocks = format_market_message(pending_market)
+            
+            # Post to Slack
+            slack_response = slack_client.chat_postMessage(
+                channel=SLACK_CHANNEL_ID,
+                text=message_text,
+                blocks=blocks
+            )
+            
+            if not slack_response or not slack_response.get('ok'):
+                raise Exception(f"Failed to post to Slack: {slack_response.get('error', 'Unknown error')}")
                 
-                # Step 2: Post pending market to Slack
-                message_id = post_pending_market_to_slack(pending_market)
-                if not message_id:
-                    logger.error("Failed to post pending market to Slack")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to post pending market to Slack"
-                    db.session.commit()
-                    return 1
+            message_id = slack_response['ts']
+            
+            # Update pending market as posted
+            pending_market.posted = True
+            pending_market.slack_message_id = message_id
+            pending_market.posted_at = datetime.utcnow()
+            db.session.commit()
+            logger.info(f"Posted pending market to Slack with ID {message_id}")
+            
+            # Wait a bit for message to be visible
+            time.sleep(2)
+            
+            # Step 3: Approve pending market
+            # Add approval reaction
+            add_reaction_to_message(message_id, "white_check_mark")
+            
+            # Log approval in the database
+            approval = ApprovalEvent(
+                entity_id=pending_market.id,
+                entity_type="pending_market",
+                approved=True,
+                approved_by="test_user",
+                approval_date=datetime.utcnow(),
+                slack_message_id=message_id
+            )
+            db.session.add(approval)
+            
+            # Create market entry
+            market = Market(
+                id=pending_market.poly_id,
+                question=pending_market.question,
+                category=pending_market.category,
+                source="test_pipeline",
+                expiry=pending_market.expiry,
+                status="approved", 
+                options=[opt["value"] for opt in pending_market.options],
+                banner_uri=pending_market.banner_url,
+                icon_uri=pending_market.icon_url,
+                option_images=pending_market.option_images,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+                approved_at=datetime.utcnow()
+            )
+            db.session.add(market)
+            db.session.commit()
+            logger.info(f"Approved pending market: {pending_market.question}")
+            
+            # Step 4: Post for deployment approval
+            # Format expiry date
+            expiry_date = datetime.fromtimestamp(market.expiry / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
+            
+            # Format deployment message
+            market_type = "Binary Market (Yes/No)" if len(market.options) == 2 else "Multi-option Market"
+            deployment_message_text, deployment_blocks = format_deployment_message(
+                market_id=market.id,
+                question=market.question,
+                category=market.category.capitalize(),
+                market_type=market_type,
+                options=market.options,
+                expiry=expiry_date,
+                banner_uri=market.banner_uri
+            )
+            
+            # Post to Slack
+            deployment_response = slack_client.chat_postMessage(
+                channel=SLACK_CHANNEL_ID,
+                text=deployment_message_text,
+                blocks=deployment_blocks
+            )
+            
+            if not deployment_response or not deployment_response.get('ok'):
+                raise Exception(f"Failed to post deployment approval: {deployment_response.get('error', 'Unknown error')}")
                 
-                # Wait a bit for message to be visible
-                time.sleep(2)
-                
-                # Step 3: Approve pending market
-                market = approve_pending_market(pending_market, message_id)
-                if not market:
-                    logger.error("Failed to approve pending market")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to approve pending market"
-                    db.session.commit()
-                    return 1
-                
-                # Step 4: Post for deployment approval
-                deployment_message_id = post_deployment_approval(market)
-                if not deployment_message_id:
-                    logger.error("Failed to post deployment approval message")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to post deployment approval message"
-                    db.session.commit()
-                    return 1
-                
-                # Wait a bit for message to be visible
-                time.sleep(2)
-                
-                # Step 5: Approve deployment
-                if not approve_deployment(market, deployment_message_id):
-                    logger.error("Failed to approve deployment")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to approve deployment"
-                    db.session.commit()
-                    return 1
-                
-                # Step 6: Deploy to Apechain
-                tx_hash = deploy_market_to_apechain(market)
-                if not tx_hash:
-                    logger.error("Failed to deploy market to Apechain")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to deploy market to Apechain"
-                    db.session.commit()
-                    return 1
-                
-                # Step 7: Track market ID
-                market_id = track_market_id(market, tx_hash)
-                if not market_id:
-                    logger.error("Failed to track market ID")
-                    pipeline_run.status = "failed"
-                    pipeline_run.error = "Failed to track market ID"
-                    db.session.commit()
-                    return 1
-                
-                # Update pipeline run with success
-                pipeline_run.status = "completed"
-                pipeline_run.end_time = datetime.utcnow()
-                pipeline_run.markets_processed = 1
-                pipeline_run.markets_approved = 1
-                pipeline_run.markets_deployed = 1
-                db.session.commit()
-                
-                # Get a fresh instance of the market for final output
-                fresh_market = db.session.query(Market).filter_by(id=market.id).first()
-                
-                logger.info("=" * 50)
-                logger.info("PIPELINE TEST COMPLETED SUCCESSFULLY")
-                logger.info(f"Market Question: {fresh_market.question}")
-                logger.info(f"Market ID: {fresh_market.id}")
-                logger.info(f"Apechain Market ID: {fresh_market.apechain_market_id}")
-                logger.info(f"Transaction Hash: {fresh_market.blockchain_tx}")
-                logger.info("=" * 50)
-                
-                return 0
-                
-            except Exception as e:
-                logger.error(f"Error in pipeline test: {str(e)}")
+            deployment_message_id = deployment_response['ts']
+            
+            # Update market with slack message ID
+            market.deployment_slack_message_id = deployment_message_id
+            db.session.commit()
+            logger.info(f"Posted market for deployment approval with ID {deployment_message_id}")
+            
+            # Wait a bit for message to be visible
+            time.sleep(2)
+            
+            # Step 5: Approve deployment
+            # Add approval reaction
+            add_reaction_to_message(deployment_message_id, "white_check_mark")
+            
+            # Log approval in the database
+            deployment_approval = ApprovalEvent(
+                entity_id=market.id,
+                entity_type="market_deployment",
+                approved=True,
+                approved_by="test_user",
+                approval_date=datetime.utcnow(),
+                slack_message_id=deployment_message_id
+            )
+            db.session.add(deployment_approval)
+            db.session.commit()
+            logger.info(f"Approved deployment for market: {market.question}")
+            
+            # Step 6: Deploy to Apechain
+            # Get market data
+            question = market.question
+            options = market.options
+            expiry = int(market.expiry / 1000)
+            category = market.category.capitalize()
+            
+            # Deploy to Apechain
+            tx_hash = deploy_to_apechain(question, options, expiry, category)
+            
+            if not tx_hash:
+                raise Exception("Failed to deploy market to Apechain")
+            
+            # Update market with transaction hash
+            market.status = "deployed"
+            market.blockchain_tx = tx_hash
+            market.deployed_at = datetime.utcnow()
+            db.session.commit()
+            logger.info(f"Deployed market to Apechain with transaction: {tx_hash}")
+            
+            # Step 7: Track market ID
+            # Wait for transaction to be mined
+            logger.info("Waiting for transaction to be mined...")
+            time.sleep(10)  # Adjust as needed based on blockchain confirmation times
+            
+            # Get market ID from transaction
+            market_id = get_deployed_market_id_from_tx(tx_hash)
+            
+            if not market_id:
+                raise Exception(f"Failed to get market ID for transaction {tx_hash}")
+            
+            # Update market with market ID
+            market.apechain_market_id = market_id
+            db.session.commit()
+            logger.info(f"Updated market with Apechain market ID: {market_id}")
+            
+            # Update pipeline run with success
+            pipeline_run.status = "completed"
+            pipeline_run.end_time = datetime.utcnow()
+            pipeline_run.markets_processed = 1
+            pipeline_run.markets_approved = 1
+            pipeline_run.markets_deployed = 1
+            db.session.commit()
+            
+            logger.info("=" * 50)
+            logger.info("PIPELINE TEST COMPLETED SUCCESSFULLY")
+            logger.info(f"Market Question: {market.question}")
+            logger.info(f"Market ID: {market.id}")
+            logger.info(f"Apechain Market ID: {market.apechain_market_id}")
+            logger.info(f"Transaction Hash: {market.blockchain_tx}")
+            logger.info("=" * 50)
+            
+            return 0
+            
+        except Exception as e:
+            logger.error(f"Error in pipeline test: {str(e)}")
+            if 'pipeline_run' in locals():
                 pipeline_run.status = "failed"
                 pipeline_run.error = str(e)
                 pipeline_run.end_time = datetime.utcnow()
                 db.session.commit()
-                return 1
-        
+            return 1
+
+def main():
+    """Main function for testing the full pipeline."""
+    try:
+        return run_single_session_pipeline()
     except Exception as e:
         logger.error(f"Error in main function: {str(e)}")
         return 1
