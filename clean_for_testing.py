@@ -47,14 +47,16 @@ def clean_database():
             logger.info(f"  - ApprovalLog: {approval_log_count} records")
             logger.info(f"  - PipelineRun: {run_count} records")
             
-            # Delete records from each table
+            # Delete records from each table including PipelineRun
+            logger.info("Deleting ALL records from database tables...")
             ApprovalEvent.query.delete()
             ApprovalLog.query.delete()
             PendingMarket.query.delete()
             Market.query.delete()
             ProcessedMarket.query.delete()
+            PipelineRun.query.delete()  # Delete all pipeline runs too
             
-            # Don't delete pipeline runs, just add a new one with clean stats
+            # Create a fresh initial PipelineRun
             new_run = PipelineRun(
                 start_time=datetime.utcnow(),
                 end_time=datetime.utcnow(),
@@ -69,6 +71,9 @@ def clean_database():
             
             # Commit changes
             db.session.commit()
+            
+            # Skip vacuum process as it may cause timeouts
+            logger.info("Skipping database vacuum operation to avoid timeouts")
             
             # Verify cleaning
             processed_count_after = ProcessedMarket.query.count()
@@ -85,7 +90,7 @@ def clean_database():
             logger.info(f"  - ApprovalEvent: {approval_count_after} records")
             logger.info(f"  - ApprovalLog: {approval_log_count_after} records")
             logger.info(f"  - PipelineRun: {run_count_after} records")
-            logger.info(f"  - Added new clean PipelineRun record")
+            logger.info(f"  - Added single clean PipelineRun record")
             
             return True
     except Exception as e:
