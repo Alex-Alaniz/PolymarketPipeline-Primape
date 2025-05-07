@@ -25,6 +25,7 @@ from sqlalchemy.orm import sessionmaker
 # Import our utility modules
 from utils.fallback_categorizer import fallback_categorize, detect_event
 from utils.messaging import post_slack_message
+from utils.transform_markets_with_events import transform_markets_with_events
 from filter_active_markets import fetch_markets, filter_active_markets
 from models import db, PendingMarket, ProcessedMarket, PipelineRun
 
@@ -175,16 +176,44 @@ def store_and_post_markets(markets):
     
     for market in markets:
         try:
-            # Create a PendingMarket record
+            # Handle options based on whether this is an event or regular market
+            is_event = market.get('is_event', False)
+            
+            if is_event:
+                # For events, options are team names
+                options = market.get('options', [])
+                if not options or not isinstance(options, list) or len(options) < 2:
+                    logger.warning(f"Event market has insufficient options, skipping: {market.get('question')}")
+                    continue
+            else:
+                # For regular markets, use binary Yes/No options if not specified
+                options = market.get('options', ["Yes", "No"])
+                if not options or not isinstance(options, list) or len(options) == 0:
+                    options = ["Yes", "No"]
+            
+            # Store option images as JSON if available
+            option_images = market.get('option_images', {})
+            option_images_json = json.dumps(option_images) if option_images else None
+            
+            # Store option market IDs for events (maps team names to their market IDs)
+            option_market_ids = market.get('option_market_ids', {})
+            option_market_ids_json = json.dumps(option_market_ids) if option_market_ids else None
+            
+            # Create a PendingMarket record with full event information
             pending_market = PendingMarket(
                 poly_id=market.get('id'),
                 question=market.get('question'),
                 category=market.get('category'),
-                options=json.dumps(["Yes", "No"]),  # Default binary options
+                options=json.dumps(options),
                 expiry=market.get('expiry_time'),
                 event_id=market.get('event_id'),
                 event_name=market.get('event_name'),
-                posted=False  # Will be set to True after posting
+                posted=False,  # Will be set to True after posting
+                event_image=market.get('event_image'),
+                event_icon=market.get('event_icon'),
+                option_images=option_images_json,
+                is_event=is_event,
+                option_market_ids=option_market_ids_json
             )
             
             # Add to database
@@ -261,8 +290,13 @@ def _run_simple_pipeline_internal():
         db.session.commit()
         return (0, 0, 0)
     
-    # Step 2: Categorize markets
-    categorized_markets = categorize_markets(markets)
+    # Step 2: Transform markets to use events as primary structure
+    transformed_markets = transform_markets_with_events(markets)
+    transformed_count = len(transformed_markets)
+    logger.info(f"Transformed {fetched_count} markets into {transformed_count} markets/events")
+    
+    # Step 3: Categorize transformed markets
+    categorized_markets = categorize_markets(transformed_markets)
     categorized_count = len(categorized_markets)
     logger.info(f"Categorized {categorized_count} markets")
     

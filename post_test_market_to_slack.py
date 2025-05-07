@@ -177,18 +177,36 @@ def is_valid_url(url):
 
 def post_test_market():
     """Post a test market to Slack for approval."""
-    # Create a test market
+    # Create a test event market (not a binary market)
     test_market = {
-        "id": f"test_{datetime.now().strftime('%Y%m%d%H%M%S')}",
-        "question": "Will Manchester United win the Champions League 2025?",
+        "id": f"event_test_{datetime.now().strftime('%Y%m%d%H%M%S')}",
+        "question": "UEFA Champions League Winner 2025",
         "category": "sports",
-        "event_name": "UEFA Champions League 2025",
         "event_id": "event_champions_league_2025",
+        "event_name": "UEFA Champions League 2025",
         "expiry": (datetime.now() + timedelta(days=60)).isoformat(),
-        "event_image": "https://upload.wikimedia.org/wikipedia/en/thumb/9/9a/UEFA_Champions_League_logo.svg/640px-UEFA_Champions_League_logo.svg.png",
+        "event_image": "https://i.imgur.com/Ux7r6Fp.png",
+        "is_event": True,
+        "options": [
+            "Manchester United",
+            "Paris Saint-Germain",
+            "Arsenal",
+            "Inter Milan",
+            "Real Madrid"
+        ],
         "option_images": {
-            "Yes": "https://upload.wikimedia.org/wikipedia/en/thumb/7/7a/Manchester_United_FC_crest.svg/640px-Manchester_United_FC_crest.svg.png",
-            "No": "https://upload.wikimedia.org/wikipedia/commons/thumb/c/cc/Cross_red_circle.svg/640px-Cross_red_circle.svg.png"
+            "Manchester United": "https://i.imgur.com/OTDjOce.png",
+            "Paris Saint-Germain": "https://i.imgur.com/B8Zmr1v.png",
+            "Arsenal": "https://i.imgur.com/yBzwzFM.png",
+            "Inter Milan": "https://i.imgur.com/5fiT0XE.png",
+            "Real Madrid": "https://i.imgur.com/vvL5yfp.png"
+        },
+        "option_market_ids": {
+            "Manchester United": "market_id_1234",
+            "Paris Saint-Germain": "market_id_2345",
+            "Arsenal": "market_id_3456",
+            "Inter Milan": "market_id_4567",
+            "Real Madrid": "market_id_5678"
         }
     }
     

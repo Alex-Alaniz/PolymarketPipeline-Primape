@@ -305,6 +305,9 @@ def format_market_with_images(market_data):
     Returns:
         Tuple of (text_message, blocks_array)
     """
+    # Check if this is an event or regular market
+    is_event = market_data.get('is_event', False)
+    
     # Basic market information
     question = market_data.get('question', 'Unknown Market')
     category = market_data.get('category', 'uncategorized')
@@ -313,12 +316,12 @@ def format_market_with_images(market_data):
     event_id = market_data.get('event_id', '')
     
     # Start with a text fallback message
-    text_message = f"*New Market for Approval*\n"
-    text_message += f"*Question:* {question}\n"
+    text_message = f"*New {'Event' if is_event else 'Market'} for Approval*\n"
+    text_message += f"*{'Event' if is_event else 'Question'}:* {question}\n"
     text_message += f"*Category:* {category}\n"
     text_message += f"*Expiry:* {expiry}\n"
     
-    if event_name:
+    if event_name and not is_event:
         text_message += f"*Event:* {event_name}\n"
     
     # Create blocks for rich formatting
@@ -327,14 +330,14 @@ def format_market_with_images(market_data):
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "New Market for Approval"
+                "text": f"New {'Event' if is_event else 'Market'} for Approval"
             }
         },
         {
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Question:* {question}"
+                "text": f"*{'Event' if is_event else 'Question'}:* {question}"
             }
         },
         {
@@ -352,8 +355,8 @@ def format_market_with_images(market_data):
         }
     ]
     
-    # Add event information if available
-    if event_name:
+    # For regular markets, add event info
+    if event_name and not is_event:
         event_block = {
             "type": "section",
             "text": {
@@ -378,31 +381,75 @@ def format_market_with_images(market_data):
             }
         )
     
-    # Add option images if available
-    option_images = market_data.get('option_images', {})
-    if option_images and isinstance(option_images, dict) and len(option_images) > 0:
-        for option_name, image_url in option_images.items():
-            if image_url and is_valid_url(image_url):
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"*Option:* {option_name}"
+    # Handle options based on whether this is an event or regular market
+    if is_event:
+        # For events, show options as team names with their images
+        options = market_data.get('options', [])
+        option_images = market_data.get('option_images', {})
+        option_market_ids = market_data.get('option_market_ids', {})
+        
+        # Add option divider
+        blocks.append({
+            "type": "divider"
+        })
+        
+        # Add heading for options
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Options:*"
+            }
+        })
+        
+        # Add each option (team) with its image
+        for option in options:
+            # Add option name
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*{option}*" + (f" (ID: {option_market_ids.get(option, 'Unknown')})" if option in option_market_ids else "")
+                }
+            })
+            
+            # Add option image if available
+            if option in option_images and option_images[option] and is_valid_url(option_images[option]):
+                blocks.append({
+                    "type": "image",
+                    "title": {
+                        "type": "plain_text",
+                        "text": f"Option: {option}"
+                    },
+                    "image_url": option_images[option],
+                    "alt_text": f"Option {option}"
+                })
+    else:
+        # Regular market - add option images if available
+        option_images = market_data.get('option_images', {})
+        if option_images and isinstance(option_images, dict) and len(option_images) > 0:
+            for option_name, image_url in option_images.items():
+                if image_url and is_valid_url(image_url):
+                    blocks.append(
+                        {
+                            "type": "section",
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": f"*Option:* {option_name}"
+                            }
                         }
-                    }
-                )
-                blocks.append(
-                    {
-                        "type": "image",
-                        "title": {
-                            "type": "plain_text",
-                            "text": f"Option Image: {option_name}"
-                        },
-                        "image_url": image_url,
-                        "alt_text": f"Option {option_name}"
-                    }
-                )
+                    )
+                    blocks.append(
+                        {
+                            "type": "image",
+                            "title": {
+                                "type": "plain_text",
+                                "text": f"Option Image: {option_name}"
+                            },
+                            "image_url": image_url,
+                            "alt_text": f"Option {option_name}"
+                        }
+                    )
     
     # Add reminder for approval reactions
     blocks.append(
