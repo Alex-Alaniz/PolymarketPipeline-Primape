@@ -295,6 +295,44 @@ def delete_message(message_ts: str) -> bool:
         logger.error(f"Error deleting message: {str(e)}")
         return False
 
+def post_slack_message(message: str):
+    """
+    Post a simple text message to Slack and add approval reactions.
+    
+    Args:
+        message: Message text to post
+        
+    Returns:
+        Response dictionary if successful, None otherwise
+    """
+    if not slack_client:
+        logger.error("Slack client not initialized - missing token")
+        return None
+    
+    try:
+        # Post to Slack
+        response = slack_client.chat_postMessage(
+            channel=SLACK_CHANNEL_ID,
+            text=message
+        )
+        
+        if response and response.get('ok'):
+            message_id = response['ts']
+            
+            # Add standard approval/rejection reactions
+            add_reaction_to_message(message_id, "thumbsup")
+            add_reaction_to_message(message_id, "thumbsdown")
+            
+            logger.info(f"Posted message to Slack with ID {message_id}")
+            return response
+        else:
+            logger.error(f"Failed to post message to Slack: {response.get('error', 'Unknown error')}")
+            return None
+            
+    except Exception as e:
+        logger.error(f"Error posting message to Slack: {str(e)}")
+        return None
+
 def post_markets_to_slack(markets, format_market_message_func=None):
     """
     Post a batch of markets to Slack.
@@ -336,8 +374,8 @@ def post_markets_to_slack(markets, format_market_message_func=None):
                 message_id = response['ts']
                 
                 # Add approval/rejection reactions
-                add_reaction_to_message(message_id, "white_check_mark")
-                add_reaction_to_message(message_id, "x")
+                add_reaction_to_message(message_id, "thumbsup")
+                add_reaction_to_message(message_id, "thumbsdown")
                 
                 # Set the message ID on the market
                 if hasattr(market, 'message_id'):

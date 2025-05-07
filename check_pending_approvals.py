@@ -1,0 +1,158 @@
+#!/usr/bin/env python3
+
+"""
+Check for market approvals in Slack
+
+This script checks Slack messages for reactions (thumbs up/down)
+and updates the approval status in the database.
+
+It handles the following steps in the pipeline:
+1. Checks all pending markets posted to Slack
+2. Marks them as approved/rejected based on reactions
+3. Moves approved markets to the main Market table
+"""
+
+import os
+import json
+import logging
+from datetime import datetime
+from typing import Dict, List, Any, Tuple
+
+from flask import Flask
+from utils.messaging import get_message_reactions
+from models import db, PendingMarket, ApprovalLog, Market
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger("approval_checker")
+
+# Import Flask app for database context
+app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+db.init_app(app)
+
+def check_market_approvals() -> Tuple[int, int, int]:
+    """
+    Check for market approvals or rejections in Slack.
+    
+    Returns:
+        Tuple[int, int, int]: Count of (pending, approved, rejected) markets
+    """
+    # Find all pending markets that have been posted to Slack
+    pending_markets = PendingMarket.query.filter(
+        PendingMarket.posted == True,
+        PendingMarket.slack_message_id.isnot(None),
+        PendingMarket.approved.is_(None)  # Not yet approved or rejected
+    ).all()
+    
+    if not pending_markets:
+        logger.info("No pending markets found for approval check")
+        return 0, 0, 0
+    
+    logger.info(f"Checking {len(pending_markets)} pending markets for approvals")
+    
+    approved_count = 0
+    rejected_count = 0
+    
+    for market in pending_markets:
+        # Skip if no Slack message ID
+        if not market.slack_message_id:
+            continue
+        
+        # Get reactions on the Slack message
+        reactions = get_message_reactions(market.slack_message_id)
+        
+        # Check for approval (thumbsup)
+        approved = any(
+            reaction in reactions 
+            for reaction in ['thumbsup', '+1']
+        )
+        
+        # Check for rejection (thumbsdown)
+        rejected = any(
+            reaction in reactions 
+            for reaction in ['thumbsdown', '-1']
+        )
+        
+        # Skip if no decision yet
+        if not approved and not rejected:
+            continue
+        
+        # Record the decision
+        market.approved = approved
+        
+        # Create approval log entry
+        approval_log = ApprovalLog(
+            timestamp=datetime.utcnow(),
+            market_id=market.poly_id, 
+            decision="approved" if approved else "rejected",
+            message_id=market.slack_message_id
+        )
+        db.session.add(approval_log)
+        
+        # For approved markets, create entry in main Market table
+        if approved:
+            # Create market entry
+            create_market_entry(market)
+            approved_count += 1
+            logger.info(f"Market approved: {market.question[:50]}...")
+        else:
+            rejected_count += 1
+            logger.info(f"Market rejected: {market.question[:50]}...")
+        
+        # Commit changes
+        db.session.commit()
+    
+    return len(pending_markets), approved_count, rejected_count
+
+def create_market_entry(pending_market: PendingMarket) -> bool:
+    """
+    Create an entry in the Market table for an approved market.
+    
+    Args:
+        pending_market: PendingMarket model instance
+        
+    Returns:
+        bool: True if successful, False otherwise
+    """
+    try:
+        # Parse options from JSON string
+        options = json.loads(pending_market.options) if pending_market.options else []
+        
+        # Create Market entry
+        market = Market(
+            poly_id=pending_market.poly_id,
+            question=pending_market.question,
+            category=pending_market.category,
+            options=pending_market.options,  # Keep as JSON string
+            expiry=pending_market.expiry,
+            event_id=pending_market.event_id,
+            event_name=pending_market.event_name
+        )
+        
+        # Add to database
+        db.session.add(market)
+        
+        return True
+    except Exception as e:
+        logger.error(f"Error creating market entry: {str(e)}")
+        db.session.rollback()
+        return False
+
+def main():
+    """
+    Main function to check market approvals.
+    """
+    with app.app_context():
+        pending_count, approved_count, rejected_count = check_market_approvals()
+        logger.info(f"Approval check complete: {pending_count} pending, {approved_count} approved, {rejected_count} rejected")
+
+if __name__ == "__main__":
+    main()
