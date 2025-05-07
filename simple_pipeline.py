@@ -69,6 +69,7 @@ def fetch_and_filter_markets():
 def categorize_markets(markets):
     """
     Categorize markets using the fallback keyword-based categorizer.
+    Also extract event information from the Polymarket API response.
     
     Args:
         markets: List of market data dictionaries
@@ -86,17 +87,75 @@ def categorize_markets(markets):
         
         # Use fallback categorization
         category = fallback_categorize(question)
-        event_id, event_name = detect_event(question)
+        
+        # Extract event information from market data
+        event_id = None
+        event_name = None
+        event_image = None
+        event_icon = None
+        event_questions = []
+        event_outcomes = []
+        
+        # First check if event data is directly available
+        if 'event_id' in market:
+            event_id = market.get('event_id')
+        
+        if 'event_name' in market:
+            event_name = market.get('event_name')
+            
+        if 'event_image' in market:
+            event_image = market.get('event_image')
+            
+        if 'event_icon' in market:
+            event_icon = market.get('event_icon')
+        
+        # Then check for detailed event data from API
+        events = market.get('events', [])
+        if events:
+            for event in events:
+                if 'id' in event:
+                    event_id = event['id']
+                if 'name' in event:
+                    event_name = event['name']
+                if 'image' in event:
+                    event_image = event['image']
+                if 'icon' in event:
+                    event_icon = event['icon']
+                if 'questions' in event:
+                    event_questions = event['questions']
+                if 'outcomes' in event:
+                    event_outcomes = event['outcomes']
+        
+        # If event info is still not found, use fallback from text analysis
+        if not event_id or not event_name:
+            detected_id, detected_name = detect_event(question)
+            event_id = event_id or detected_id
+            event_name = event_name or detected_name
         
         logger.info(f"Categorized market {i+1}/{len(markets)}: '{question[:30]}...' as {category}")
         if event_id:
-            logger.info(f"Detected event: {event_name} (ID: {event_id})")
+            logger.info(f"Detected event: {event_name or 'Unknown'} (ID: {event_id})")
+            if event_image:
+                logger.info(f"Event has banner image: {event_image[:50]}...")
+        
+        # Get market option images if available
+        option_images = {}
+        if 'option_images' in market:
+            option_images = market.get('option_images', {})
+        elif 'icon' in market:
+            # If market has an icon, use it as default option image
+            option_images = {"Yes": market.get('icon')}
         
         # Add category and event info to market
         market_copy = market.copy()
         market_copy['category'] = category
         market_copy['event_id'] = event_id
         market_copy['event_name'] = event_name
+        market_copy['event_image'] = event_image
+        market_copy['event_icon'] = event_icon
+        market_copy['event_questions'] = event_questions
+        market_copy['event_outcomes'] = event_outcomes
+        market_copy['option_images'] = option_images
         
         categorized_markets.append(market_copy)
     
