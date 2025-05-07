@@ -79,6 +79,20 @@ def process_event_images(market_data: Dict[str, Any]) -> Dict[str, Any]:
     if 'option_images' not in processed_data:
         processed_data['option_images'] = {}
     
+    # Store these flags in the processed data for easier debugging
+    processed_data['is_binary'] = False
+    processed_data['is_multiple_option'] = False
+    
+    # First check if this is a multiple choice market from the API flag
+    is_multiple_choice = processed_data.get('is_multiple_choice', False)
+    
+    # Then check if this has an events array with multiple outcomes
+    has_event_array = (
+        'events' in processed_data 
+        and isinstance(processed_data['events'], list) 
+        and len(processed_data['events']) > 0
+    )
+    
     # Determine if this is a binary market (Yes/No outcomes)
     is_binary = False
     outcomes_raw = processed_data.get("outcomes", "[]")
@@ -91,75 +105,94 @@ def process_event_images(market_data: Dict[str, Any]) -> Dict[str, Any]:
         # Check if outcomes are exactly ["Yes", "No"]
         if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
             is_binary = True
+            processed_data['is_binary'] = True
             logger.info("Detected binary Yes/No market")
     except Exception as e:
         logger.error(f"Error checking binary market status: {str(e)}")
     
-    # Check if this is a multi-option market or event market
-    is_multiple = processed_data.get('is_multiple_option', False) or processed_data.get('is_event', False)
+    # A market is "multiple option" if it's either flagged as multiple choice
+    # OR it has an events array with options
+    is_multiple = (
+        is_multiple_choice
+        or processed_data.get('is_event', False)
+        or (has_event_array and not is_binary)
+    )
     
-    # Skip if no events array
-    if not processed_data.get('events'):
-        if is_binary:
-            # For binary markets without events array, use market-level image
-            if 'image' in processed_data:
-                processed_data['event_image'] = processed_data['image']
-                logger.info(f"Binary market: Using market-level image: {processed_data['image'][:30]}...")
-        return processed_data
+    # Store the flag for later use
+    processed_data['is_multiple_option'] = is_multiple
     
-    # Get the main event data (first event in array)
-    event = processed_data['events'][0]
-    
-    # Set event ID and name
-    if 'id' in event:
-        processed_data['event_id'] = event['id']
-    if 'title' in event:
-        processed_data['event_name'] = event['title']
-    
-    # RULE 1: For binary markets, use market-level image URL (not icon)
+    # PRIORITY 1: Binary Markets (Yes/No outcomes)
     if is_binary:
+        # For binary markets, use market-level image
         if 'image' in processed_data:
             processed_data['event_image'] = processed_data['image']
             logger.info(f"Binary market: Using market-level image: {processed_data['image'][:30]}...")
+        
+        # For binary markets, we don't use option icons
+        processed_data['option_images'] = {}
+        
+        # If there's no events array or we're done with binary processing, we can return early
+        if not has_event_array:
+            return processed_data
     
-    # RULE 2: For multi-option markets, MUST use market["events"][0]["image"]
-    elif is_multiple:
+    # PRIORITY 2: Multi-option markets with events array
+    if is_multiple and has_event_array:
+        # Get the main event data (first event in array)
+        event = processed_data['events'][0]
+        
+        # Set event ID and name
+        if 'id' in event:
+            processed_data['event_id'] = event['id']
+        if 'title' in event:
+            processed_data['event_name'] = event['title']
+        
+        # RULE 2: For multi-option markets, MUST use market["events"][0]["image"]
         if 'image' in event:
             processed_data['event_image'] = event['image']
             logger.info(f"Multi-option market: Using events[0].image for banner: {event['image'][:30]}...")
-    
-    # For multi-option markets, store event icon too
-    if is_multiple and 'icon' in event:
-        processed_data['event_icon'] = event['icon']
-        logger.info(f"Multi-option market: Using events[0].icon: {event['icon'][:30]}...")
-    
-    # Extract option images from outcomes if available
-    option_images = processed_data.get('option_images', {})
-    
-    # RULE 2: For option icons, use option_market["icon"]
-    if 'outcomes' in event and isinstance(event['outcomes'], list):
-        for outcome in event['outcomes']:
-            # Skip if no outcome data
-            if not isinstance(outcome, dict):
-                continue
+        
+        # For multi-option markets, store event icon too
+        if 'icon' in event:
+            processed_data['event_icon'] = event['icon']
+            logger.info(f"Multi-option market: Using events[0].icon: {event['icon'][:30]}...")
+        
+        # Extract option images from outcomes if available
+        option_images = processed_data.get('option_images', {}) or {}
+        
+        # RULE 2: For option icons, use option_market["icon"]
+        if 'outcomes' in event and isinstance(event['outcomes'], list):
+            for outcome in event['outcomes']:
+                # Skip if no outcome data
+                if not isinstance(outcome, dict):
+                    continue
+                    
+                # Get option ID, name, and icon
+                option_id = outcome.get('id')
+                option_name = outcome.get('title') or outcome.get('name')
                 
-            # Get option ID, name, and icon
-            option_id = outcome.get('id')
-            option_name = outcome.get('title') or outcome.get('name')
-            
-            # Prefer icon over image for option icons
-            option_icon = outcome.get('icon')
-            if not option_icon:
-                option_icon = outcome.get('image')
-            
-            # Store option image if available - use ID as key if available, otherwise name
-            key = option_id if option_id else option_name
-            if key and option_icon:
-                option_images[key] = option_icon
-                logger.info(f"Added option icon for {key}: {option_icon[:30]}...")
+                # Prefer icon over image for option icons
+                option_icon = outcome.get('icon')
+                if not option_icon:
+                    option_icon = outcome.get('image')
+                
+                # Store option image if available - use ID as key if available, otherwise name
+                key = option_id if option_id else option_name
+                if key and option_icon:
+                    option_images[key] = option_icon
+                    logger.info(f"Added option icon for {key}: {option_icon[:30]}...")
+        
+        # Update option images
+        processed_data['option_images'] = option_images
     
-    # Update option images
-    processed_data['option_images'] = option_images
+    # Log the final image decisions for debugging
+    logger.info(f"""
+    Final image decisions:
+    - is_binary: {processed_data.get('is_binary', False)}
+    - is_multiple_option: {processed_data.get('is_multiple_option', False)}
+    - event_image: {processed_data.get('event_image', 'None')[:30]}...
+    - event_icon: {processed_data.get('event_icon', 'None')[:30]}...
+    - option_images: {len(processed_data.get('option_images', {}))} images
+    """)
     
     return processed_data
 

@@ -47,21 +47,32 @@ def run_pipeline():
     
     # Run the pipeline directly
     try:
-        # Run the pipeline script directly
-        logger.info("Running pipeline.py directly")
+        # First run our test script to verify the image handling rules
+        logger.info("Running image handling test first")
+        import subprocess
+        test_result = subprocess.run("python test_event_images.py", shell=True, capture_output=True, text=True)
+        
+        if test_result.returncode == 0:
+            logger.info("✅ Image handling tests passed")
+            logger.info(test_result.stdout)
+        else:
+            logger.error("❌ Image handling tests failed")
+            logger.error(test_result.stderr)
+            return False
+            
+        # Now run the actual pipeline
+        logger.info("Running pipeline.py")
         from main import app
         
         with app.app_context():
-            cmd = "python pipeline.py"
-            import subprocess
-            result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
+            result = subprocess.run("python pipeline.py", shell=True, capture_output=True, text=True)
             
             if result.returncode == 0:
-                logger.info("Pipeline completed successfully")
-                logger.info(f"Output: {result.stdout}")
+                logger.info("✅ Pipeline completed successfully")
+                logger.info(f"Output: {result.stdout[:500]}...")  # Show first 500 chars of output
                 return True
             else:
-                logger.error(f"Pipeline failed with exit code {result.returncode}")
+                logger.error(f"❌ Pipeline failed with exit code {result.returncode}")
                 logger.error(f"Error: {result.stderr}")
                 return False
     except Exception as e:
