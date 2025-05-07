@@ -1,0 +1,13 @@
+[Unit]
+Description=Polymarket Pipeline Daily Service
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/path/to/your/project
+ExecStart=/path/to/your/project/run_daily_pipeline.sh
+Environment=PYTHONUNBUFFERED=1
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,2 @@
+# Run Polymarket pipeline daily at midnight
+0 0 * * * /path/to/your/project/run_daily_pipeline.sh >> /path/to/your/project/logs/cron_pipeline.log 2>&1
