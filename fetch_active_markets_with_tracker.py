@@ -482,9 +482,11 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 else:
                     # Create default Yes/No options
                     logger.info("Adding default Yes/No options for binary market")
+                    # Use icon/image fields from the API when available
+                    image_url = market.get("icon") or market.get("image") or market.get("image_url", "")
                     option_images = {
-                        "Yes": market.get("image_url", ""),
-                        "No": market.get("image_url", "")
+                        "Yes": image_url,
+                        "No": image_url
                     }
             
             # Make sure option_images is set in the market data

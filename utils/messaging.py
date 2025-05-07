@@ -326,14 +326,25 @@ def format_market_with_images(market_data):
     event_name = market_data.get('event_name', '')
     event_id = market_data.get('event_id', '')
     
-    # Format expiry date nicely if it's a timestamp
-    if isinstance(expiry, int) or (isinstance(expiry, str) and expiry.isdigit()):
-        try:
-            from datetime import datetime
+    # Format expiry date nicely if it's a timestamp or ISO format
+    try:
+        from datetime import datetime
+        import dateutil.parser
+        
+        if isinstance(expiry, int) or (isinstance(expiry, str) and expiry.isdigit()):
+            # Handle numeric timestamp (milliseconds or seconds)
             expiry_date = datetime.fromtimestamp(int(expiry) / 1000 if int(expiry) > 1000000000000 else int(expiry))
             expiry = expiry_date.strftime('%Y-%m-%d %H:%M UTC')
-        except Exception as e:
-            logger.error(f"Error formatting expiry date: {e}")
+        elif isinstance(expiry, str) and ('T' in expiry or '-' in expiry):
+            # Handle ISO format date string (YYYY-MM-DDTHH:MM:SS)
+            try:
+                expiry_date = dateutil.parser.parse(expiry)
+                expiry = expiry_date.strftime('%Y-%m-%d %H:%M UTC')
+                logger.info(f"Parsed ISO date format: {expiry}")
+            except Exception as date_e:
+                logger.error(f"Error parsing ISO date format: {date_e}")
+    except Exception as e:
+        logger.error(f"Error formatting expiry date: {e}")
     
     # Start with a text fallback message
     text_message = f"*New {'Event' if is_event else 'Market'} for Approval*\n"
@@ -404,7 +415,26 @@ def format_market_with_images(market_data):
     # Handle options based on whether this is an event or regular market
     if is_event:
         # For events, show options as team names with their images
-        options = market_data.get('options', [])
+        # First try to get options from outcomes field (proper API format)
+        options = []
+        outcomes_raw = market_data.get("outcomes", "[]")
+        try:
+            if isinstance(outcomes_raw, str):
+                outcomes = json.loads(outcomes_raw)
+            else:
+                outcomes = outcomes_raw
+                
+            if isinstance(outcomes, list):
+                options = outcomes
+                logger.info(f"Extracted {len(options)} options from outcomes field")
+        except Exception as e:
+            logger.error(f"Error parsing outcomes field: {str(e)}")
+            
+        # If no options found in outcomes, try the options field
+        if not options:
+            options = market_data.get('options', [])
+            logger.info(f"Using {len(options)} options from options field")
+            
         option_images = market_data.get('option_images', {})
         option_market_ids = market_data.get('option_market_ids', {})
         
@@ -445,9 +475,37 @@ def format_market_with_images(market_data):
                     "alt_text": f"Option {option}"
                 })
     else:
-        # Regular market - add option images if available
+        # Regular market - try to extract outcomes for binary markets
+        outcomes = []
+        try:
+            # Try to extract from outcomes field first
+            outcomes_raw = market_data.get("outcomes", "[]")
+            if isinstance(outcomes_raw, str):
+                outcomes = json.loads(outcomes_raw)
+            else:
+                outcomes = outcomes_raw
+            
+            if isinstance(outcomes, list) and outcomes:
+                logger.info(f"Binary market with {len(outcomes)} outcomes from outcomes field")
+                # Add outcomes as options section
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Options:* " + ", ".join(outcomes)
+                    }
+                })
+        except Exception as e:
+            logger.error(f"Error extracting outcomes for binary market: {str(e)}")
+        
+        # Add option images if available
         option_images = market_data.get('option_images', {})
         if option_images and isinstance(option_images, dict) and len(option_images) > 0:
+            # Add a divider before options
+            blocks.append({
+                "type": "divider"
+            })
+            
             for option_name, image_url in option_images.items():
                 if image_url and is_valid_url(image_url):
                     blocks.append(
