@@ -460,12 +460,32 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                     
                     logger.info(f"Processing multi-option market with {len(outcomes)} options")
                     
-                    # Extract option images from the market data
-                    for option in outcomes:
-                        option_key = str(option)
-                        if 'option_images' in market and option_key in market['option_images']:
-                            option_images[option_key] = market['option_images'][option_key]
-                            logger.info(f"Found image for option: {option_key}")
+                    # First check if options have images defined in events array
+                    if 'events' in market and isinstance(market['events'], list) and len(market['events']) > 0:
+                        event = market['events'][0]  # Use first event
+                        
+                        # Check if outcomes in event
+                        if 'outcomes' in event and isinstance(event['outcomes'], list):
+                            for outcome in event['outcomes']:
+                                if isinstance(outcome, dict) and 'title' in outcome and 'image' in outcome:
+                                    option_name = outcome['title']
+                                    option_images[option_name] = outcome['image']
+                                    logger.info(f"Found outcome image from events array: {option_name}")
+                    
+                    # If no images yet, check option_images
+                    if not option_images and 'option_images' in market:
+                        for option in outcomes:
+                            option_key = str(option)
+                            if option_key in market['option_images']:
+                                option_images[option_key] = market['option_images'][option_key]
+                                logger.info(f"Found image for option: {option_key}")
+                    
+                    # If still no images, use the event icon for all options
+                    if not option_images and market.get('event_icon'):
+                        for option in outcomes:
+                            option_key = str(option)
+                            option_images[option_key] = market['event_icon']
+                            logger.info(f"Using event icon for option: {option_key}")
                     
                     # Save option market IDs if available
                     option_market_ids = {}
@@ -476,19 +496,8 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 except Exception as e:
                     logger.error(f"Error processing multi-option market: {str(e)}")
             else:
-                # For binary markets, use Yes/No if available
-                if 'option_images' in market:
-                    option_images = market['option_images']
-                    logger.info(f"Binary market with option images: {list(option_images.keys())}")
-                else:
-                    # Create default Yes/No options
-                    logger.info("Adding default Yes/No options for binary market")
-                    # Use icon/image fields from the API when available
-                    image_url = market.get("icon") or market.get("image") or market.get("image_url", "")
-                    option_images = {
-                        "Yes": image_url,
-                        "No": image_url
-                    }
+                # For binary markets, we don't need option images - using one banner only
+                logger.info("Binary market - using single banner image")
             
             # Make sure option_images is set in the market data
             market['option_images'] = option_images

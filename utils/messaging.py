@@ -538,11 +538,35 @@ def is_valid_url(url):
     if not url or not isinstance(url, str):
         return False
     
+    # Common invalid URL patterns to filter out
+    invalid_patterns = [
+        "undefined", "null", "N/A", "none", "[]", "{}", 
+        "false", "true", "<", ">", "data:image"
+    ]
+    
+    # Quickly check for common invalid patterns
+    for pattern in invalid_patterns:
+        if pattern in url.lower():
+            logger.warning(f"Invalid URL detected containing '{pattern}': {url[:30]}...")
+            return False
+    
+    # Only accept http/https URLs
+    if not (url.startswith('http://') or url.startswith('https://')):
+        logger.warning(f"Invalid URL scheme (not http/https): {url[:30]}...")
+        return False
+        
     try:
         from urllib.parse import urlparse
         result = urlparse(url)
-        return all([result.scheme, result.netloc])
-    except:
+        
+        # URL must have scheme (http/https) and netloc (domain)
+        valid = all([result.scheme, result.netloc])
+        if not valid:
+            logger.warning(f"Invalid URL structure: {url[:30]}...")
+            
+        return valid
+    except Exception as e:
+        logger.warning(f"Error validating URL: {str(e)} - {url[:30]}...")
         return False
 
 def post_slack_message(message, blocks=None, market_data=None):
