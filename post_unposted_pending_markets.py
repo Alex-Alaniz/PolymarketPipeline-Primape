@@ -95,12 +95,26 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
     category = market.category.lower() if market.category else 'news'
     emoji = category_emoji.get(category, category_emoji['unknown'])
     
+    # Parse options if they're stored as a string
+    options_list = []
+    if market.options:
+        if isinstance(market.options, str):
+            try:
+                options_list = json.loads(market.options)
+            except json.JSONDecodeError:
+                options_list = []
+        else:
+            options_list = market.options
+    
     # Format options list for display
     option_values = []
-    if market.options:
-        for option in market.options:
+    for option in options_list:
+        if isinstance(option, dict):
             option_value = option.get('value', 'Unknown')
             option_values.append(option_value)
+        elif isinstance(option, str):
+            option_values.append(option)
+    
     options_str = ', '.join(option_values) if option_values else 'Yes, No'
     
     # Determine if this market is part of an event

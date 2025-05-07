@@ -73,30 +73,34 @@ def check_pending_market_approvals() -> Tuple[int, int, int]:
         has_rejection = False
         reviewer = None
         
-        for reaction in reactions:
-            logger.info(f"Processing reaction: {reaction}")
-            reaction_name = reaction.get("name", "")
-            logger.info(f"Reaction name: '{reaction_name}'")
+        # Reactions are returned as a dict {reaction_name: [user_ids]}
+        for reaction_name, users in reactions.items():
+            logger.info(f"Processing reaction: {reaction_name}")
             
-            # Get users who reacted (excluding the bot)
-            users = [user for user in reaction.get("users", []) if user != BOT_USER_ID]
+            # Ensure users is a list
+            if not isinstance(users, list):
+                logger.warning(f"Expected list of users for reaction {reaction_name}, but got {type(users)}")
+                continue
+                
+            # Filter out bot user
+            non_bot_users = [user for user in users if user != BOT_USER_ID]
             
             # If only the bot reacted, skip this reaction
-            if not users:
+            if not non_bot_users:
                 logger.info(f"Skipping reaction '{reaction_name}' - only from bot user {BOT_USER_ID}")
                 continue
                 
-            logger.info(f"Non-bot users who reacted with '{reaction_name}': {users}")
+            logger.info(f"Non-bot users who reacted with '{reaction_name}': {non_bot_users}")
             
             if reaction_name == "white_check_mark" or reaction_name == "+1" or reaction_name == "thumbsup":
                 has_approval = True
                 # Get first non-bot user who reacted as approver
-                reviewer = users[0]
+                reviewer = non_bot_users[0]
                 logger.info(f"Found approval reaction from user {reviewer}")
             elif reaction_name == "x" or reaction_name == "-1" or reaction_name == "thumbsdown":
                 has_rejection = True
                 # Get first non-bot user who reacted as rejector
-                reviewer = users[0]
+                reviewer = non_bot_users[0]
                 logger.info(f"Found rejection reaction from user {reviewer}")
                 
         logger.info(f"Final result: has_approval={has_approval}, has_rejection={has_rejection}, reviewer={reviewer}")
@@ -209,25 +213,48 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
         
         # Extract options for the market
         options = []
-        outcomes_raw = raw_data.get("outcomes", "[]")
         
-        # Parse outcomes which come as a JSON string
-        try:
-            if isinstance(outcomes_raw, str):
-                outcomes = json.loads(outcomes_raw)
+        # First check if we have options from the pending market
+        if pending_market.options:
+            logger.info(f"Using options from pending_market: {pending_market.options}")
+            if isinstance(pending_market.options, str):
+                try:
+                    options_data = json.loads(pending_market.options)
+                    # Handle options that might be in [{"id": "...", "value": "..."}, ...] format
+                    if isinstance(options_data, list) and options_data and isinstance(options_data[0], dict):
+                        options = [opt.get("value", "Unknown") for opt in options_data]
+                    else:
+                        options = options_data
+                except json.JSONDecodeError:
+                    logger.error(f"Failed to parse options JSON: {pending_market.options}")
+                    options = []
             else:
-                outcomes = outcomes_raw
-                
-            # For multiple-option markets, remove duplicates
-            if is_multiple and outcomes:
-                outcomes = list(dict.fromkeys(outcomes))
-                options = outcomes
-            else:
-                # Binary market defaults to Yes/No
-                options = outcomes if outcomes else ["Yes", "No"]
-        except Exception as e:
-            logger.error(f"Error parsing outcomes: {str(e)}")
-            options = ["Yes", "No"]  # Default fallback
+                options = pending_market.options
+        
+        # Fallback to raw_data if no options found in pending_market
+        if not options:
+            logger.info("No valid options in pending_market, falling back to raw_data")
+            outcomes_raw = raw_data.get("outcomes", "[]")
+            
+            # Parse outcomes which come as a JSON string
+            try:
+                if isinstance(outcomes_raw, str):
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                    
+                # For multiple-option markets, remove duplicates
+                if is_multiple and outcomes:
+                    outcomes = list(dict.fromkeys(outcomes))
+                    options = outcomes
+                else:
+                    # Binary market defaults to Yes/No
+                    options = outcomes if outcomes else ["Yes", "No"]
+            except Exception as e:
+                logger.error(f"Error parsing outcomes: {str(e)}")
+                options = ["Yes", "No"]  # Default fallback
+        
+        logger.info(f"Final options for market: {options}")
             
         # Get the expiry timestamp
         expiry_timestamp = pending_market.expiry
