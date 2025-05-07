@@ -397,44 +397,82 @@ def format_market_with_images(market_data):
         }
         blocks.append(event_block)
     
-    # Add event banner image if available
-    # First check if we have an event image in the proper events array format
-    event_image = None
-    
-    # Check if we have events data in raw JSON format and extract the image
-    events_data = market_data.get('events')
-    if events_data:
-        try:
-            # The events data might be a string, list, or directly accessible
-            if isinstance(events_data, str):
-                if events_data.startswith('[') or events_data.startswith('{'):
-                    events_data = json.loads(events_data)
+    # RULE 1 & 2: Different image handling based on market type
+    # Determine if this is a binary market (Yes/No outcomes) or multi-option market
+    is_binary = False
+    outcomes_raw = market_data.get("outcomes", "[]")
+    try:
+        if isinstance(outcomes_raw, str):
+            outcomes = json.loads(outcomes_raw)
+        else:
+            outcomes = outcomes_raw
             
-            # If it's a list, take the first event's image
+        # Check if outcomes are exactly ["Yes", "No"]
+        if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
+            is_binary = True
+            logger.info("Detected binary Yes/No market")
+    except Exception as e:
+        logger.error(f"Error checking binary market status: {str(e)}")
+    
+    # Parse events data if it's a string
+    events_data = market_data.get('events')
+    if isinstance(events_data, str):
+        try:
+            if events_data.startswith('[') or events_data.startswith('{'):
+                events_data = json.loads(events_data)
+                logger.info(f"Successfully parsed events data from JSON string")
+        except Exception as e:
+            logger.error(f"Error parsing events string data: {str(e)}")
+    
+    # Debug log the events data structure
+    if events_data:
+        if isinstance(events_data, list):
+            logger.info(f"Events data is a list with {len(events_data)} items")
+            if len(events_data) > 0 and isinstance(events_data[0], dict):
+                logger.info(f"First event keys: {list(events_data[0].keys())}")
+                if 'image' in events_data[0]:
+                    logger.info(f"Found first event image: {events_data[0]['image'][:30]}...")
+        else:
+            logger.info(f"Events data is not a list: {type(events_data)}")
+    
+    # Get banner image based on market type
+    banner_image = None
+    
+    if is_binary:
+        # RULE 1: For binary markets, use market-level image URL (not icon)
+        banner_image = market_data.get('image')
+        logger.info(f"Binary market: Using market-level image: {banner_image}")
+    else:
+        # RULE 2: For multi-option markets, MUST use event-level image
+        # Specifically and exactly: banner = market["events"][0]["image"]
+        try:
             if isinstance(events_data, list) and len(events_data) > 0:
                 first_event = events_data[0]
                 if isinstance(first_event, dict) and 'image' in first_event:
-                    event_image = first_event.get('image')
-                    logger.info(f"Found event image from events array: {event_image}")
+                    banner_image = first_event.get('image')
+                    logger.info(f"Multi-option market: Using events[0].image: {banner_image}")
+                    # Log success for debugging
+                    logger.info(f"SUCCESS: Found event banner from events[0].image")
         except Exception as e:
-            logger.error(f"Error parsing events data for image: {str(e)}")
+            logger.error(f"Error getting event banner image: {str(e)}")
     
-    # If we couldn't get the image from events, try the direct event_image field
-    if not event_image:
-        event_image = market_data.get('event_image')
-        logger.info(f"Using direct event_image field: {event_image}")
+    # Only use fallbacks if we absolutely couldn't find the banner image
+    if not banner_image:
+        logger.warning("Could not find preferred banner image, trying fallbacks")
+        # Try other possible fields
+        for field in ['event_image', 'image', 'banner_image', 'bannerImage']:
+            if field in market_data and market_data[field]:
+                banner_image = market_data[field]
+                logger.info(f"Using fallback banner image from {field}: {banner_image}")
+                break
     
-    # Display the event image if available
-    if event_image and is_valid_url(event_image):
+    # Display the banner image if available
+    if banner_image and is_valid_url(banner_image):
         blocks.append(
             {
                 "type": "image",
-                "title": {
-                    "type": "plain_text",
-                    "text": "Event Banner Image"
-                },
-                "image_url": event_image,
-                "alt_text": "Event Banner"
+                "image_url": banner_image,
+                "alt_text": "Event banner"
             }
         )
     
@@ -503,67 +541,113 @@ def format_market_with_images(market_data):
             }
         })
         
-        # For each option, show the option name with its icon INLINE
-        option_images = market_data.get('option_images', {})
+        # RULE 2: For multi-option markets, get option icons
+        option_images = {}  # Dict to store option_id -> option_icon mapping
         
-        # Check if we have option images in the events data with "id" and "image" structure
-        if events_data and option_images == {}:
+        # Look for option images - Need to extract icon for each option
+        # From the example: For "Option: Real Madrid", we want its specific market's icon URL 
+        # Not from nested outcomes, but from the option markets themselves
+        
+        # For each option (like "Real Madrid"), we need to find the corresponding market data
+        option_markets = market_data.get('option_markets', [])
+        
+        # If option_markets isn't populated, check the raw response
+        if not option_markets and isinstance(market_data.get('response'), dict):
+            option_markets = market_data.get('response', {}).get('option_markets', [])
+            
+        # Log what we're working with
+        logger.info(f"Checking option markets array with {len(option_markets) if option_markets else 0} items")
+        
+        # First process option_markets if available (direct market references)
+        if option_markets:
             try:
-                logger.info("Checking events data for option images...")
-                # First, try to extract option images from events data
+                for option_market in option_markets:
+                    if isinstance(option_market, dict):
+                        # Get market ID and icon
+                        market_id = option_market.get('id', '')
+                        market_icon = option_market.get('icon', '')
+                        market_question = option_market.get('question', '')
+                        
+                        # Use the question as the display name for this option
+                        if market_id and market_question:
+                            # Store the icon URL indexed by market ID
+                            if market_icon and is_valid_url(market_icon):
+                                option_images[market_id] = market_icon
+                                logger.info(f"Found icon for market ID {market_id} ({market_question}): {market_icon[:30]}...")
+                                # Also set the display name in our option_info mapping
+                                option_info[market_id] = market_question
+            except Exception as e:
+                logger.error(f"Error processing option_markets: {str(e)}")
+        
+        # If we didn't find icons from option_markets, fall back to events structure
+        if not option_images and events_data:
+            try:
+                logger.info("Falling back to events.outcomes for option icons...")
                 if isinstance(events_data, list) and len(events_data) > 0:
                     for event_obj in events_data:
                         if isinstance(event_obj, dict) and 'outcomes' in event_obj:
                             outcomes_data = event_obj.get('outcomes', [])
                             
-                            # Process each outcome for images
+                            # Process each outcome for icons
                             for outcome in outcomes_data:
-                                if isinstance(outcome, dict) and 'id' in outcome and 'image' in outcome:
+                                if isinstance(outcome, dict):
                                     outcome_id = outcome.get('id', '')
-                                    outcome_image = outcome.get('image', '')
+                                    
+                                    # First check for option_market_id field
+                                    option_market_id = outcome.get('option_market_id', '')
+                                    if option_market_id:
+                                        # This links to the market, use that ID
+                                        outcome_id = option_market_id
+                                    
+                                    # Try to get the icon specifically (preferred)
+                                    outcome_icon = outcome.get('icon', '')
+                                    
+                                    # If no icon, try image as fallback
+                                    if not outcome_icon or not is_valid_url(outcome_icon):
+                                        outcome_icon = outcome.get('image', '')
                                     
                                     # Store in our option_images dict with outcome ID as key
-                                    if outcome_id and outcome_image:
-                                        option_images[outcome_id] = outcome_image
-                                        logger.info(f"Found option image for {outcome_id}: {outcome_image[:30]}...")
+                                    if outcome_id and outcome_icon and is_valid_url(outcome_icon):
+                                        option_images[outcome_id] = outcome_icon
+                                        logger.info(f"Found option icon from events for {outcome_id}: {outcome_icon[:30]}...")
             except Exception as e:
-                logger.error(f"Error extracting option images from events data: {str(e)}")
+                logger.error(f"Error extracting option icons from events data: {str(e)}")
+                
+        # Log what we found
+        logger.info(f"Found {len(option_images)} option icons and {len(option_info)} option names")
+        
+        # Prepare the fields list for the section - following Rule 2 structure for Slack payload
+        option_fields = []
         
         for option in options:
             # Use the option name from our mapping if available, otherwise use ID
             display_name = option_info.get(option, option) if option_info else option
-            option_text = f"*{display_name}*"
             
-            # Get option image if available
-            option_image_url = None
-            if option in option_images and option_images[option]:
-                option_image_url = option_images[option]
-                logger.info(f"Using image for option '{display_name}': {option_image_url[:30]}...")
+            # Get option icon URL
+            icon_url = option_images.get(option, '')
             
-            # If we have an image, display it inline with the option
-            if option_image_url and is_valid_url(option_image_url):
-                # Create a section with both text and image
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": option_text
-                    },
-                    "accessory": {
-                        "type": "image",
-                        "image_url": option_image_url,
-                        "alt_text": f"Option: {option}"
-                    }
-                })
+            # Only include valid image URLs, don't show the raw JSON
+            if icon_url and is_valid_url(icon_url):
+                # Format each option as "*Name* : <icon_url>" exactly as specified
+                option_field = {
+                    "type": "mrkdwn",
+                    "text": f"*{display_name}* : {icon_url}"
+                }
+                option_fields.append(option_field)
             else:
-                # If no image, just show the option text
-                blocks.append({
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": option_text
-                    }
-                })
+                # No icon available, just show the name
+                option_field = {
+                    "type": "mrkdwn",
+                    "text": f"*{display_name}*"
+                }
+                option_fields.append(option_field)
+        
+        # Add all option fields in a single section
+        if option_fields:
+            blocks.append({
+                "type": "section",
+                "fields": option_fields
+            })
     else:
         # Regular market (binary Yes/No) - only show one banner image
         outcomes = []
