@@ -784,11 +784,13 @@ def clean_environment():
             
             # Run the environment cleaning process
             with app.app_context():
-                success = clean_environment.reset_full_environment()
-                if success:
+                exit_code = clean_environment.main()
+                if exit_code == 0:
                     print("Environment cleaning completed successfully")
+                    success = True
                 else:
-                    print("Environment cleaning failed")
+                    print(f"Environment cleaning failed with exit code {exit_code}")
+                    success = False
             
             # Update UI status
             pipeline_status["running"] = False
