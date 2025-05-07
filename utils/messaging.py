@@ -668,62 +668,86 @@ def format_market_with_images(market_data):
         # Prepare the fields list for the section - following Rule 2 structure for Slack payload
         option_fields = []
         
-        # First deduplicate options by entity (team, candidate, etc.) to prevent duplicate logos
-        # We're going to map each unique entity to its best display name and icon URL
-        deduplicated_options = {}  # Key: entity_name, Value: (option_id, display_name, icon_url)
-        question_pattern = r"will\s+(.*?)\s+win"  # Pattern to extract entity from questions
+        # Let's implement proper deduplication to ensure we don't show
+        # both "Real Madrid" and "Will Real Madrid win..." as separate options
         
-        # Group options by the entity they represent (e.g., "Real Madrid" vs "Will Real Madrid win...")
-        entity_mapping = {}  # Maps option_id to an entity name (e.g., "real-madrid" -> "Real Madrid")
+        # First group by team/entity
+        entity_groups = {}  # Maps normalized entity name -> list of (option_id, display_name, icon_url)
         
-        # First pass - try to identify entities from all options
-        for option in options:
-            # Use the option name from our mapping if available, otherwise use ID
-            display_name = option_info.get(option, option) if option_info else option
+        # Regular expression to extract team names from questions
+        import re
+        question_patterns = [
+            r"will\s+(.*?)\s+win",  # Will X win...
+            r"will\s+(.*?)\s+be",   # Will X be...
+            r"will\s+(.*?)$"        # Will X (at end of string)
+        ]
+        
+        # Helper function to extract entity name from display names
+        def extract_entity(name):
+            """Extract the entity (team, candidate) from a display name."""
+            name_lower = name.lower()
             
-            # Get option icon URL
+            # Direct match for event outcome titles (like "Real Madrid")
+            for event in market_data.get('events', []):
+                for outcome in event.get('outcomes', []):
+                    if outcome.get('title', '').lower() == name_lower:
+                        return outcome.get('title')
+            
+            # Try to extract from question formats
+            for pattern in question_patterns:
+                match = re.search(pattern, name_lower)
+                if match:
+                    entity = match.group(1).strip().title()
+                    return entity
+                    
+            # If we couldn't extract, return the original
+            return name
+            
+        # First pass - collect all options and their entity representations
+        for option in options:
+            # Get display name and icon
+            display_name = option_info.get(option, option) if option_info else option
             icon_url = option_images.get(option, '')
             
-            # Skip invalid URLs
-            if not icon_url or not is_valid_url(icon_url) or not is_slack_accessible_url(icon_url):
+            # Make sure we have a valid URL for this option
+            if not icon_url or not is_valid_url(icon_url):
+                logger.warning(f"Option {option} has invalid icon URL: {icon_url}")
                 continue
                 
-            # Try to identify the entity this option represents
-            entity_name = None
+            # Extract the entity this option represents
+            entity_name = extract_entity(display_name)
             
-            # If the option ID is from events[0].outcomes, use the title as entity name
-            if not option.isdigit() and market_data.get('events'):
-                for event in market_data.get('events', []):
-                    for outcome in event.get('outcomes', []):
-                        if outcome.get('id') == option:
-                            entity_name = outcome.get('title')
-                            break
-                    if entity_name:
-                        break
-            
-            # If still no entity name, try to extract it from questions like "Will X win..."
-            if not entity_name and "will" in display_name.lower():
-                import re
-                match = re.search(question_pattern, display_name.lower())
-                if match:
-                    entity_name = match.group(1).strip().title()  # Title case the entity name
-            
-            # If still no entity, use the display name directly
-            if not entity_name:
-                entity_name = display_name
-                
-            # Store this mapping
-            entity_mapping[option] = entity_name
-            
-            # For deduplication, normalize the entity name
+            # For grouping, normalize the entity name 
             normalized_entity = entity_name.lower().strip()
             
-            # Store or update in deduplicated options
-            if normalized_entity not in deduplicated_options:
-                deduplicated_options[normalized_entity] = (option, entity_name, icon_url)
-            elif len(entity_name) < len(deduplicated_options[normalized_entity][1]):
-                # Prefer shorter, cleaner names (like "Real Madrid" over "Will Real Madrid win...")
-                deduplicated_options[normalized_entity] = (option, entity_name, icon_url)
+            # Add to the appropriate entity group
+            if normalized_entity not in entity_groups:
+                entity_groups[normalized_entity] = []
+            
+            entity_groups[normalized_entity].append((option, display_name, icon_url))
+        
+        # Second pass - select the best representation for each entity
+        deduplicated_options = {}  # Final deduplicated options
+        
+        for normalized_entity, options_list in entity_groups.items():
+            # Default to the first option
+            best_option = options_list[0]  
+            
+            # Prioritize options from events array (usually cleaner names)
+            for option_id, display_name, icon_url in options_list:
+                # Non-numeric IDs usually come from events array
+                if not option_id.isdigit():
+                    best_option = (option_id, display_name, icon_url)
+                    break
+            
+            # If all are numeric, prefer shorter display names
+            if best_option[0].isdigit():
+                # Sort by display name length and take the shortest
+                options_list.sort(key=lambda x: len(x[1]))
+                best_option = options_list[0]
+            
+            # Store the best option
+            deduplicated_options[normalized_entity] = best_option
         
         # Log what we're doing
         logger.info(f"Deduplicated {len(options)} options into {len(deduplicated_options)} unique options")
@@ -751,8 +775,9 @@ def format_market_with_images(market_data):
             display_name = option_info.get(option, option) if option_info else option
             normalized_name = display_name.lower().strip()
             
-            # If this option wasn't included in the deduplicated list with icons
-            if normalized_name not in deduplicated_options:
+            # Skip options that were already included in our deduplicated list
+            normalized_entity = extract_entity(display_name).lower().strip()
+            if normalized_entity not in deduplicated_options:
                 option_field = {
                     "type": "mrkdwn",
                     "text": f"*{display_name}*"
