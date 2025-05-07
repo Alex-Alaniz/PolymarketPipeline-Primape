@@ -32,6 +32,11 @@ class Market(db.Model):
     apechain_market_id = db.Column(db.String(255))  # Added Apechain market ID for tracking
     github_commit = db.Column(db.String(255))
     blockchain_tx = db.Column(db.String(255))
+    
+    # Event tracking fields for grouping related markets
+    event_id = db.Column(db.String(255))  # ID of the associated event
+    event_name = db.Column(db.String(255))  # Name of the associated event
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
