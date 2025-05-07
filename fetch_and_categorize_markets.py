@@ -257,7 +257,7 @@ def filter_new_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
 
 def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     """
-    Categorize and store markets in the database.
+    Categorize and store markets in the database using batch processing.
     
     Args:
         markets: List of market data dictionaries
@@ -265,41 +265,110 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     Returns:
         int: Number of markets stored
     """
-    # First, categorize all markets in a batch with a single API call
-    logger.info(f"Batch categorizing {len(markets)} markets with GPT-4o-mini using single API call...")
-    categorized_markets = batch_categorize_markets(markets)
-    logger.info(f"Completed efficient batch categorization of {len(categorized_markets)} markets")
+    # Check if we have markets to process
+    if not markets:
+        logger.info("No markets to categorize")
+        return 0
     
+    # Prepare markets for batch categorization
+    batch_ready_markets = []
+    original_markets = {}  # Map to track original market data by batch ID
+    
+    for i, market in enumerate(markets):
+        # Extract question from the market
+        question = market.get('title', '') or market.get('question', '')
+        
+        # Skip markets without questions
+        if not question:
+            logger.warning(f"Skipping market with no question: {market.get('conditionId', 'unknown')}")
+            continue
+            
+        # Create a simple object for categorization with just the fields needed
+        market_obj = {
+            'id': i,  # Use index as batch ID
+            'question': question,
+            'description': market.get('description', '')
+        }
+        batch_ready_markets.append(market_obj)
+        
+        # Store original market data for later use
+        original_markets[i] = market
+    
+    # Batch categorize all markets in a single API call
+    logger.info(f"Batch categorizing {len(batch_ready_markets)} markets with GPT-4o-mini in a single API call...")
+    categorized_batch = batch_categorize_markets(batch_ready_markets)
+    
+    # Create a map of categorization results
+    categorization_map = {}
+    for market in categorized_batch:
+        batch_id = market.get('id')
+        if batch_id is not None:
+            categorization_map[batch_id] = market
+    
+    # Log category distribution
+    category_counts = {}
+    for market in categorized_batch:
+        category = market.get('ai_category', 'news')
+        if category in category_counts:
+            category_counts[category] += 1
+        else:
+            category_counts[category] = 1
+    
+    logger.info("Category distribution:")
+    for category, count in category_counts.items():
+        percentage = count / len(categorized_batch) * 100
+        logger.info(f"  - {category}: {count} markets ({percentage:.1f}%)")
+    
+    # Store markets with their categories
     stored_count = 0
     
-    for market_data in categorized_markets:
+    for batch_id, original_market in original_markets.items():
         try:
-            # Extract key data
-            market_id = market_data.get('conditionId') or market_data.get('id')
-            question = market_data.get('question')
+            # Extract Polymarket ID and question
+            market_id = original_market.get('conditionId') or original_market.get('id')
+            question = original_market.get('title') or original_market.get('question', '')
             
             # Skip if already in database (safety check)
             if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
+                logger.info(f"Market {market_id} already exists in database, skipping")
                 continue
             
-            # Get category and manual review flag from categorization
-            category = market_data.get('ai_category', 'news')
-            needs_manual = market_data.get('needs_manual_categorization', True)
+            # Get category from batch categorization results
+            if batch_id in categorization_map:
+                batch_result = categorization_map[batch_id]
+                category = batch_result.get('ai_category', 'news')
+                needs_manual = batch_result.get('needs_manual_categorization', True)
+                logger.info(f"Using batch categorization for market {batch_id}: {category}")
+            else:
+                # Fallback to keyword-based categorization if not found in batch results
+                from utils.batch_categorizer import keyword_based_categorization
+                category = keyword_based_categorization(question)
+                needs_manual = True
+                logger.warning(f"Market {batch_id} not found in batch results, using keyword fallback: {category}")
             
-            # Transform options
-            options, option_images = transform_market_options(market_data)
+            # Process outcome options with error handling
+            try:
+                options, option_images = transform_market_options(original_market)
+            except Exception as e:
+                logger.warning(f"Error transforming options for market {market_id}: {str(e)}")
+                # Create fallback options for binary markets
+                options = [
+                    {"value": "Yes", "displayName": "Yes"},
+                    {"value": "No", "displayName": "No"}
+                ]
+                option_images = {"Yes": None, "No": None}
             
             # Create pending market entry
             pending_market = PendingMarket(
                 poly_id=market_id,
                 question=question,
                 category=category,
-                banner_url=market_data.get('image'),
-                icon_url=market_data.get('icon'),
+                banner_url=original_market.get('image'),
+                icon_url=original_market.get('icon'),
                 options=options,
                 option_images=option_images,
-                expiry=market_data.get('endDate'),
-                raw_data=market_data,
+                expiry=original_market.get('endDate'),
+                raw_data=original_market,
                 needs_manual_categorization=needs_manual,
                 posted=False
             )
@@ -312,7 +381,7 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
                 condition_id=market_id,
                 question=question,
                 category=category,
-                raw_data=market_data,
+                raw_data=original_market,
                 posted=False
             )
             
@@ -322,13 +391,16 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
             logger.info(f"Stored market '{question[:50]}...' with category '{category}'")
             
         except Exception as e:
-            logger.error(f"Error storing market {market_data.get('id')}: {str(e)}")
+            market_id_display = market_id if 'market_id' in locals() else f"batch_id_{batch_id}"
+            logger.error(f"Error storing market {market_id_display}: {str(e)}")
+            logger.error(f"Error type: {type(e).__name__}")
             db.session.rollback()
             continue
     
     # Commit all changes
     db.session.commit()
     
+    logger.info(f"Completed efficient batch categorization and stored {stored_count} markets")
     return stored_count
 
 def main():

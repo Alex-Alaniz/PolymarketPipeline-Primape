@@ -198,19 +198,62 @@ def batch_categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, An
             if isinstance(content, str):
                 content = content.strip()
                 if content.startswith('[') and content.endswith(']'):
+                    # Standard JSON array response
                     result = json.loads(content)
                 else:
-                    # Try to extract JSON from the response text
+                    # Try to extract JSON from the response text using various patterns
                     import re
+                    # Try to find an array pattern first
                     json_match = re.search(r'\[.*\]', content, re.DOTALL)
                     if json_match:
                         result = json.loads(json_match.group(0))
                     else:
-                        # Fall back to parsing the whole content
-                        try:
-                            result = json.loads(content)
-                        except:
-                            raise ValueError("Could not extract JSON array from response")
+                        # Try to find an object pattern if no array found
+                        json_match = re.search(r'\{.*\}', content, re.DOTALL)
+                        if json_match:
+                            result = json.loads(json_match.group(0))
+                        else:
+                            # Fall back to parsing the whole content
+                            try:
+                                result = json.loads(content)
+                            except:
+                                # If all parsing fails, try to extract individual categories
+                                categories = []
+                                # Extract id-category pairs using regex
+                                id_cat_matches = re.findall(r'id["\s:]+(\d+).*?category["\s:]+([a-z]+)', content, re.IGNORECASE | re.DOTALL)
+                                for id_str, cat in id_cat_matches:
+                                    try:
+                                        market_id = int(id_str)
+                                        categories.append({
+                                            "id": market_id,
+                                            "ai_category": cat.lower(),
+                                            "confidence": 0.7
+                                        })
+                                    except:
+                                        pass
+                                
+                                if categories:
+                                    result = categories
+                                else:
+                                    # Last resort: manual text parsing
+                                    lines = content.split('\n')
+                                    for i, line in enumerate(lines):
+                                        if ':' in line:
+                                            parts = line.split(':')
+                                            if len(parts) >= 2 and any(cat in parts[1].lower() for cat in VALID_CATEGORIES):
+                                                for cat in VALID_CATEGORIES:
+                                                    if cat in parts[1].lower():
+                                                        categories.append({
+                                                            "id": i,
+                                                            "ai_category": cat,
+                                                            "confidence": 0.6
+                                                        })
+                                                        break
+                                    
+                                    if categories:
+                                        result = categories
+                                    else:
+                                        raise ValueError("Could not extract categories from response")
             else:
                 result = content
                 
@@ -222,6 +265,31 @@ def batch_categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, An
                     raise ValueError(f"Expected list result, got {type(result)}")
                     
             logger.info(f"Successfully received categorization for {len(result)} markets")
+            
+            # Validate categories in results
+            for item in result:
+                if isinstance(item, dict):
+                    # Handle various field naming conventions in the API response
+                    if "ai_category" not in item:
+                        # Try other common field names
+                        if "category" in item:
+                            item["ai_category"] = item["category"]
+                        elif "market_category" in item:
+                            item["ai_category"] = item["market_category"]
+                        
+                    # Ensure category is lowercase and valid
+                    if "ai_category" in item:
+                        item["ai_category"] = item["ai_category"].lower()
+                        # Validate against VALID_CATEGORIES
+                        if item["ai_category"] not in VALID_CATEGORIES:
+                            # Try to find closest match
+                            for valid_cat in VALID_CATEGORIES:
+                                if valid_cat in item["ai_category"] or item["ai_category"] in valid_cat:
+                                    item["ai_category"] = valid_cat
+                                    break
+                            else:
+                                # Default to news if no match found
+                                item["ai_category"] = "news"
             
             # Create a map for quick lookups
             categorization_map = {}
