@@ -120,6 +120,21 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
         bool: True if successful, False otherwise
     """
     try:
+        # Check if this market already exists (to prevent duplicate key errors)
+        existing_market = Market.query.filter_by(id=pending_market.poly_id).first()
+        if existing_market:
+            logger.warning(f"Market with ID {pending_market.poly_id} already exists, skipping creation")
+            return True
+        
+        # For event markets, also check if the event already exists to avoid duplicate event error
+        is_event = pending_market.is_event
+        if is_event and pending_market.event_id:
+            # If this is an event and the event already exists, skip it
+            existing_event = Market.query.filter_by(event_id=pending_market.event_id, is_event=True).first()
+            if existing_event:
+                logger.warning(f"Event with ID {pending_market.event_id} already exists, skipping creation")
+                return True
+        
         # Generate a market ID (use poly_id for now, but consider using a UUID in production)
         market_id = pending_market.poly_id
         
@@ -144,6 +159,7 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
         
         # Add to database
         db.session.add(market)
+        logger.info(f"Created market entry: {pending_market.question[:50]}...")
         
         return True
     except Exception as e:
