@@ -348,38 +348,44 @@ HTML_TEMPLATE = """
         
         // Keep the old function implementations as fallbacks
         function runPipeline() {
-            // Direct implementation to avoid circular reference
-            fetch('/run-pipeline', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
+            console.log("Run Pipeline button clicked");
+            // Super simplified implementation for debugging
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/run-pipeline", true);
+            xhr.setRequestHeader("Content-Type", "application/json");
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    console.log("Response received:", xhr.status, xhr.responseText);
+                    if (xhr.status === 200) {
+                        try {
+                            var response = JSON.parse(xhr.responseText);
+                            if (response.success) {
+                                // Update the UI
+                                document.getElementById('status').textContent = 'running';
+                                document.getElementById('run-pipeline').disabled = true;
+                                
+                                // Show message
+                                var statusBox = document.querySelector('.status-box');
+                                statusBox.innerHTML = '<div class="alert alert-info"><strong>Pipeline started!</strong> Processing markets from Polymarket API...</div>';
+                                
+                                // Refresh after delay
+                                setTimeout(function() {
+                                    window.location.reload();
+                                }, 2000);
+                            } else {
+                                alert("Failed to start pipeline: " + response.message);
+                            }
+                        } catch (e) {
+                            console.error("Error parsing response:", e);
+                            alert("Error parsing server response");
+                        }
+                    } else {
+                        alert("Server error: " + xhr.status);
+                    }
                 }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    // Update the UI status
-                    document.getElementById('status').textContent = 'running';
-                    
-                    // Disable the button
-                    document.getElementById('run-pipeline').disabled = true;
-                    
-                    // Show a message in the status box
-                    const statusBox = document.querySelector('.status-box');
-                    statusBox.innerHTML = '<div class="alert alert-info"><strong>Pipeline started!</strong> Processing markets from Polymarket API...</div>';
-                    
-                    // Refresh page after a delay
-                    setTimeout(() => {
-                        window.location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to start pipeline: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('An error occurred while starting the pipeline');
-            });
+            };
+            xhr.send(JSON.stringify({}));
+            return false; // Prevent default action
         }
         
         function checkMarketApprovals() {
