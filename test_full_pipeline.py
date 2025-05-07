@@ -293,9 +293,8 @@ def main():
         with app.app_context():
             # Create a pipeline run record
             pipeline_run = PipelineRun(
-                pipeline_name="test_full_pipeline",
                 status="running",
-                started_at=datetime.utcnow()
+                start_time=datetime.utcnow()
             )
             db.session.add(pipeline_run)
             db.session.commit()
@@ -371,7 +370,7 @@ def main():
                 
                 # Update pipeline run with success
                 pipeline_run.status = "completed"
-                pipeline_run.completed_at = datetime.utcnow()
+                pipeline_run.end_time = datetime.utcnow()
                 pipeline_run.markets_processed = 1
                 pipeline_run.markets_approved = 1
                 pipeline_run.markets_deployed = 1
@@ -391,7 +390,7 @@ def main():
                 logger.error(f"Error in pipeline test: {str(e)}")
                 pipeline_run.status = "failed"
                 pipeline_run.error = str(e)
-                pipeline_run.completed_at = datetime.utcnow()
+                pipeline_run.end_time = datetime.utcnow()
                 db.session.commit()
                 return 1
         
