@@ -399,20 +399,31 @@ def format_market_with_images(market_data):
     
     # RULE 1 & 2: Different image handling based on market type
     # Determine if this is a binary market (Yes/No outcomes) or multi-option market
-    is_binary = False
-    outcomes_raw = market_data.get("outcomes", "[]")
-    try:
-        if isinstance(outcomes_raw, str):
-            outcomes = json.loads(outcomes_raw)
-        else:
-            outcomes = outcomes_raw
-            
-        # Check if outcomes are exactly ["Yes", "No"]
-        if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
-            is_binary = True
-            logger.info("Detected binary Yes/No market")
-    except Exception as e:
-        logger.error(f"Error checking binary market status: {str(e)}")
+    # Determine market type from flags in the data
+    is_binary = market_data.get('is_binary', False)
+    is_multiple_option = market_data.get('is_multiple_option', False)
+    
+    # If flags aren't set, check outcomes manually
+    if not is_binary and not is_multiple_option:
+        # Check for binary Yes/No outcomes
+        outcomes_raw = market_data.get("outcomes", "[]")
+        try:
+            if isinstance(outcomes_raw, str):
+                outcomes = json.loads(outcomes_raw)
+            else:
+                outcomes = outcomes_raw
+                
+            # Check if outcomes are exactly ["Yes", "No"]
+            if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
+                is_binary = True
+                logger.info("Detected binary Yes/No market from outcomes")
+        except Exception as e:
+            logger.error(f"Error checking binary market status: {str(e)}")
+        
+        # Check for multiple options / events
+        if market_data.get('is_multiple_choice', False) or market_data.get('is_event', False):
+            is_multiple_option = True
+            logger.info("Detected multi-option market from is_multiple_choice or is_event flag")
     
     # Parse events data if it's a string
     events_data = market_data.get('events')
@@ -434,33 +445,49 @@ def format_market_with_images(market_data):
                     logger.info(f"Found first event image: {events_data[0]['image'][:30]}...")
         else:
             logger.info(f"Events data is not a list: {type(events_data)}")
+        
+        # If we have events array but no market type determined, assume it's a multi-option market
+        if not is_binary and not is_multiple_option:
+            is_multiple_option = True
+            logger.info("Detected multi-option market from presence of events array")
     
     # Get banner image based on market type
     banner_image = None
     
+    # RULE 1: Binary Markets (Yes/No outcomes)
     if is_binary:
-        # RULE 1: For binary markets, use market-level image URL (not icon)
-        banner_image = market_data.get('image')
-        logger.info(f"Binary market: Using market-level image: {banner_image}")
-    else:
-        # RULE 2: For multi-option markets, MUST use event-level image
-        # Specifically and exactly: banner = market["events"][0]["image"]
-        try:
-            if isinstance(events_data, list) and len(events_data) > 0:
-                first_event = events_data[0]
-                if isinstance(first_event, dict) and 'image' in first_event:
-                    banner_image = first_event.get('image')
-                    logger.info(f"Multi-option market: Using events[0].image: {banner_image}")
-                    # Log success for debugging
-                    logger.info(f"SUCCESS: Found event banner from events[0].image")
-        except Exception as e:
-            logger.error(f"Error getting event banner image: {str(e)}")
+        # Get banner image from 'event_image' field first (processed by our filter)
+        if 'event_image' in market_data:
+            banner_image = market_data.get('event_image')
+            logger.info(f"Binary market: Using pre-processed event_image: {banner_image}")
+        else:
+            # Fall back to market-level image URL (not icon)
+            banner_image = market_data.get('image')
+            logger.info(f"Binary market: Using market-level image: {banner_image}")
+    
+    # RULE 2: Multi-option Markets
+    elif is_multiple_option:
+        # First try 'event_image' field (set by our filter)
+        if 'event_image' in market_data:
+            banner_image = market_data.get('event_image')
+            logger.info(f"Multi-option market: Using pre-processed event_image: {banner_image}")
+        else:
+            # RULE 2: For multi-option markets, MUST use market["events"][0]["image"]
+            try:
+                if isinstance(events_data, list) and len(events_data) > 0:
+                    first_event = events_data[0]
+                    if isinstance(first_event, dict) and 'image' in first_event:
+                        banner_image = first_event.get('image')
+                        logger.info(f"Multi-option market: Using events[0].image: {banner_image}")
+                        logger.info(f"SUCCESS: Found event banner from events[0].image")
+            except Exception as e:
+                logger.error(f"Error getting event banner image: {str(e)}")
     
     # Only use fallbacks if we absolutely couldn't find the banner image
     if not banner_image:
         logger.warning("Could not find preferred banner image, trying fallbacks")
         # Try other possible fields
-        for field in ['event_image', 'image', 'banner_image', 'bannerImage']:
+        for field in ['image', 'banner_image', 'bannerImage']:
             if field in market_data and market_data[field]:
                 banner_image = market_data[field]
                 logger.info(f"Using fallback banner image from {field}: {banner_image}")
