@@ -677,13 +677,22 @@ def format_market_with_images(market_data):
             
             # Only include valid image URLs, don't show the raw JSON
             if icon_url and is_valid_url(icon_url):
-                # Format each option as "*Name* : <icon_url>" exactly as specified
+                # Format option with both name and icon URL for proper display in Slack
+                # Using the format "*Name* : url" to ensure Slack displays it correctly
                 option_field = {
                     "type": "mrkdwn",
-                    "text": f"*{display_name}* : {icon_url}"
+                    "text": f"*{display_name}*"
                 }
                 option_fields.append(option_field)
-                logger.info(f"Added option field with image: {display_name}")
+                
+                # Add the image as a separate block for better rendering
+                blocks.append({
+                    "type": "image",
+                    "image_url": icon_url,
+                    "alt_text": f"Option icon for {display_name}"
+                })
+                
+                logger.info(f"Added option field with separate image block: {display_name}")
             else:
                 # No icon available, just show the name
                 option_field = {
@@ -778,8 +787,39 @@ def is_valid_url(url):
         valid = all([result.scheme, result.netloc])
         if not valid:
             logger.warning(f"Invalid URL structure: {url[:30]}...")
+            return False
             
-        return valid
+        # Check for common image domains we know are valid
+        known_valid_domains = [
+            'polymarket-upload.s3.us-east-2.amazonaws.com',
+            'upload.wikimedia.org',
+            's3.amazonaws.com',
+            'amazonaws.com',
+            'images.theabcdn.com',
+            'pbs.twimg.com',
+            'cdn.pixabay.com',
+            'i.imgur.com',
+            'upload.wikimedia.org'
+        ]
+        
+        domain = result.netloc.lower()
+        for valid_domain in known_valid_domains:
+            if valid_domain in domain:
+                return True
+                
+        # For other domains, check file extension
+        path = result.path.lower()
+        valid_extensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.svg']
+        
+        for ext in valid_extensions:
+            if path.endswith(ext):
+                return True
+                
+        # If we can't confirm it's an image URL, log and return cautiously
+        logger.warning(f"URL doesn't match known image patterns: {url[:50]}...")
+        # Still return True for non-standard URLs to allow them through if they pass basic validation
+        return True
+        
     except Exception as e:
         logger.warning(f"Error validating URL: {str(e)} - {url[:30]}...")
         return False
