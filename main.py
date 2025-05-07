@@ -24,6 +24,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Import modules
 from pipeline import PolymarketPipeline
 from models import db, Market, ApprovalEvent, PipelineRun, PendingMarket, ApprovalLog
+from api_routes import api_bp
 
 # Create Flask app
 app = Flask(__name__)
@@ -38,6 +39,9 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 # Initialize database with app
 db.init_app(app)
+
+# Register API Blueprint
+app.register_blueprint(api_bp)
 
 # Create tables
 with app.app_context():

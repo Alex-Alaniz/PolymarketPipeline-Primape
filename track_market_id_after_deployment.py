@@ -26,7 +26,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Local imports
 from models import db, Market, PipelineRun
-from utils.apechain import get_deployed_market_id_from_tx
+import utils.apechain
+from utils.apechain import get_deployed_market_id_from_tx, get_market_info
 
 # Initialize app
 db.init_app(app)
