@@ -53,9 +53,8 @@ logging.basicConfig(
 logger = logging.getLogger('pipeline')
 
 # Constants
-# API configuration
+# API configuration - Polymarket Gamma API is public and doesn't require an API key
 MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
-POLYMARKET_API_KEY = os.environ.get("POLYMARKET_API_KEY", "")
 MARKETS_QUERY = """
 query FetchMarkets($first: Int!, $skip: Int!) {
   markets(
@@ -117,10 +116,8 @@ def fetch_markets(limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
             }
         }
         
-        # Set up headers with API key if available
+        # Polymarket Gamma API is public and doesn't require authentication
         headers = {}
-        if POLYMARKET_API_KEY:
-            headers["X-API-KEY"] = POLYMARKET_API_KEY
         
         # Try with REST API endpoint first (with query parameters)
         try:
