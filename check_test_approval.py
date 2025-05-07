@@ -90,6 +90,38 @@ def get_message_reactions(message_ts: str) -> Dict[str, List[str]]:
         logger.error(f"Error getting message reactions: {str(e)}")
         return {}
 
+def extract_market_details(message_text):
+    """
+    Extract market details from message text.
+    
+    Args:
+        message_text: Text content of the Slack message
+        
+    Returns:
+        Dictionary with market details
+    """
+    lines = message_text.split('\n')
+    details = {
+        'question': '',
+        'category': '',
+        'expiry': '',
+        'event': '',
+        'has_banner_image': False,
+        'has_option_images': False
+    }
+    
+    for line in lines:
+        if line.startswith('*Question:*'):
+            details['question'] = line.replace('*Question:*', '').strip()
+        elif line.startswith('*Category:*'):
+            details['category'] = line.replace('*Category:*', '').strip()
+        elif line.startswith('*Expiry:*'):
+            details['expiry'] = line.replace('*Expiry:*', '').strip()
+        elif line.startswith('*Event:*'):
+            details['event'] = line.replace('*Event:*', '').strip()
+    
+    return details
+
 def check_market_approvals():
     """
     Check for market approvals or rejections in Slack.
@@ -109,6 +141,7 @@ def check_market_approvals():
         # Check if this is a market message (contains "New Market for Approval")
         if "New Market for Approval" in message.get("text", ""):
             message_ts = message.get("ts")
+            message_text = message.get("text", "")
             
             # Get reactions
             reactions = get_message_reactions(message_ts)
@@ -125,14 +158,42 @@ def check_market_approvals():
                 for reaction in ['thumbsdown', '-1']
             )
             
+            # Extract market details
+            details = extract_market_details(message_text)
+            
+            # Check for images in blocks (if available)
+            has_images = False
+            has_event_banner = False
+            has_option_images = False
+            
+            if 'blocks' in message:
+                for block in message.get('blocks', []):
+                    if block.get('type') == 'image':
+                        has_images = True
+                        if 'Event Banner' in block.get('alt_text', ''):
+                            has_event_banner = True
+                        elif 'Option' in block.get('alt_text', ''):
+                            has_option_images = True
+            
+            # Status indicator
+            status = "✅ APPROVED" if approved else "❌ REJECTED" if rejected else "⏳ PENDING"
+            
+            # Print market details with additional event information
+            logger.info(f"{status} - {details['question']}")
+            logger.info(f"  Category: {details['category']}")
+            
+            if details['event']:
+                logger.info(f"  Event: {details['event']}")
+                logger.info(f"  Event banner image: {'Yes' if has_event_banner else 'No'}")
+            
+            if has_option_images:
+                logger.info(f"  Has option images: Yes")
+            
             if approved:
-                logger.info(f"Market APPROVED: {message.get('text')[:100]}...")
                 approved_count += 1
             elif rejected:
-                logger.info(f"Market REJECTED: {message.get('text')[:100]}...")
                 rejected_count += 1
             else:
-                logger.info(f"Market PENDING decision: {message.get('text')[:100]}...")
                 pending_count += 1
     
     logger.info(f"Market status: {pending_count} pending, {approved_count} approved, {rejected_count} rejected")

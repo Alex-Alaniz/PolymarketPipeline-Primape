@@ -295,12 +295,156 @@ def delete_message(message_ts: str) -> bool:
         logger.error(f"Error deleting message: {str(e)}")
         return False
 
-def post_slack_message(message: str):
+def format_market_with_images(market_data):
     """
-    Post a simple text message to Slack and add approval reactions.
+    Format a market message for Slack with event banner and option images.
+    
+    Args:
+        market_data: Market data dictionary with images
+        
+    Returns:
+        Tuple of (text_message, blocks_array)
+    """
+    # Basic market information
+    question = market_data.get('question', 'Unknown Market')
+    category = market_data.get('category', 'uncategorized')
+    expiry = market_data.get('expiry_time', 'Unknown')
+    event_name = market_data.get('event_name', '')
+    event_id = market_data.get('event_id', '')
+    
+    # Start with a text fallback message
+    text_message = f"*New Market for Approval*\n"
+    text_message += f"*Question:* {question}\n"
+    text_message += f"*Category:* {category}\n"
+    text_message += f"*Expiry:* {expiry}\n"
+    
+    if event_name:
+        text_message += f"*Event:* {event_name}\n"
+    
+    # Create blocks for rich formatting
+    blocks = [
+        {
+            "type": "header",
+            "text": {
+                "type": "plain_text",
+                "text": "New Market for Approval"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Question:* {question}"
+            }
+        },
+        {
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Category:* {category}"
+                },
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Expiry:* {expiry}"
+                }
+            ]
+        }
+    ]
+    
+    # Add event information if available
+    if event_name:
+        event_block = {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Event:* {event_name}\n*Event ID:* {event_id}"
+            }
+        }
+        blocks.append(event_block)
+    
+    # Add event banner image if available
+    event_image = market_data.get('event_image')
+    if event_image and is_valid_url(event_image):
+        blocks.append(
+            {
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": "Event Banner Image"
+                },
+                "image_url": event_image,
+                "alt_text": "Event Banner"
+            }
+        )
+    
+    # Add option images if available
+    option_images = market_data.get('option_images', {})
+    if option_images and isinstance(option_images, dict) and len(option_images) > 0:
+        for option_name, image_url in option_images.items():
+            if image_url and is_valid_url(image_url):
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"*Option:* {option_name}"
+                        }
+                    }
+                )
+                blocks.append(
+                    {
+                        "type": "image",
+                        "title": {
+                            "type": "plain_text",
+                            "text": f"Option Image: {option_name}"
+                        },
+                        "image_url": image_url,
+                        "alt_text": f"Option {option_name}"
+                    }
+                )
+    
+    # Add reminder for approval reactions
+    blocks.append(
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "React with 👍 to approve or 👎 to reject"
+            }
+        }
+    )
+    
+    return text_message, blocks
+
+def is_valid_url(url):
+    """
+    Check if a string is a valid URL.
+    
+    Args:
+        url: URL string to check
+        
+    Returns:
+        Boolean indicating if the URL is valid
+    """
+    if not url or not isinstance(url, str):
+        return False
+    
+    try:
+        from urllib.parse import urlparse
+        result = urlparse(url)
+        return all([result.scheme, result.netloc])
+    except:
+        return False
+
+def post_slack_message(message, blocks=None, market_data=None):
+    """
+    Post a message to Slack and add approval reactions.
     
     Args:
         message: Message text to post
+        blocks: Optional blocks for rich formatting
+        market_data: Optional market data dictionary for auto-formatting with images
         
     Returns:
         Response dictionary if successful, None otherwise
@@ -310,11 +454,22 @@ def post_slack_message(message: str):
         return None
     
     try:
+        # If market data is provided, format the message with images
+        if market_data:
+            message, blocks = format_market_with_images(market_data)
+        
+        # Prepare payload
+        payload = {
+            "channel": SLACK_CHANNEL_ID,
+            "text": message
+        }
+        
+        # Add blocks if provided
+        if blocks:
+            payload["blocks"] = blocks
+        
         # Post to Slack
-        response = slack_client.chat_postMessage(
-            channel=SLACK_CHANNEL_ID,
-            text=message
-        )
+        response = slack_client.chat_postMessage(**payload)
         
         if response and response.get('ok'):
             message_id = response['ts']

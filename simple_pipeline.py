@@ -191,24 +191,9 @@ def store_and_post_markets(markets):
             db.session.add(pending_market)
             db.session.commit()
             
-            # Format the message for Slack
-            title = market.get('question', 'Unknown Market')
-            category = market.get('category', 'uncategorized')
-            expiry = market.get('expiry_time', 'Unknown')
-            
-            # Simplified message format
-            message = f"*New Market for Approval*\n"
-            message += f"*Question:* {title}\n"
-            message += f"*Category:* {category}\n"
-            message += f"*Expiry:* {expiry}\n"
-            
-            if market.get('event_name'):
-                message += f"*Event:* {market.get('event_name')}\n"
-            
-            message += "\nReact with 👍 to approve or 👎 to reject"
-            
-            # Post to Slack
-            response = post_slack_message(message)
+            # Use our enhanced formatting function
+            # This will include event banner and option images in the Slack message
+            response = post_slack_message("", market_data=market)
             
             if response and response.get('ok'):
                 # Update the PendingMarket record with Slack message info
@@ -216,7 +201,7 @@ def store_and_post_markets(markets):
                 pending_market.posted = True
                 db.session.commit()
                 
-                logger.info(f"Posted market to Slack: {title[:50]}...")
+                logger.info(f"Posted market to Slack: {market.get('question', 'Unknown')[:50]}...")
                 posted_count += 1
             else:
                 logger.error(f"Failed to post market to Slack: {response}")
