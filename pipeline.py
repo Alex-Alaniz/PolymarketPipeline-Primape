@@ -203,8 +203,15 @@ class PolymarketPipeline:
         # Check category distribution 
         categories = {}
         for market in filtered_markets:
-            # Look for ai_category first, then category, default to news
-            category = market.get("ai_category") or market.get("category") or "news"
+            # Look for ai_category first, then category, default to uncategorized
+            category = market.get("ai_category") or market.get("category") or "uncategorized"
+            
+            # Remove any default "news" category to ensure proper categorization flow
+            if category == "news" and not market.get("ai_category"):
+                category = "uncategorized"
+                # Update the market's category to ensure it's properly uncategorized
+                market["category"] = "uncategorized"
+                
             categories[category] = categories.get(category, 0) + 1
         
         logger.info("Market category distribution:")

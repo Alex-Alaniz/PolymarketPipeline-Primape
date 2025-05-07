@@ -413,85 +413,74 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 # Add to list
                 market_data_list.append(raw_data)
         
-        # Post directly to Slack, preserving the structure of multi-option markets
+        # Post directly to Slack, using utils.messaging format_market_with_images
+        # Import the function from utils.messaging
+        from utils.messaging import format_market_with_images
+        
         # Define a custom formatter function to use with post_markets_to_slack
         def format_market_message(market):
-            """Custom formatter for raw market data"""
-            category = market.get('event_category', 'news')
-            question = market.get('question', 'Unknown Question')
+            """
+            Custom formatter for raw market data with rich image support
             
-            # Define emoji map for categories
-            category_emoji = {
-                'politics': ':ballot_box_with_ballot:',
-                'crypto': ':coin:',
-                'sports': ':sports_medal:',
-                'business': ':chart_with_upwards_trend:',
-                'culture': ':performing_arts:',
-                'tech': ':computer:',
-                'news': ':newspaper:',
-                # Add fallback for unknown categories
-                'unknown': ':question:'
-            }
+            This uses the enhanced format_market_with_images function from utils.messaging
+            to properly display event images and option icons.
+            """
+            # IMPORTANT: Remove pre-categorization - all markets should start uncategorized
+            # If event_category is in the market data, save it in a different field for later
+            if 'event_category' in market:
+                market['original_category'] = market['event_category']
+                market['event_category'] = 'uncategorized'
+            if 'category' in market:
+                market['original_category'] = market['category']
+                market['category'] = 'uncategorized'
             
-            # Get emoji for this category
-            emoji = category_emoji.get(category.lower(), category_emoji['unknown'])
+            # Check if this is a multi-option market (event)
+            is_event = market.get('is_multiple_option', False)
+            market['is_event'] = is_event
             
-            # Format options list for display
-            option_values = []
-            if market.get('is_multiple_option', False):
+            # Process option images
+            option_images = {}
+            if is_event:
+                # For multi-option markets, get option images
                 outcomes_raw = market.get("outcomes", "[]")
                 try:
                     if isinstance(outcomes_raw, str):
                         outcomes = json.loads(outcomes_raw)
                     else:
                         outcomes = outcomes_raw
-                    option_values = outcomes
+                    
+                    # Extract option images from the market data
+                    for option in outcomes:
+                        option_key = str(option)
+                        if 'option_images' in market and option_key in market['option_images']:
+                            option_images[option_key] = market['option_images'][option_key]
+                    
+                    # Save option market IDs if available
+                    option_market_ids = {}
+                    if 'option_market_ids' in market:
+                        option_market_ids = market['option_market_ids']
+                    market['option_market_ids'] = option_market_ids
+                        
                 except Exception as e:
-                    logger.error(f"Error parsing outcomes: {str(e)}")
+                    logger.error(f"Error processing multi-option market: {str(e)}")
             else:
-                # Binary market
-                option_values = ["Yes", "No"]
+                # For binary markets, use Yes/No if available
+                if 'option_images' in market:
+                    option_images = market['option_images']
             
-            options_str = ', '.join(option_values) if option_values else 'Yes, No'
+            # Make sure option_images is set in the market data
+            market['option_images'] = option_images
             
-            # Format message text with category badge
-            message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {question}  Options: {options_str} "
+            # Extract event banner and icon if available
+            if 'event_image' in market:
+                logger.info(f"Market has event banner image: {market['event_image'][:50]}...")
+            if 'event_icon' in market:
+                logger.info(f"Market has event icon: {market['event_icon'][:50]}...")
+            if 'option_images' in market:
+                logger.info(f"Market has {len(market['option_images'])} option images")
             
-            # Create blocks for rich formatting
-            blocks = [
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*New Market for Review*\n*Category:* {emoji} {category.capitalize()}"
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"*Question:* {question}"
-                    }
-                },
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"Options: {options_str}"
-                    }
-                },
-                {
-                    "type": "context",
-                    "elements": [
-                        {
-                            "type": "mrkdwn",
-                            "text": "React with :white_check_mark: to approve or :x: to reject"
-                        }
-                    ]
-                }
-            ]
-            
-            return message_text, blocks
+            # Use the enhanced formatter from utils.messaging
+            return format_market_with_images(market)
         
         # Use utils.messaging version with formatter function
         posted_count = post_markets_to_slack(market_data_list, format_market_message_func=format_market_message)
