@@ -30,7 +30,7 @@ from utils.market_categorizer import categorize_market
 from utils.messaging import post_formatted_message_to_slack, get_message_reactions, add_reaction_to_message
 from utils.deployment_formatter import format_deployment_message
 from utils.apechain import create_market, get_deployed_market_id_from_tx
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -228,8 +228,9 @@ def post_pending_market_to_slack(pending_market):
 
 def approve_pending_market(pending_market, message_id):
     """Simulate approval of a pending market."""
-    # Add approval reaction to the message
-    add_reaction_to_message(message_id, "white_check_mark")
+    # Add approval reaction to the message if we have a message ID
+    if message_id:
+        add_reaction_to_message(message_id, "white_check_mark")
     
     # Wait for a moment to simulate human approval
     logger.info(f"Simulating approval reaction for message {message_id}")
@@ -300,8 +301,9 @@ def post_deployment_approval(market):
 
 def approve_deployment(market, message_id):
     """Simulate approval of market deployment."""
-    # Add approval reaction to the message
-    add_reaction_to_message(message_id, "white_check_mark")
+    # Add approval reaction to the message if we have a message ID
+    if message_id:
+        add_reaction_to_message(message_id, "white_check_mark")
     
     # Wait for a moment to simulate human approval
     logger.info(f"Simulating approval reaction for deployment message {message_id}")
@@ -441,7 +443,7 @@ def run_full_pipeline_test():
     input()
     
     # Check if approved
-    reactions = get_message_reactions(deployment_message_id) if deployment_message_id else {}
+    reactions = safe_get_message_reactions(deployment_message_id)
     if "white_check_mark" not in reactions:
         logger.info("Automatically approving the deployment...")
         # Approve the deployment
