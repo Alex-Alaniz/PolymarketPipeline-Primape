@@ -19,6 +19,7 @@ def check_markets():
         print(f"Event ID: {market.event_id or 'None'}")
         print(f"Event Name: {market.event_name or 'None'}")
         print(f"Status: {market.status}")
+        print(f"Apechain Market ID: {market.apechain_market_id or 'None'}")
         print("---")
 
 if __name__ == "__main__":
