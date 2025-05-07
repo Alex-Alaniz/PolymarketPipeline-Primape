@@ -145,8 +145,14 @@ def approve_pending_market(pending_market, message_id):
     
     # Log approval in the database
     with app.app_context():
+        # Get a fresh instance of the pending market from the database
+        fresh_pending_market = db.session.query(PendingMarket).filter_by(id=pending_market.id).first()
+        if not fresh_pending_market:
+            logger.error("Pending market not found in database")
+            return None
+            
         approval = ApprovalEvent(
-            entity_id=pending_market.id,
+            entity_id=fresh_pending_market.id,
             entity_type="pending_market",
             approved=True,
             approved_by="test_user",
@@ -157,16 +163,16 @@ def approve_pending_market(pending_market, message_id):
         
         # Create market entry
         market = Market(
-            id=pending_market.poly_id,
-            question=pending_market.question,
-            category=pending_market.category,
+            id=fresh_pending_market.poly_id,
+            question=fresh_pending_market.question,
+            category=fresh_pending_market.category,
             source="test_pipeline",
-            expiry=pending_market.expiry,
+            expiry=fresh_pending_market.expiry,
             status="approved", 
-            options=[opt["value"] for opt in pending_market.options],
-            banner_uri=pending_market.banner_url,
-            icon_uri=pending_market.icon_url,
-            option_images=pending_market.option_images,
+            options=[opt["value"] for opt in fresh_pending_market.options],
+            banner_uri=fresh_pending_market.banner_url,
+            icon_uri=fresh_pending_market.icon_url,
+            option_images=fresh_pending_market.option_images,
             created_at=datetime.utcnow(),
             updated_at=datetime.utcnow(),
             approved_at=datetime.utcnow()
@@ -174,40 +180,46 @@ def approve_pending_market(pending_market, message_id):
         db.session.add(market)
         db.session.commit()
     
-    logger.info(f"Approved pending market: {pending_market.question}")
-    return market
+        logger.info(f"Approved pending market: {fresh_pending_market.question}")
+        return market
 
 def post_deployment_approval(market):
     """Post a market for deployment approval."""
-    # Format expiry date
-    expiry_date = datetime.fromtimestamp(market.expiry / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
-    
-    # Format deployment message
-    market_type = "Binary Market (Yes/No)" if len(market.options) == 2 else "Multi-option Market"
-    message_text, blocks = format_deployment_message(
-        market_id=market.id,
-        question=market.question,
-        category=market.category.capitalize(),
-        market_type=market_type,
-        options=market.options,
-        expiry=expiry_date,
-        banner_uri=market.banner_uri
-    )
-    
-    # Post to Slack
-    message_id = post_formatted_message_to_slack(message_text, blocks=blocks)
-    
-    if not message_id:
-        logger.error("Failed to post deployment approval message to Slack")
-        return None
-    
-    # Update market with slack message ID
     with app.app_context():
-        market.deployment_slack_message_id = message_id
+        # Get a fresh instance of the market from the database
+        fresh_market = db.session.query(Market).filter_by(id=market.id).first()
+        if not fresh_market:
+            logger.error("Market not found in database")
+            return None
+            
+        # Format expiry date
+        expiry_date = datetime.fromtimestamp(fresh_market.expiry / 1000).strftime("%Y-%m-%d %H:%M:%S UTC")
+        
+        # Format deployment message
+        market_type = "Binary Market (Yes/No)" if len(fresh_market.options) == 2 else "Multi-option Market"
+        message_text, blocks = format_deployment_message(
+            market_id=fresh_market.id,
+            question=fresh_market.question,
+            category=fresh_market.category.capitalize(),
+            market_type=market_type,
+            options=fresh_market.options,
+            expiry=expiry_date,
+            banner_uri=fresh_market.banner_uri
+        )
+        
+        # Post to Slack
+        message_id = post_formatted_message_to_slack(message_text, blocks=blocks)
+        
+        if not message_id:
+            logger.error("Failed to post deployment approval message to Slack")
+            return None
+        
+        # Update market with slack message ID
+        fresh_market.deployment_slack_message_id = message_id
         db.session.commit()
-    
-    logger.info(f"Posted market for deployment approval with ID {message_id}")
-    return message_id
+        
+        logger.info(f"Posted market for deployment approval with ID {message_id}")
+        return message_id
 
 def approve_deployment(market, message_id):
     """Simulate approval of market deployment."""
@@ -216,8 +228,14 @@ def approve_deployment(market, message_id):
     
     # Log approval in the database
     with app.app_context():
+        # Get a fresh instance of the market from the database
+        fresh_market = db.session.query(Market).filter_by(id=market.id).first()
+        if not fresh_market:
+            logger.error("Market not found in database")
+            return False
+            
         approval = ApprovalEvent(
-            entity_id=market.id,
+            entity_id=fresh_market.id,
             entity_type="market_deployment",
             approved=True,
             approved_by="test_user",
@@ -227,39 +245,45 @@ def approve_deployment(market, message_id):
         db.session.add(approval)
         db.session.commit()
     
-    logger.info(f"Approved deployment for market: {market.question}")
-    return True
+        logger.info(f"Approved deployment for market: {fresh_market.question}")
+        return True
 
 def deploy_market_to_apechain(market):
     """Deploy market to Apechain."""
-    # Get market data
-    question = market.question
-    
-    # Convert options list to proper format
-    options = market.options
-    
-    # Convert expiry from milliseconds to seconds
-    expiry = int(market.expiry / 1000)
-    
-    # Capitalize category
-    category = market.category.capitalize()
-    
-    # Deploy to Apechain
-    tx_hash = deploy_to_apechain(question, options, expiry, category)
-    
-    if not tx_hash:
-        logger.error("Failed to deploy market to Apechain")
-        return None
-    
-    # Update market with transaction hash
     with app.app_context():
-        market.status = "deployed"
-        market.blockchain_tx = tx_hash
-        market.deployed_at = datetime.utcnow()
+        # Get a fresh instance of the market from the database
+        fresh_market = db.session.query(Market).filter_by(id=market.id).first()
+        if not fresh_market:
+            logger.error("Market not found in database")
+            return None
+            
+        # Get market data
+        question = fresh_market.question
+        
+        # Convert options list to proper format
+        options = fresh_market.options
+        
+        # Convert expiry from milliseconds to seconds
+        expiry = int(fresh_market.expiry / 1000)
+        
+        # Capitalize category
+        category = fresh_market.category.capitalize()
+        
+        # Deploy to Apechain
+        tx_hash = deploy_to_apechain(question, options, expiry, category)
+        
+        if not tx_hash:
+            logger.error("Failed to deploy market to Apechain")
+            return None
+        
+        # Update market with transaction hash
+        fresh_market.status = "deployed"
+        fresh_market.blockchain_tx = tx_hash
+        fresh_market.deployed_at = datetime.utcnow()
         db.session.commit()
-    
-    logger.info(f"Deployed market to Apechain with transaction: {tx_hash}")
-    return tx_hash
+        
+        logger.info(f"Deployed market to Apechain with transaction: {tx_hash}")
+        return tx_hash
 
 def track_market_id(market, tx_hash):
     """Track the market ID from Apechain after deployment."""
@@ -276,11 +300,17 @@ def track_market_id(market, tx_hash):
     
     # Update market with market ID
     with app.app_context():
-        market.apechain_market_id = market_id
+        # Get a fresh instance of the market from the database
+        fresh_market = db.session.query(Market).filter_by(id=market.id).first()
+        if not fresh_market:
+            logger.error("Market not found in database")
+            return None
+            
+        fresh_market.apechain_market_id = market_id
         db.session.commit()
     
-    logger.info(f"Updated market with Apechain market ID: {market_id}")
-    return market_id
+        logger.info(f"Updated market with Apechain market ID: {market_id}")
+        return market_id
 
 def main():
     """Main function for testing the full pipeline."""
@@ -376,12 +406,15 @@ def main():
                 pipeline_run.markets_deployed = 1
                 db.session.commit()
                 
+                # Get a fresh instance of the market for final output
+                fresh_market = db.session.query(Market).filter_by(id=market.id).first()
+                
                 logger.info("=" * 50)
                 logger.info("PIPELINE TEST COMPLETED SUCCESSFULLY")
-                logger.info(f"Market Question: {market.question}")
-                logger.info(f"Market ID: {market.id}")
-                logger.info(f"Apechain Market ID: {market.apechain_market_id}")
-                logger.info(f"Transaction Hash: {market.blockchain_tx}")
+                logger.info(f"Market Question: {fresh_market.question}")
+                logger.info(f"Market ID: {fresh_market.id}")
+                logger.info(f"Apechain Market ID: {fresh_market.apechain_market_id}")
+                logger.info(f"Transaction Hash: {fresh_market.blockchain_tx}")
                 logger.info("=" * 50)
                 
                 return 0
