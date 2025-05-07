@@ -20,6 +20,7 @@ import json
 import logging
 import hashlib
 import requests
+import traceback
 from datetime import datetime, timedelta
 from typing import Dict, List, Any, Tuple, Optional
 
@@ -33,7 +34,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 
 # Import updated models
-from models_updated import db, Event, Market, PendingMarket, ProcessedMarket, ApprovalEvent
+from models_updated import db, Event, Market, PendingMarket, ProcessedMarket, SlackApprovalMessage
 db.init_app(app)
 
 # Import utility functions
@@ -96,67 +97,106 @@ query FetchMarkets($first: Int!, $skip: Int!) {
 }
 """
 
-def fetch_markets(limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
+def fetch_binary_markets(limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
     """
-    Fetch markets from Polymarket API.
+    Fetch binary markets from Polymarket Markets API.
+    These are markets that are not part of event groups.
     
     Args:
         limit: Maximum number of markets to fetch
         skip: Number of markets to skip (for pagination)
         
     Returns:
-        List of market data dictionaries
+        List of binary market data dictionaries
     """
     try:
-        # Define GraphQL query
-        payload = {
-            "query": MARKETS_QUERY,
-            "variables": {
-                "first": limit,
-                "skip": skip
-            }
-        }
-        
         # Polymarket Gamma API is public and doesn't require authentication
         headers = {}
         
-        # Try with REST API endpoint first (with query parameters)
+        # Try with REST API endpoint first (markets endpoint)
         try:
-            logger.info(f"Fetching markets from REST API endpoint")
+            logger.info(f"Fetching binary markets from Markets REST API endpoint")
             rest_response = requests.get(MARKETS_API_URL, headers=headers)
             rest_response.raise_for_status()
             
             rest_data = rest_response.json()
             # If we have valid data, use it
             if rest_data and isinstance(rest_data, list):
-                logger.info(f"Successfully fetched {len(rest_data)} markets from REST API")
-                return rest_data
+                logger.info(f"Successfully fetched {len(rest_data)} binary markets from REST API")
+                
+                # Filter markets to only include those not part of events
+                standalone_markets = [m for m in rest_data if not m.get('events')]
+                logger.info(f"Filtered to {len(standalone_markets)} standalone binary markets")
+                
+                return standalone_markets
             else:
-                logger.warning(f"REST API returned invalid data format, trying GraphQL endpoint")
-        except Exception as e:
-            logger.warning(f"REST API request failed: {str(e)}, trying GraphQL endpoint")
-        
-        # Fall back to GraphQL API if REST fails
-        try:
-            graphql_url = "https://gamma-api.polymarket.com/query"
-            response = requests.post(graphql_url, json=payload, headers=headers)
-            response.raise_for_status()
-            
-            data = response.json()
-            if "errors" in data:
-                logger.error(f"GraphQL errors: {data['errors']}")
+                logger.warning(f"Markets REST API returned invalid data format")
                 return []
-            
-            markets = data.get('data', {}).get('markets', [])
-            logger.info(f"Fetched {len(markets)} markets from Gamma API (skip={skip})")
-            return markets
         except Exception as e:
-            logger.error(f"GraphQL API request failed: {str(e)}")
+            logger.warning(f"Markets REST API request failed: {str(e)}")
             return []
         
     except Exception as e:
-        logger.error(f"Error fetching markets from API: {str(e)}")
+        logger.error(f"Error fetching binary markets from API: {str(e)}")
         return []
+
+def fetch_event_markets(limit: int = 100, skip: int = 0) -> List[Dict[str, Any]]:
+    """
+    Fetch event markets from Polymarket Events API.
+    These are events that contain grouped markets to be transformed into a single market with options.
+    
+    Args:
+        limit: Maximum number of events to fetch
+        skip: Number of events to skip (for pagination)
+        
+    Returns:
+        List of event data dictionaries
+    """
+    try:
+        # Polymarket Gamma API is public and doesn't require authentication
+        headers = {}
+        
+        # Try with REST API endpoint (events endpoint)
+        try:
+            logger.info(f"Fetching events from Events REST API endpoint")
+            rest_response = requests.get(EVENTS_API_URL, headers=headers)
+            rest_response.raise_for_status()
+            
+            rest_data = rest_response.json()
+            # If we have valid data, use it
+            if rest_data and isinstance(rest_data, list):
+                # Filter events that have markets
+                valid_events = [evt for evt in rest_data if evt.get('markets') and len(evt.get('markets', [])) > 0]
+                logger.info(f"Successfully fetched {len(valid_events)} events with markets from Events API")
+                return valid_events
+            else:
+                logger.warning(f"Events REST API returned invalid data format")
+                return []
+        except Exception as e:
+            logger.warning(f"Events REST API request failed: {str(e)}")
+            return []
+        
+    except Exception as e:
+        logger.error(f"Error fetching events from API: {str(e)}")
+        return []
+
+def fetch_all_market_data(limit: int = 100) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    """
+    Fetch both binary markets and event markets from Polymarket API.
+    
+    Args:
+        limit: Maximum number of markets/events to fetch per type
+        
+    Returns:
+        Tuple of (binary_markets, event_markets)
+    """
+    # Fetch both types of market data
+    binary_markets = fetch_binary_markets(limit=limit)
+    event_markets = fetch_event_markets(limit=limit)
+    
+    logger.info(f"Fetched {len(binary_markets)} binary markets and {len(event_markets)} events")
+    
+    return binary_markets, event_markets
 
 def filter_active_non_expired_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -566,43 +606,237 @@ def post_pending_markets_to_slack(markets: List[PendingMarket], max_to_post: int
         
         return posted_count
 
-def run_pipeline(max_markets: int = 20) -> int:
+def process_binary_markets(binary_markets: List[Dict[str, Any]], max_markets: int = 20) -> Tuple[List[Event], List[PendingMarket]]:
     """
-    Run the full pipeline.
+    Process binary markets (non-event markets).
     
     Args:
+        binary_markets: List of binary market data
         max_markets: Maximum number of markets to process
+        
+    Returns:
+        Tuple of (events, pending_markets)
+    """
+    # Step 1: Filter binary markets
+    active_markets = filter_active_non_expired_markets(binary_markets)
+    new_markets = filter_new_markets(active_markets)
+    
+    if not new_markets:
+        logger.info("No new binary markets to process")
+        return [], []
+    
+    # Step 2: Store in database
+    # Note: For binary markets, each market gets its own "event" (1:1 relationship)
+    events, pending_markets = store_events_and_markets(new_markets[:max_markets])
+    
+    logger.info(f"Processed {len(events)} events and {len(pending_markets)} binary markets")
+    
+    return events, pending_markets
+
+def process_event_markets(event_data: List[Dict[str, Any]], max_events: int = 10) -> Tuple[List[Event], List[PendingMarket]]:
+    """
+    Process event markets (transform event with multiple markets into single market with options).
+    
+    Args:
+        event_data: List of event data from Polymarket Events API
+        max_events: Maximum number of events to process
+        
+    Returns:
+        Tuple of (events, pending_markets)
+    """
+    # First filter events to active, non-expired ones
+    now = datetime.now().timestamp() * 1000  # Current time in milliseconds
+    
+    active_events = []
+    for event in event_data:
+        # Skip if event is closed, archived, or inactive
+        if event.get('closed') or event.get('archived') or not event.get('active', True):
+            continue
+        
+        # Skip if event has already expired
+        end_date = event.get('endDate')
+        if end_date and int(end_date) < now:
+            continue
+        
+        # Skip if event doesn't have image or icon URLs
+        if not event.get('image') or not event.get('icon'):
+            continue
+        
+        # Skip events without markets
+        markets = event.get('markets', [])
+        if not markets or len(markets) == 0:
+            continue
+        
+        # Add to filtered list
+        active_events.append(event)
+    
+    logger.info(f"Filtered down to {len(active_events)} active, non-expired events")
+    
+    # Filter events not already in database
+    with app.app_context():
+        # Get IDs of events already in the database
+        existing_event_ids = set()
+        
+        # Check events table
+        event_ids = db.session.query(Event.source_id).all()
+        existing_event_ids.update([e[0] for e in event_ids if e[0]])
+        
+        # Filter out events that are already in the database
+        new_events = [e for e in active_events if e.get('id') not in existing_event_ids]
+        
+        logger.info(f"Found {len(new_events)} new events not yet in the database")
+    
+    if not new_events:
+        logger.info("No new event markets to process")
+        return [], []
+    
+    # Transform events into our format and store in database
+    # We'll use utils/transform_market_with_events.py for this
+    events = []
+    pending_markets = []
+    
+    for event in new_events[:max_events]:
+        try:
+            # Transform the event into our format
+            event_id = event.get('id')
+            event_name = event.get('title')
+            event_banner = event.get('image')
+            event_icon = event.get('icon')
+            event_category = event.get('category', 'sports').lower()
+            event_description = event.get('description', '')
+            
+            # Create an event object
+            event_obj = Event(
+                id=generate_event_id(event_name),
+                name=event_name,
+                description=event_description,
+                category=event_category,
+                banner_url=event_banner,
+                icon_url=event_icon,
+                source_id=event_id,
+                raw_data=json.dumps(event)
+            )
+            
+            with app.app_context():
+                db.session.add(event_obj)
+                db.session.commit()
+                events.append(event_obj)
+            
+            # Transform event markets into a single market with options
+            market_options = []
+            option_images = {}
+            
+            for market in event.get('markets', []):
+                market_id = market.get('id')
+                market_question = market.get('question')
+                market_icon = market.get('icon')
+                
+                # Skip markets without proper data
+                if not all([market_id, market_question]):
+                    continue
+                
+                # Add as an option
+                market_options.append(market_question)
+                if market_icon:
+                    option_images[market_question] = market_icon
+            
+            # Create a pending market for the whole event
+            if market_options:
+                # Categorize the market using GPT-4o-mini
+                question = f"Event: {event_name}"
+                category, needs_manual = categorize_market(question, event_description)
+                
+                # Use event category if categorization returns unknown
+                if category.lower() == 'unknown':
+                    category = event_category
+                
+                # Create pending market entry
+                pending_market = PendingMarket(
+                    poly_id=event_id,
+                    question=question,
+                    event_name=event_name,
+                    event_id=event_obj.id,
+                    category=category,
+                    banner_url=event_banner,
+                    icon_url=event_icon,
+                    options=market_options,
+                    option_images=option_images,
+                    expiry=event.get('endDate'),
+                    raw_data=json.dumps(event),
+                    needs_manual_categorization=needs_manual,
+                    posted=False,
+                    is_event=True
+                )
+                
+                with app.app_context():
+                    db.session.add(pending_market)
+                    
+                    # Also add to processed_markets table to prevent duplicates
+                    processed_market = ProcessedMarket(
+                        condition_id=event_id,
+                        question=question,
+                        event_name=event_name,
+                        event_id=event_obj.id,
+                        raw_data=json.dumps(event),
+                        posted=False,
+                        approved=None  # None means pending
+                    )
+                    
+                    db.session.add(processed_market)
+                    db.session.commit()
+                    
+                    pending_markets.append(pending_market)
+                    
+                    logger.info(f"Created event market {event_id}: {question} with {len(market_options)} options")
+        
+        except Exception as e:
+            logger.error(f"Error processing event {event.get('id')}: {str(e)}")
+            continue
+    
+    return events, pending_markets
+
+def run_pipeline(max_markets: int = 20, max_events: int = 10) -> int:
+    """
+    Run the full pipeline with both binary markets and event markets.
+    
+    Args:
+        max_markets: Maximum number of binary markets to process
+        max_events: Maximum number of events to process
         
     Returns:
         int: Exit code (0 for success, non-zero for failure)
     """
     try:
-        # Step 1: Fetch markets from API
-        markets = fetch_markets(limit=max_markets)
+        # Step 1: Fetch both binary markets and events from Polymarket API
+        binary_markets, event_data = fetch_all_market_data(limit=max_markets*2)  # Fetch more than we need to account for filtering
         
-        # Step 2: Filter markets
-        filtered_markets = filter_active_non_expired_markets(markets)
-        new_markets = filter_new_markets(filtered_markets)
+        # Step 2: Process binary markets
+        binary_events, binary_pending_markets = process_binary_markets(binary_markets, max_markets)
         
-        if not new_markets:
+        # Step 3: Process event markets
+        event_events, event_pending_markets = process_event_markets(event_data, max_events)
+        
+        # Combine the results
+        all_events = binary_events + event_events
+        all_pending_markets = binary_pending_markets + event_pending_markets
+        
+        if not all_pending_markets:
             logger.info("No new markets to process")
             return 0
         
-        # Step 3: Store events and markets in database
-        events, pending_markets = store_events_and_markets(new_markets)
-        
-        # Step 4: Post markets to Slack
-        posted_count = post_pending_markets_to_slack(pending_markets, max_to_post=10)
+        # Step 4: Post pending markets to Slack for approval
+        posted_count = post_pending_markets_to_slack(all_pending_markets)
         
         logger.info(f"Pipeline completed successfully")
-        logger.info(f"Created {len(events)} events")
-        logger.info(f"Created {len(pending_markets)} pending markets")
+        logger.info(f"Created {len(all_events)} events")
+        logger.info(f"Created {len(all_pending_markets)} pending markets")
         logger.info(f"Posted {posted_count} markets to Slack")
         
         return 0
-    
+        
     except Exception as e:
         logger.error(f"Error in pipeline: {str(e)}")
+        traceback.print_exc()
         return 1
 
 if __name__ == "__main__":
