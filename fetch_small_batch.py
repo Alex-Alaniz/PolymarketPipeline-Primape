@@ -14,22 +14,20 @@ import json
 import logging
 from datetime import datetime
 
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+logger = logging.getLogger("fetch_small_batch")
+
 from main import app
 from models import db, PendingMarket, PipelineRun
 from utils.polymarket import PolymarketExtractor
 # We'll implement our own categorization function since we're having issues with imports
-from openai import OpenAI
-
-# Initialize OpenAI client
-openai_client = None
-try:
-    openai_api_key = os.environ.get("OPENAI_API_KEY")
-    if openai_api_key:
-        openai_client = OpenAI(api_key=openai_api_key)
-    else:
-        logger.warning("OPENAI_API_KEY not found in environment variables")
-except Exception as e:
-    logger.error(f"Error initializing OpenAI client: {str(e)}")
 
 # Valid categories - must match exactly what's in the prompt
 VALID_CATEGORIES = ["politics", "crypto", "sports", "business", "culture", "news", "tech"]
@@ -88,7 +86,7 @@ def keyword_based_categorization(question: str) -> str:
 
 def categorize_markets(markets: list) -> list:
     """
-    Categorize a batch of markets using OpenAI or keyword fallback.
+    Categorize a batch of markets using keyword-based categorization.
     
     Args:
         markets: List of market data dictionaries
@@ -118,16 +116,6 @@ def categorize_markets(markets: list) -> list:
     except Exception as e:
         logger.error(f"Error in categorization: {str(e)}")
         return []
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
-)
-logger = logging.getLogger("fetch_small_batch")
 
 def create_pipeline_run():
     """Create a new pipeline run record."""
@@ -180,16 +168,15 @@ def fetch_and_categorize(api_limit=10, process_limit=5):
         logger.info(f"Fetching markets from Polymarket API")
         extractor = PolymarketExtractor()
         
-        try:
-            data = extractor.extract_data()
-            if not data:
-                logger.error("Failed to fetch markets from Polymarket API")
-                update_pipeline_run(run_id, "failed", error="API fetch failed")
-                return False
-            
-            # Limit the number of markets to process
-            data = data[:api_limit] if len(data) > api_limit else data
-            logger.info(f"Fetched {len(data)} markets from Polymarket API")
+        data = extractor.extract_data()
+        if not data:
+            logger.error("Failed to fetch markets from Polymarket API")
+            update_pipeline_run(run_id, "failed", error="API fetch failed")
+            return False
+        
+        # Limit the number of markets to process
+        data = data[:api_limit] if len(data) > api_limit else data
+        logger.info(f"Fetched {len(data)} markets from Polymarket API")
         
         # Filter markets to keep only non-expired ones
         filtered_markets = []
@@ -230,7 +217,7 @@ def fetch_and_categorize(api_limit=10, process_limit=5):
             return True
         
         # Categorize the markets
-        logger.info(f"Categorizing {len(new_markets)} markets with GPT-4o-mini...")
+        logger.info(f"Categorizing {len(new_markets)} markets with keyword-based categorization...")
         categorized_markets = categorize_markets(new_markets)
         
         if not categorized_markets:
