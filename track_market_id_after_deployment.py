@@ -32,7 +32,6 @@ def create_pipeline_run():
     """Create a new pipeline run record in the database."""
     try:
         pipeline_run = PipelineRun(
-            stage="track_deployed_markets",
             status="running",
             start_time=datetime.utcnow()
         )
@@ -58,7 +57,7 @@ def update_pipeline_run(pipeline_run, status, markets_processed=0, markets_updat
         pipeline_run.markets_failed = markets_failed
         
         if error:
-            pipeline_run.error_message = str(error)
+            pipeline_run.error = str(error)
             
         db.session.commit()
         logger.info(f"Updated pipeline run {pipeline_run.id} with status {status}")
