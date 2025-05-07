@@ -50,6 +50,50 @@ def reset_pending_markets():
         db.session.rollback()
         return False
 
+def clean_test_markets():
+    """
+    Clean test markets from the Market table.
+    
+    This removes any previously created test markets based on test IDs.
+    """
+    try:
+        with app.app_context():
+            # List of test market ID prefixes
+            test_prefixes = [
+                'event_ucl_test', 
+                'event_laliga_test', 
+                'market_inter', 
+                'market_real', 
+                'market_arsenal',
+                'market_psg',
+                'market_barca',
+                'market_atletico',
+                'market_btc',
+                'market_election'
+            ]
+            
+            # Delete test markets
+            deleted_count = 0
+            for prefix in test_prefixes:
+                deleted = db.session.query(Market).filter(
+                    Market.id.startswith(prefix)
+                ).delete()
+                deleted_count += deleted
+            
+            db.session.commit()
+            
+            logger.info(f"Deleted {deleted_count} test markets from the Market table")
+            
+            # Verify remaining markets
+            remaining_count = db.session.query(Market).count()
+            logger.info(f"Remaining markets in database: {remaining_count}")
+            
+            return True
+    except Exception as e:
+        logger.error(f"Error cleaning test markets: {e}")
+        db.session.rollback()
+        return False
+
 def main():
     """
     Main function to run the database cleaning.
@@ -59,9 +103,13 @@ def main():
     """
     logger.info("Starting database cleaning for event testing")
     
-    success = reset_pending_markets()
+    # First, reset pending markets
+    success_pending = reset_pending_markets()
     
-    if success:
+    # Then, clean any test markets from previous runs
+    success_test = clean_test_markets()
+    
+    if success_pending and success_test:
         logger.info("Successfully cleaned database for event testing")
         return 0
     else:
