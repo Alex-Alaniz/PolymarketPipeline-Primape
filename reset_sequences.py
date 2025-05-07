@@ -21,20 +21,21 @@ def reset_sequences():
         # Import within function to avoid circular dependencies
         from main import app
         from models import db, PipelineRun
+        from sqlalchemy import text
         
         with app.app_context():
             # First, get a list of all tables and their sequences
             logger.info("Identifying sequences to reset...")
             
             # Get all sequences in the public schema
-            query = """
+            query = text("""
             SELECT 
                 sequence_name 
             FROM 
                 information_schema.sequences 
             WHERE 
                 sequence_schema = 'public'
-            """
+            """)
             
             result = db.session.execute(query)
             sequences = [row[0] for row in result]
@@ -50,7 +51,7 @@ def reset_sequences():
             # Reset each sequence
             for sequence in sequences:
                 logger.info(f"Resetting sequence: {sequence}")
-                reset_query = f"ALTER SEQUENCE {sequence} RESTART WITH 1"
+                reset_query = text(f"ALTER SEQUENCE {sequence} RESTART WITH 1")
                 db.session.execute(reset_query)
             
             # Commit the changes
