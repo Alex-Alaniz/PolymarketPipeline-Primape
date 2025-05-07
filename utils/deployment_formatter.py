@@ -1,142 +1,212 @@
 """
-Deployment message formatting utilities.
+Format deployment approval messages for Slack.
 
-This module provides functions for formatting messages for deployment approval
-in Slack, matching the format used in the original pipeline.
+This module provides functions for formatting market deployment approval messages
+with rich formatting, including event banners, option images, and category information.
 """
 
-from typing import Dict, List, Any, Tuple, Optional
+from typing import Dict, List, Any, Optional, Tuple, Union
 
 def format_deployment_message(
-    market_id: str,
+    market_id: Union[str, int],
     question: str,
     category: str,
-    market_type: str,
-    options: List[str],
-    expiry: str,
+    market_type: str = "Binary Market (Yes/No)",
+    options: List[str] = None,
+    expiry: str = "Unknown",
     banner_uri: Optional[str] = None,
     event_name: Optional[str] = None,
-    event_id: Optional[str] = None
+    event_id: Optional[str] = None,
+    event_image: Optional[str] = None,
+    event_icon: Optional[str] = None,
+    option_images: Optional[Dict[str, str]] = None,
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Format a market message for deployment approval.
+    Format a market message for deployment approval with rich formatting.
     
     Args:
         market_id: Market ID
         question: Market question
         category: Market category
-        market_type: Market type (e.g., 'Binary Market (Yes/No)')
+        market_type: Type of market (binary, categorical, etc.)
         options: List of option values
-        expiry: Human-readable expiry date 
+        expiry: Human-readable expiry date
         banner_uri: Optional banner image URI
-        event_name: Optional name of the event this market belongs to
-        event_id: Optional ID of the event this market belongs to
+        event_name: Optional event name
+        event_id: Optional event ID
+        event_image: Optional event banner image URI
+        event_icon: Optional event icon URI
+        option_images: Optional dictionary mapping option values to image URIs
         
     Returns:
-        Tuple of (message text, blocks)
+        Tuple[str, List[Dict]]: Formatted message text and blocks
     """
-    # Format options as numbered list
-    options_text = "*Options:*\n"
-    for i, option in enumerate(options):
-        options_text += f"  {i+1}. {option}\n"
+    # Define emoji map for categories
+    category_emoji = {
+        'politics': ':ballot_box_with_ballot:',
+        'crypto': ':coin:',
+        'sports': ':sports_medal:',
+        'business': ':chart_with_upwards_trend:',
+        'culture': ':performing_arts:',
+        'tech': ':computer:',
+        'news': ':newspaper:',
+        # Add fallback for unknown categories
+        'unknown': ':question:'
+    }
     
-    # Simple message text (matching original format)
-    message_text = f"*Market for Deployment Approval*  *Question:* {question}"
-    if event_name:
-        message_text += f"  *Event:* {event_name}"
+    # Get emoji for this category (case-insensitive)
+    category_lower = category.lower() if category else 'unknown'
+    emoji = category_emoji.get(category_lower, category_emoji['unknown'])
     
-    # Create blocks with exact same format as original messages
+    # Default text for fallback
+    message_text = f"*Deployment Approval*\n\n*Question:* {question}\n*Category:* {emoji} {category.capitalize() if category else 'Unknown'}"
+    
+    # Ensure options is a list
+    if not options:
+        options = ["Yes", "No"]
+    
+    # Create rich message blocks
     blocks = [
         {
             "type": "header",
             "text": {
                 "type": "plain_text",
-                "text": "Market for Deployment Approval",
+                "text": "Deployment Approval",
                 "emoji": True
-            }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*Question:* {question}"
             }
         }
     ]
     
-    # Add event information if available
+    # Add event info and banner if available
     if event_name:
+        # First add the event banner if available
+        if event_image:
+            blocks.append({
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": f"Event: {event_name}",
+                    "emoji": True
+                },
+                "image_url": event_image,
+                "alt_text": event_name
+            })
+        
+        # Then add the event information
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Event:* {event_name}"
+                "text": f"*Event:* {event_name} · ID: `{event_id or 'N/A'}`"
             }
         })
     
-    blocks.extend([
-        {
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn", 
-                    "text": f"*Category:* {category}"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Expiry:* {expiry}"
-                }
-            ]
-        },
-        {
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Type:* {market_type}"
-                },
-                {
-                    "type": "mrkdwn",
-                    "text": f"*ID:* {market_id}"
-                }
-            ]
-        }
-    ])
-    
-    # Add event ID if available
-    if event_id:
-        blocks.append({
-            "type": "section",
-            "fields": [
-                {
-                    "type": "mrkdwn",
-                    "text": f"*Event ID:* {event_id}"
-                }
-            ]
-        })
-    
+    # Add the market question
     blocks.append({
         "type": "section",
         "text": {
             "type": "mrkdwn",
-            "text": options_text
+            "text": f"*Market Question:* {question}"
         }
     })
     
-    # Add banner if available
-    if banner_uri:
+    # Add metadata section
+    blocks.append({
+        "type": "section",
+        "fields": [
+            {
+                "type": "mrkdwn",
+                "text": f"*Category:* {emoji} {category.capitalize() if category else 'Unknown'}"
+            },
+            {
+                "type": "mrkdwn",
+                "text": f"*Type:* {market_type}"
+            }
+        ]
+    })
+    
+    # Add second row of metadata
+    blocks.append({
+        "type": "section",
+        "fields": [
+            {
+                "type": "mrkdwn",
+                "text": f"*ID:* `{market_id}`"
+            },
+            {
+                "type": "mrkdwn",
+                "text": f"*Expiry:* {expiry}"
+            }
+        ]
+    })
+    
+    # Add market banner if available and different from event banner
+    if banner_uri and banner_uri != event_image:
+        blocks.append({
+            "type": "image",
+            "title": {
+                "type": "plain_text",
+                "text": "Market Banner",
+                "emoji": True
+            },
+            "image_url": banner_uri,
+            "alt_text": "Market Banner"
+        })
+    
+    # Add options section
+    if options:
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": "*Market Banner*"
+                "text": "*Options:*"
+            }
+        })
+        
+        # Add each option with its image if available
+        for i, option in enumerate(options):
+            option_value = str(option)
+            
+            # Create option section
+            option_block = {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"• {option_value}"
+                }
+            }
+            
+            # Add icon image if available
+            icon_url = None
+            if option_images and option_value in option_images:
+                icon_url = option_images[option_value]
+                
+            if icon_url:
+                option_block["accessory"] = {
+                    "type": "image",
+                    "image_url": icon_url,
+                    "alt_text": option_value
+                }
+                
+            blocks.append(option_block)
+    
+    # Add event icon if available
+    if event_icon:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Event Icon:*"
             },
             "accessory": {
                 "type": "image",
-                "image_url": banner_uri,
-                "alt_text": "Market Banner"
+                "image_url": event_icon,
+                "alt_text": "Event Icon"
             }
         })
+    
+    # Add divider
+    blocks.append({"type": "divider"})
     
     # Add approval instructions
     blocks.append({

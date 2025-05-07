@@ -212,37 +212,76 @@ def store_pending_markets_with_events(markets: List[Dict[str, Any]]) -> Tuple[Li
         # List to store created PendingMarket objects
         pending_markets = []
         
+        # Filter out markets already in the database
+        filtered_markets = []
+        market_data_map = {}  # Map to store market data by ID for later use
+        
         for market_data in transformed_markets:
             market_id = market_data.get('id')
             
             # Skip if market is already in the database
             if db.session.query(PendingMarket).filter_by(poly_id=market_id).first():
                 continue
+                
+            # Prepare for batch categorization
+            filtered_markets.append({
+                'id': market_id,
+                'question': market_data.get('question', ''),
+                'description': market_data.get('description', '')
+            })
             
-            # Categorize the market using GPT-4o-mini
-            question = market_data.get('question', '')
-            description = market_data.get('description', '')
-            category, needs_manual = categorize_market(question, description)
+            # Store market data for later use
+            market_data_map[market_id] = market_data
+        
+        # Skip if no markets to process
+        if not filtered_markets:
+            logger.info("No new markets to store")
+            return [], events_data
+            
+        # Batch categorize all markets at once
+        logger.info(f"Batch categorizing {len(filtered_markets)} markets")
+        categorized_markets = batch_categorize_markets(filtered_markets)
+        
+        # Create a map for quick category lookup
+        category_map = {}
+        for market in categorized_markets:
+            market_id = market.get('id')
+            category_map[market_id] = {
+                'category': market.get('ai_category', 'news'),
+                'needs_manual': market.get('needs_manual_categorization', True)
+            }
+        
+        # Create PendingMarket entries with categorized data
+        for market_data in filtered_markets:
+            market_id = market_data.get('id')
+            original_data = market_data_map.get(market_id, {})
+            
+            # Get category from the batch results or fallback to news
+            category_info = category_map.get(market_id, {'category': 'news', 'needs_manual': True})
+            category = category_info.get('category', 'news')
+            needs_manual = category_info.get('needs_manual', True)
+            
+            question = original_data.get('question', '')
             
             # Create pending market entry
             pending_market = PendingMarket(
                 poly_id=market_id,
                 question=question,
-                event_name=market_data.get('event_name'),
-                event_id=market_data.get('event_id'),
+                event_name=original_data.get('event_name'),
+                event_id=original_data.get('event_id'),
                 category=category,
-                banner_url=market_data.get('banner_uri'),
-                icon_url=market_data.get('icon_url'),
-                options=market_data.get('options'),
-                option_images=market_data.get('option_images'),
-                expiry=market_data.get('expiry'),
-                raw_data=market_data.get('raw_data'),
+                banner_url=original_data.get('banner_uri'),
+                icon_url=original_data.get('icon_url'),
+                options=original_data.get('options'),
+                option_images=original_data.get('option_images'),
+                expiry=original_data.get('expiry'),
+                raw_data=original_data.get('raw_data'),
                 needs_manual_categorization=needs_manual,
                 posted=False
             )
             
             db.session.add(pending_market)
-            logger.info(f"Added pending market {market_id}: {question}")
+            logger.info(f"Added pending market {market_id}: {question} [Category: {category}]")
             pending_markets.append(pending_market)
         
         # Commit all changes at once
@@ -253,7 +292,7 @@ def store_pending_markets_with_events(markets: List[Dict[str, Any]]) -> Tuple[Li
 
 def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Format a market message for posting to Slack with category badge.
+    Format a market message for posting to Slack with category badge, event images and option images.
     
     Args:
         market: PendingMarket model instance
@@ -289,40 +328,41 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
                 "text": "New Market for Approval",
                 "emoji": True
             }
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"*{market.question}*"
-            }
         }
     ]
     
-    # Add event name if available
+    # Add event info and banner if available
     if market.event_name:
+        # First add the event banner if available
+        if market.banner_url:
+            blocks.append({
+                "type": "image",
+                "title": {
+                    "type": "plain_text",
+                    "text": f"Event: {market.event_name}",
+                    "emoji": True
+                },
+                "image_url": market.banner_url,
+                "alt_text": market.event_name
+            })
+        
+        # Then add the event information
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": f"*Event:* {market.event_name}"
+                "text": f"*Event:* {market.event_name} · ID: `{market.event_id or 'N/A'}`"
             }
         })
     
-    # Add market options if available
-    if market.options:
-        options_text = "*Options:*\n"
-        for option in market.options:
-            option_value = option.get('value', 'Unknown')
-            options_text += f"• {option_value}\n"
-        
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": options_text
-            }
-        })
+    # Add the market question
+    blocks.append({
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": f"*Market Question:* {market.question}"
+        }
+    })
     
     # Add category section with badge
     blocks.append({
@@ -333,16 +373,79 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
         }
     })
     
-    # Add image if available
-    if market.banner_url:
+    # Add market options with images if available
+    if market.options:
         blocks.append({
-            "type": "image",
-            "image_url": market.banner_url,
-            "alt_text": market.question
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Options:*"
+            }
+        })
+        
+        # Get option images if available
+        option_images = market.option_images or {}
+        
+        # Add each option with its image if available
+        for option in market.options:
+            option_value = option.get('value', 'Unknown')
+            option_id = option.get('id', '')
+            
+            # Create option section
+            option_block = {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"• {option_value}"
+                }
+            }
+            
+            # Add icon image if available (either from option_images or directly from option)
+            icon_url = None
+            if option_value in option_images:
+                icon_url = option_images[option_value]
+            elif 'image_url' in option and option['image_url']:
+                icon_url = option['image_url']
+            elif 'image' in option and option['image']:
+                icon_url = option['image']
+                
+            if icon_url:
+                option_block["accessory"] = {
+                    "type": "image",
+                    "image_url": icon_url,
+                    "alt_text": option_value
+                }
+                
+            blocks.append(option_block)
+    
+    # Show market icon URL if available
+    if market.icon_url:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*Market Icon:*"
+            },
+            "accessory": {
+                "type": "image",
+                "image_url": market.icon_url,
+                "alt_text": "Market Icon"
+            }
         })
     
     # Add divider
     blocks.append({"type": "divider"})
+    
+    # Add market ID and metadata
+    blocks.append({
+        "type": "context",
+        "elements": [
+            {
+                "type": "mrkdwn",
+                "text": f"Market ID: `{market.poly_id}` · Posted: {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+            }
+        ]
+    })
     
     # Add approval/rejection buttons context
     blocks.append({
@@ -411,8 +514,8 @@ def main():
     Main function to run the market fetching, categorizing, and posting process.
     """
     try:
-        # Fetch markets from API
-        markets = fetch_markets(limit=30)
+        # Fetch markets from API (use 200 instead of 30)
+        markets = fetch_markets(limit=200)
         
         # Filter markets
         filtered_markets = filter_active_non_expired_markets(markets)
@@ -425,8 +528,8 @@ def main():
         # Store markets in database with event tracking
         pending_markets, events_data = store_pending_markets_with_events(new_markets)
         
-        # Post markets to Slack (max 10 at a time to avoid rate limits)
-        posted_count = post_markets_to_slack(pending_markets, max_to_post=10)
+        # Post markets to Slack (max 20 at a time)
+        posted_count = post_markets_to_slack(pending_markets, max_to_post=20)
         
         logger.info(f"Posted {posted_count} markets to Slack")
         logger.info(f"Extracted {len(events_data)} events from markets")
