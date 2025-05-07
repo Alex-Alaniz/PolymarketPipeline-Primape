@@ -48,8 +48,8 @@ def check_market_approvals() -> Tuple[int, int, int]:
     # Find all pending markets that have been posted to Slack
     pending_markets = PendingMarket.query.filter(
         PendingMarket.posted == True,
-        PendingMarket.slack_message_id.isnot(None),
-        PendingMarket.approved.is_(None)  # Not yet approved or rejected
+        PendingMarket.slack_message_id.isnot(None)
+        # No approved field in the model, we'll use ApprovalLog to track decisions
     ).all()
     
     if not pending_markets:
@@ -85,15 +85,12 @@ def check_market_approvals() -> Tuple[int, int, int]:
         if not approved and not rejected:
             continue
         
-        # Record the decision
-        market.approved = approved
-        
         # Create approval log entry
         approval_log = ApprovalLog(
-            timestamp=datetime.utcnow(),
-            market_id=market.poly_id, 
+            poly_id=market.poly_id,
+            slack_msg_id=market.slack_message_id,
             decision="approved" if approved else "rejected",
-            message_id=market.slack_message_id
+            created_at=datetime.utcnow()
         )
         db.session.add(approval_log)
         
