@@ -524,7 +524,9 @@ def run_pipeline(max_markets: int = 20) -> int:
 if __name__ == "__main__":
     with app.app_context():
         # Check if database has necessary tables
-        if not db.engine.has_table('events'):
+        from sqlalchemy import inspect
+        inspector = inspect(db.engine)
+        if 'events' not in inspector.get_table_names():
             logger.error("Database schema is not initialized. Run reset_and_setup_events_model.py first.")
             sys.exit(1)
     
