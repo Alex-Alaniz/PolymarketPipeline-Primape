@@ -12,7 +12,7 @@ def format_deployment_message(
     question: str,
     category: str,
     market_type: str = "Binary Market (Yes/No)",
-    options: List[str] = None,
+    options: Optional[List[str]] = None,
     expiry: str = "Unknown",
     banner_uri: Optional[str] = None,
     event_name: Optional[str] = None,
