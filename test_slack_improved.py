@@ -100,12 +100,12 @@ POLYMARKET_DATA = {
 # Test with URLs that are definitely Slack-accessible
 def update_to_real_urls(data):
     """Replace mock URLs with real, working URLs."""
-    # Real URLs that should work with Slack
+    # Real URLs that should work with Slack (using imgur which is known to be Slack-accessible)
     real_urls = {
-        "election": "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3e/Flag_of_the_United_States_of_America.svg/1200px-Flag_of_the_United_States_of_America.svg.png",
-        "harris": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Kamala_Harris_2021.jpg/800px-Kamala_Harris_2021.jpg",
-        "trump": "https://upload.wikimedia.org/wikipedia/commons/thumb/5/56/Donald_Trump_official_portrait.jpg/220px-Donald_Trump_official_portrait.jpg",
-        "other": "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b9/US_Capitol_west_side.JPG/220px-US_Capitol_west_side.JPG"
+        "election": "https://i.imgur.com/a6HmjrV.jpg",  # US flag
+        "harris": "https://i.imgur.com/M4VS2zn.jpg",    # Harris placeholder
+        "trump": "https://i.imgur.com/GFB7Oxt.jpg",     # Trump placeholder
+        "other": "https://i.imgur.com/y3eOwmx.jpg"      # Capitol building
     }
     
     # Update banner image

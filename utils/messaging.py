@@ -773,23 +773,37 @@ def is_slack_accessible_url(url):
         
         # List of domains known to work with Slack
         slack_accessible_domains = [
-            'polymarket-upload.s3.us-east-2.amazonaws.com',
-            's3.amazonaws.com',
-            'amazonaws.com',
-            'polymarket.co',
-            'slack.com',
-            'slack-edge.com',
-            'pbs.twimg.com',
-            'twimg.com',
+            # Imgur - confirmed working and reliable
             'imgur.com',
             'i.imgur.com',
+            
+            # Polymarket domains
+            'polymarket-upload.s3.us-east-2.amazonaws.com',
+            'polymarket.co',
+            
+            # AWS and cloud storage
+            's3.amazonaws.com',
+            'amazonaws.com',
+            
+            # Social media
+            'pbs.twimg.com',
+            'twimg.com',
             'cdn.discordapp.com',
             'media.discordapp.net',
+            
+            # Image services
             'giphy.com',
             'media.giphy.com',
             'unsplash.com',
             'images.unsplash.com',
-            'img.youtube.com'
+            
+            # Video platforms
+            'img.youtube.com',
+            
+            # Slack's own domains
+            'slack.com',
+            'slack-edge.com',
+            'files.slack.com'
         ]
         
         # Check if domain is in the whitelist

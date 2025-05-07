@@ -34,19 +34,18 @@ LA_LIGA_DATA = {
             "startDate": "2024-09-18T16:52:55.612547Z",
             "creationDate": "2024-09-18T16:52:55.612533Z",
             "endDate": "2025-05-25T12:00:00Z",
-            # We're using polymarket's official URL format now instead of wikipedia
-            "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png",
+            # Using imgur which is known to be Slack-accessible
+            "image": "https://i.imgur.com/Yk6Vvcq.jpg",  # La Liga logo
             "outcomes": [
                 {
                     "id": "real-madrid",
                     "title": "Real Madrid",
-                    # Use polymarket URL formats for these too
-                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/real-madrid-icon-RmkESpX9bNQI.png",
+                    "icon": "https://i.imgur.com/HnG0ZAw.png",  # Madrid logo
                 },
                 {
                     "id": "barcelona",
                     "title": "Barcelona",
-                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/barcelona-icon-tI2B9SnBwcV0.png",
+                    "icon": "https://i.imgur.com/8mSafpx.png",  # Barcelona logo
                 },
             ]
         }
@@ -61,7 +60,7 @@ LA_LIGA_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "149845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/barcelona-icon-tI2B9SnBwcV0.png",
+            "icon": "https://i.imgur.com/8mSafpx.png",  # Barcelona logo
         },
         {
             "id": "507395",
@@ -72,7 +71,7 @@ LA_LIGA_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "159845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/real-madrid-icon-RmkESpX9bNQI.png",
+            "icon": "https://i.imgur.com/HnG0ZAw.png",  # Madrid logo
         }
     ]
 }
@@ -86,7 +85,7 @@ BITCOIN_DATA = {
     "endDate": "2025-12-31T23:59:59Z",
     "is_binary": True,
     "is_multiple_option": False,
-    "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/4/46/Bitcoin.svg/1200px-Bitcoin.svg.png"
+    "image": "https://i.imgur.com/oBgMoXn.png"  # Bitcoin logo from imgur
 }
 
 def test_multi_option_market():
@@ -115,14 +114,12 @@ def test_multi_option_market():
     
     for block in blocks:
         # Check for banner image
-        if block.get('type') == 'image' and 'la-liga' in block.get('image_url', '').lower():
+        if block.get('type') == 'image' and block.get('alt_text') == 'Event banner':
             banner_block = block
             print(f"\n✅ Found event banner image: {block.get('image_url')}")
         
         # Check for option icon images (separate blocks)
-        elif block.get('type') == 'image' and any(
-            team in block.get('image_url', '').lower() for team in ['madrid', 'barcelona']
-        ):
+        elif block.get('type') == 'image' and block.get('alt_text', '').startswith('Option icon for'):
             option_image_blocks.append(block)
             print(f"✅ Found option icon image: {block.get('image_url')}")
         
@@ -202,7 +199,7 @@ def test_binary_market():
     
     for block in blocks:
         # Check for banner image
-        if block.get('type') == 'image' and 'bitcoin' in block.get('image_url', '').lower():
+        if block.get('type') == 'image' and block.get('alt_text') == 'Event banner':
             banner_block = block
             print(f"\n✅ Found banner image: {block.get('image_url')}")
         
