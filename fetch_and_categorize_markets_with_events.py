@@ -25,6 +25,7 @@ import config
 from models_updated import db, Event, Market, PendingMarket
 from utils.transform_market_with_events import transform_market_for_apechain, transform_markets_batch
 from utils.market_categorizer import categorize_market
+from utils.batch_categorizer import batch_categorize_markets
 from utils.messaging import post_formatted_message_to_slack, add_reaction_to_message
 from tenacity import retry, stop_after_attempt, wait_exponential
 
@@ -46,7 +47,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 db.init_app(app)
 
 # Constants
-MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 "
+MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=200"
 MARKETS_QUERY = """
 query FetchMarkets($first: Int!, $skip: Int!) {
   markets(
@@ -88,7 +89,7 @@ query FetchMarkets($first: Int!, $skip: Int!) {
 """
 
 @retry(stop=stop_after_attempt(3), wait=wait_exponential(multiplier=1, min=2, max=10))
-def fetch_markets(limit: int = 100) -> List[Dict[str, Any]]:
+def fetch_markets(limit: int = 200) -> List[Dict[str, Any]]:
     """
     Fetch markets from Polymarket API using the Gamma Markets endpoint.
     
