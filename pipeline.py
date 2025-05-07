@@ -8,14 +8,15 @@ fetching markets to deployment on ApeChain. It coordinates the various
 steps in the pipeline and provides status reporting.
 
 Steps in the pipeline:
-1. Fetch active markets from Polymarket API (filter_active_markets.py)
-2. Post markets to Slack for approval (fetch_active_markets_with_tracker.py)
-3. Check for market approvals in Slack (check_market_approvals.py)
-4. Generate banner images for approved markets (TODO)
-5. Post banners to Slack for approval (TODO)
-6. Check for banner approvals in Slack (check_image_approvals.py)
-7. Deploy approved markets to ApeChain (TODO)
-8. Update database with deployment status (TODO)
+1. Fetch markets from Polymarket Gamma API (fetch_gamma_markets.py)
+2. Transform markets with proper event detection (utils/transform_market_with_events.py)
+3. Post pending markets to Slack for approval (post_unposted_pending_markets.py)
+4. Check for market approvals in Slack (check_pending_market_approvals.py)
+5. Generate banner images for approved markets
+6. Post banners to Slack for approval
+7. Check for banner approvals in Slack (check_image_approvals.py)
+8. Final deployment approval and deploy to ApeChain (check_deployment_approvals.py)
+9. Track market IDs after deployment (track_market_id_after_deployment.py)
 """
 
 import os
