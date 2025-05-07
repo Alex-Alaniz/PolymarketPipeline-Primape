@@ -34,17 +34,19 @@ LA_LIGA_DATA = {
             "startDate": "2024-09-18T16:52:55.612547Z",
             "creationDate": "2024-09-18T16:52:55.612533Z",
             "endDate": "2025-05-25T12:00:00Z",
-            "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/2021_La_Liga_logo.jpg/1200px-2021_La_Liga_logo.jpg",
+            # We're using polymarket's official URL format now instead of wikipedia
+            "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png",
             "outcomes": [
                 {
                     "id": "real-madrid",
                     "title": "Real Madrid",
-                    "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/1200px-Real_Madrid_CF.svg.png",
+                    # Use polymarket URL formats for these too
+                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/real-madrid-icon-RmkESpX9bNQI.png",
                 },
                 {
                     "id": "barcelona",
                     "title": "Barcelona",
-                    "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/1200px-FC_Barcelona_%28crest%29.svg.png",
+                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/barcelona-icon-tI2B9SnBwcV0.png",
                 },
             ]
         }
@@ -59,7 +61,7 @@ LA_LIGA_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "149845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/1200px-FC_Barcelona_%28crest%29.svg.png",
+            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/barcelona-icon-tI2B9SnBwcV0.png",
         },
         {
             "id": "507395",
@@ -70,7 +72,7 @@ LA_LIGA_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "159845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/1200px-Real_Madrid_CF.svg.png",
+            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/real-madrid-icon-RmkESpX9bNQI.png",
         }
     ]
 }

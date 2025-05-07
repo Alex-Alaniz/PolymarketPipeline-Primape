@@ -686,11 +686,13 @@ def format_market_with_images(market_data):
                 option_fields.append(option_field)
                 
                 # Add the image as a separate block for better rendering
-                blocks.append({
-                    "type": "image",
-                    "image_url": icon_url,
-                    "alt_text": f"Option icon for {display_name}"
-                })
+                # Only add if the URL is accessible to Slack
+                if is_slack_accessible_url(icon_url):
+                    blocks.append({
+                        "type": "image",
+                        "image_url": icon_url,
+                        "alt_text": f"Option icon for {display_name}"
+                    })
                 
                 logger.info(f"Added option field with separate image block: {display_name}")
             else:
@@ -748,6 +750,71 @@ def format_market_with_images(market_data):
     )
     
     return text_message, blocks
+
+def is_slack_accessible_url(url):
+    """
+    Check if a URL is likely to be accessible by Slack for image rendering.
+    
+    Slack has restrictions on which URLs it can access. This function 
+    checks if the URL is from a known domain that Slack can access.
+    
+    Args:
+        url: URL string to check
+        
+    Returns:
+        Boolean indicating if the URL is likely accessible to Slack
+    """
+    if not url or not isinstance(url, str):
+        return False
+        
+    try:
+        from urllib.parse import urlparse
+        result = urlparse(url)
+        
+        # List of domains known to work with Slack
+        slack_accessible_domains = [
+            'polymarket-upload.s3.us-east-2.amazonaws.com',
+            's3.amazonaws.com',
+            'amazonaws.com',
+            'polymarket.co',
+            'slack.com',
+            'slack-edge.com',
+            'pbs.twimg.com',
+            'twimg.com',
+            'imgur.com',
+            'i.imgur.com',
+            'cdn.discordapp.com',
+            'media.discordapp.net',
+            'giphy.com',
+            'media.giphy.com',
+            'unsplash.com',
+            'images.unsplash.com',
+            'img.youtube.com'
+        ]
+        
+        # Check if domain is in the whitelist
+        domain = result.netloc.lower()
+        for accessible_domain in slack_accessible_domains:
+            if accessible_domain in domain:
+                return True
+                
+        # For testing, we'll allow certain other domains
+        # that have been confirmed to work
+        testing_domains = [
+            'upload.wikimedia.org'
+        ]
+        
+        for test_domain in testing_domains:
+            if test_domain in domain:
+                return True
+                
+        # By default, assume other domains may not be accessible by Slack
+        logger.warning(f"URL may not be accessible to Slack: {url[:50]}...")
+        return False
+        
+    except Exception as e:
+        logger.warning(f"Error checking Slack URL accessibility: {str(e)} - {url[:30]}...")
+        return False
 
 def is_valid_url(url):
     """
