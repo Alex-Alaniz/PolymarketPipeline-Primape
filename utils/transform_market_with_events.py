@@ -257,11 +257,17 @@ def transform_market_for_apechain(market_data: Dict[str, Any]) -> Tuple[Dict[str
     # Determine market type (binary, categorical, etc.)
     market_type = 'binary' if len(options) == 2 else 'categorical'
     
-    # Create option images mapping
+    # Create option images mapping by option name, not ID
     option_images = {}
     for option in options:
-        if option['image_url']:
-            option_images[option['id']] = option['image_url']
+        # Only try to access image_url if it's a dictionary
+        if isinstance(option, dict):
+            image_url = option.get('image_url')
+            option_value = option.get('value')
+            
+            if image_url and option_value:
+                # Use the option value (name) as the key, not the ID
+                option_images[option_value] = image_url
     
     # Create transformed market data
     transformed_market = {
@@ -269,9 +275,10 @@ def transform_market_for_apechain(market_data: Dict[str, Any]) -> Tuple[Dict[str
         'question': title,
         'type': market_type,
         'event_id': event_data['id'],
+        'event_name': event_data['name'],
         'original_market_id': market_id,
         'options': options,
-        'option_images': option_images,
+        'option_images': option_images,  # Now using option name as key
         'expiry': updated_market_data.get('endDate'),
         'status': 'new',
         'banner_uri': updated_market_data.get('image'),

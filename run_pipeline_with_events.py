@@ -387,18 +387,50 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
     
     # Add market options if available
     if market.options:
-        options_text = "*Options:*\n"
-        for option in market.options:
-            option_value = option.get('value', 'Unknown')
-            options_text += f"• {option_value}\n"
-        
+        # Create header for options
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": options_text
+                "text": "*Options:*"
             }
         })
+        
+        # Add each option separately, this will help with the option images later
+        if isinstance(market.options, list):
+            for option in market.options:
+                if isinstance(option, dict):
+                    option_value = option.get('value', 'Unknown')
+                elif isinstance(option, str):
+                    option_value = option
+                else:
+                    option_value = str(option)
+                    
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"• {option_value}"
+                    }
+                })
+        elif isinstance(market.options, dict):
+            for option_id, option_value in market.options.items():
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"• {option_value}"
+                    }
+                })
+        else:
+            # Fallback for other option formats
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"Options format not supported: {type(market.options)}"
+                }
+            })
     
     # Add category section with badge
     blocks.append({
@@ -409,13 +441,40 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
         }
     })
     
-    # Add image if available
+    # Add event banner image if available
     if market.banner_url:
         blocks.append({
             "type": "image",
             "image_url": market.banner_url,
-            "alt_text": market.question
+            "alt_text": market.question,
+            "title": {
+                "type": "plain_text",
+                "text": "Event Banner"
+            }
         })
+    
+    # Add option images if available
+    if market.option_images and isinstance(market.option_images, dict):
+        for option_name, image_url in market.option_images.items():
+            if image_url:
+                # Add option name first
+                blocks.append({
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Option:* {option_name}"
+                    }
+                })
+                # Add option image
+                blocks.append({
+                    "type": "image",
+                    "image_url": image_url,
+                    "alt_text": f"Option {option_name}",
+                    "title": {
+                        "type": "plain_text",
+                        "text": f"Option: {option_name}"
+                    }
+                })
     
     # Add divider
     blocks.append({"type": "divider"})
