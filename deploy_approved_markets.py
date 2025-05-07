@@ -30,11 +30,10 @@ logging.basicConfig(
 )
 logger = logging.getLogger("deploy_markets")
 
-def create_pipeline_run(run_type: str = "market_deployment") -> Optional[PipelineRun]:
+def create_pipeline_run() -> Optional[PipelineRun]:
     """Create a new pipeline run record in the database."""
     try:
         pipeline_run = PipelineRun(
-            run_type=run_type,
             start_time=datetime.utcnow(),
             status="running"
         )
