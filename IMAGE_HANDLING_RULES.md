@@ -27,6 +27,7 @@ This document outlines the rules for handling images in the Polymarket pipeline.
      - `events[0].outcomes[N].icon` - Icon from each event outcome
    - Always validate URLs before using them
    - Ensure icon images match the option they represent (e.g., team logo for team name)
+   - Deduplicate options that represent the same entity (e.g., "Real Madrid" and "Will Real Madrid win?")
 
 ## Slack Message Formatting
 
@@ -37,8 +38,9 @@ This document outlines the rules for handling images in the Polymarket pipeline.
 
 2. **Multi-option Markets:**
    - Display the event banner at the top
-   - Show each option with its own separate image block (not embedded in text fields)
+   - Show each deduplicated option with its own separate image block (not embedded in text fields)
    - Organize options in a clear, consistent layout
+   - Ensure each entity (team, candidate) appears only once after deduplication
 
 ## URL Validation
 
@@ -89,6 +91,10 @@ The following domains have been confirmed to work reliably with Slack:
 3. **Image Rendering Issue:**
    - **Problem:** Images not showing in Slack
    - **Solution:** Validate URLs and only use Slack-accessible domains
+
+4. **Duplicate Options Issue:**
+   - **Problem:** Same entity appearing multiple times (e.g., "Real Madrid" and "Will Real Madrid win?")
+   - **Solution:** Use deduplication logic to identify and merge duplicate entities (see OPTION_DEDUPLICATION.md)
 
 ## Implementation Guidelines
 
