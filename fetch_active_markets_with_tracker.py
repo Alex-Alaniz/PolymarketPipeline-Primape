@@ -638,9 +638,18 @@ def main():
             if market.get('is_multiple_option', False):
                 logger.info(f"Multi-option market {i+1} options after transformation:")
                 option_images = market.get('option_images', {})
-                logger.info(f"  - Has {len(option_images)} option images")
-                for option, image in list(option_images.items())[:3]:  # Show first 3 options
-                    logger.info(f"  - Option: {option}, Image: {image[:30]}...")
+                
+                # Handle option_images safely
+                if isinstance(option_images, dict):
+                    logger.info(f"  - Has {len(option_images)} option images")
+                    # Show first 3 options safely
+                    for j, (option, image) in enumerate(list(option_images.items())[:3]):
+                        if isinstance(image, str):
+                            logger.info(f"  - Option {j+1}: {option}, Image: {image[:30]}...")
+                        else:
+                            logger.info(f"  - Option {j+1}: {option}, Image type: {type(image)}")
+                else:
+                    logger.warning(f"  - Option images not a dictionary: {type(option_images)}")
         
         # Filter new markets
         new_markets = filter_new_markets(transformed_markets)
