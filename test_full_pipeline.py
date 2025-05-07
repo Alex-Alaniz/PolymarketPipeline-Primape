@@ -148,18 +148,17 @@ def approve_pending_market(pending_market, message_id):
     # Log approval in the database
     with app.app_context():
         # Get a fresh instance of the pending market from the database
-        fresh_pending_market = db.session.query(PendingMarket).filter_by(id=pending_market.id).first()
+        fresh_pending_market = db.session.query(PendingMarket).filter_by(poly_id=pending_market.poly_id).first()
         if not fresh_pending_market:
             logger.error("Pending market not found in database")
             return None
             
         approval = ApprovalEvent(
-            entity_id=fresh_pending_market.id,
-            entity_type="pending_market",
-            approved=True,
-            approved_by="test_user",
-            approval_date=datetime.utcnow(),
-            slack_message_id=message_id
+            market_id=fresh_pending_market.poly_id,
+            stage="initial",
+            status="approved",
+            message_id=message_id,
+            created_at=datetime.utcnow()
         )
         db.session.add(approval)
         
@@ -237,12 +236,11 @@ def approve_deployment(market, message_id):
             return False
             
         approval = ApprovalEvent(
-            entity_id=fresh_market.id,
-            entity_type="market_deployment",
-            approved=True,
-            approved_by="test_user",
-            approval_date=datetime.utcnow(),
-            slack_message_id=message_id
+            market_id=fresh_market.id,
+            stage="final",
+            status="approved",
+            message_id=message_id,
+            created_at=datetime.utcnow()
         )
         db.session.add(approval)
         db.session.commit()
@@ -392,12 +390,11 @@ def run_single_session_pipeline():
             
             # Log approval in the database
             approval = ApprovalEvent(
-                entity_id=pending_market.id,
-                entity_type="pending_market",
-                approved=True,
-                approved_by="test_user",
-                approval_date=datetime.utcnow(),
-                slack_message_id=message_id
+                market_id=pending_market.poly_id,
+                stage="initial",
+                status="approved",
+                message_id=message_id,
+                created_at=datetime.utcnow()
             )
             db.session.add(approval)
             
@@ -463,12 +460,11 @@ def run_single_session_pipeline():
             
             # Log approval in the database
             deployment_approval = ApprovalEvent(
-                entity_id=market.id,
-                entity_type="market_deployment",
-                approved=True,
-                approved_by="test_user",
-                approval_date=datetime.utcnow(),
-                slack_message_id=deployment_message_id
+                market_id=market.id,
+                stage="final",
+                status="approved",
+                message_id=deployment_message_id,
+                created_at=datetime.utcnow()
             )
             db.session.add(deployment_approval)
             db.session.commit()
