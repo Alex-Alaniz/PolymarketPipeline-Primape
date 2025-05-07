@@ -414,7 +414,7 @@ def format_market_with_images(market_data):
     
     # Handle options based on whether this is an event or regular market
     if is_event:
-        # For events, show options as team names with their images
+        # For events, use main event image and icon - no individual option images
         # First try to get options from outcomes field (proper API format)
         options = []
         outcomes_raw = market_data.get("outcomes", "[]")
@@ -435,7 +435,6 @@ def format_market_with_images(market_data):
             options = market_data.get('options', [])
             logger.info(f"Using {len(options)} options from options field")
             
-        option_images = market_data.get('option_images', {})
         option_market_ids = market_data.get('option_market_ids', {})
         
         # Add option divider
@@ -452,30 +451,23 @@ def format_market_with_images(market_data):
             }
         })
         
-        # Add each option (team) with its image
+        # Create a single section with all options listed inline
+        options_text = ""
         for option in options:
-            # Add option name
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"*{option}*" + (f" (ID: {option_market_ids.get(option, 'Unknown')})" if option in option_market_ids else "")
-                }
-            })
-            
-            # Add option image if available
-            if option in option_images and option_images[option] and is_valid_url(option_images[option]):
-                blocks.append({
-                    "type": "image",
-                    "title": {
-                        "type": "plain_text",
-                        "text": f"Option: {option}"
-                    },
-                    "image_url": option_images[option],
-                    "alt_text": f"Option {option}"
-                })
+            # Format each option with its ID if available
+            option_id_text = f" (ID: {option_market_ids.get(option, 'Unknown')})" if option in option_market_ids else ""
+            options_text += f"• *{option}*{option_id_text}\n"
+        
+        # Add all options in a single section
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": options_text
+            }
+        })
     else:
-        # Regular market - try to extract outcomes for binary markets
+        # Regular market (binary Yes/No) - only show one banner image
         outcomes = []
         try:
             # Try to extract from outcomes field first
@@ -498,36 +490,8 @@ def format_market_with_images(market_data):
         except Exception as e:
             logger.error(f"Error extracting outcomes for binary market: {str(e)}")
         
-        # Add option images if available
-        option_images = market_data.get('option_images', {})
-        if option_images and isinstance(option_images, dict) and len(option_images) > 0:
-            # Add a divider before options
-            blocks.append({
-                "type": "divider"
-            })
-            
-            for option_name, image_url in option_images.items():
-                if image_url and is_valid_url(image_url):
-                    blocks.append(
-                        {
-                            "type": "section",
-                            "text": {
-                                "type": "mrkdwn",
-                                "text": f"*Option:* {option_name}"
-                            }
-                        }
-                    )
-                    blocks.append(
-                        {
-                            "type": "image",
-                            "title": {
-                                "type": "plain_text",
-                                "text": f"Option Image: {option_name}"
-                            },
-                            "image_url": image_url,
-                            "alt_text": f"Option {option_name}"
-                        }
-                    )
+        # For binary markets, we DON'T add individual option images
+        # The event banner image is already added above for all markets
     
     # Add reminder for approval reactions
     blocks.append(

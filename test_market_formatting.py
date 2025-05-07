@@ -38,16 +38,20 @@ def load_test_market():
     except Exception as e:
         logger.error(f"Error loading multiple_choice_market.json: {e}")
     
-    # Create a sample market with proper fields
+    # Create a sample market with working image URLs for testing
     market_data = {
         "question": "Test Market with Updated Image Handling",
         "category": "uncategorized",
         "endDate": datetime.now().isoformat(),  # ISO format date for testing
-        "image": "https://www.polymarket.com/event-images/test-banner.jpg",
-        "icon": "https://www.polymarket.com/event-icons/test-icon.jpg",
+        "image": "https://blog.replit.com/images/site/logo.png",  # Use Replit logo as test image
+        "icon": "https://blog.replit.com/images/site/logo.png",   # Use Replit logo as test icon
         "outcomes": json.dumps(["Yes", "No"]),  # JSON string format
         "is_event": False,
-        "is_multiple_option": False
+        "is_multiple_option": False,
+        "option_images": {
+            "Yes": "https://blog.replit.com/images/site/logo.png",
+            "No": "https://blog.replit.com/images/site/logo.png"
+        }
     }
     
     logger.info("Created sample test market")
@@ -60,21 +64,21 @@ def load_test_event_market():
     Returns:
         dict: Event market data dictionary
     """
-    # Create a sample event market with proper fields
+    # Create a sample event market with working image URLs for testing
     market_data = {
         "question": "Test Event Market with Multiple Options",
         "category": "sports",
         "endDate": datetime.now().isoformat(),  # ISO format date for testing
-        "image": "https://www.polymarket.com/event-images/sports-banner.jpg",
-        "icon": "https://www.polymarket.com/event-icons/sports-icon.jpg",
+        "image": "https://blog.replit.com/images/site/logo.png",  # Use Replit logo as test image
+        "icon": "https://blog.replit.com/images/site/logo.png",   # Use Replit logo as test icon
         "outcomes": json.dumps(["Team A", "Team B", "Team C", "Draw"]),  # Multiple options
         "is_event": True,
         "is_multiple_option": True,
         "option_images": {
-            "Team A": "https://www.polymarket.com/team-icons/team-a.jpg",
-            "Team B": "https://www.polymarket.com/team-icons/team-b.jpg",
-            "Team C": "https://www.polymarket.com/team-icons/team-c.jpg",
-            "Draw": "https://www.polymarket.com/team-icons/draw.jpg"
+            "Team A": "https://blog.replit.com/images/site/logo.png",
+            "Team B": "https://blog.replit.com/images/site/logo.png",
+            "Team C": "https://blog.replit.com/images/site/logo.png",
+            "Draw": "https://blog.replit.com/images/site/logo.png"
         }
     }
     

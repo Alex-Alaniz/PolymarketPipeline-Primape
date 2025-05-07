@@ -25,10 +25,10 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 from utils.messaging import format_market_with_images
 from utils.slack import post_message_with_blocks
 
-# Polymarket API endpoints
-POLYMARKET_API_BASE = "https://strapi-matic.poly.market"
-MARKET_API_ENDPOINT = f"{POLYMARKET_API_BASE}/markets"
-EVENT_API_ENDPOINT = f"{POLYMARKET_API_BASE}/events"
+# Polymarket API endpoints - use the same endpoint as the main pipeline
+POLYMARKET_API_BASE = "https://clob.polymarket.com"
+MARKET_API_ENDPOINT = f"{POLYMARKET_API_BASE}/v1/markets"
+EVENT_API_ENDPOINT = f"{POLYMARKET_API_BASE}/v1/events"
 
 def fetch_market_from_api(prefer_multiple: bool = True) -> Optional[Dict[str, Any]]:
     """

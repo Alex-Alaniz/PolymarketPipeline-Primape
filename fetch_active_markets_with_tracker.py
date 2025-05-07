@@ -494,6 +494,7 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
             
             # Extract event banner and icon if available
             # Check for proper image and icon fields from Polymarket API
+            # For binary markets and events, prioritize getting banner image and icon
             if 'image' in market and market['image']:
                 market['event_image'] = market['image']
                 logger.info(f"Using API image field as event banner: {market['event_image'][:50]}...")
@@ -512,23 +513,38 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 market['event_icon'] = market['icon_url']
                 logger.info(f"Using icon_url as event icon: {market['event_icon'][:50]}...")
                 
-            # Check for events array and extract images if needed
+            # For multiple-option markets, check if they have an events array
+            # This is important for extracting the main event image and icon
             if 'events' in market and isinstance(market['events'], list) and len(market['events']) > 0:
                 event = market['events'][0]  # Use the first event
                 
-                # Check if the event has additional data
+                # Extract event details
+                if 'id' in event:
+                    market['event_id'] = event['id']
+                    logger.info(f"Using event ID from events array: {market['event_id']}")
+                    
                 if 'title' in event:
                     market['event_name'] = event['title']
                     logger.info(f"Using event title from events array: {market['event_name']}")
                 
-                # Only use event images if we don't already have images
-                if (not market.get('event_image') or market.get('event_image') == '') and 'image' in event:
-                    market['event_image'] = event['image']
-                    logger.info(f"Using event image from events array: {market['event_image'][:50]}...")
-                    
-                if (not market.get('event_icon') or market.get('event_icon') == '') and 'icon' in event:
-                    market['event_icon'] = event['icon']
-                    logger.info(f"Using event icon from events array: {market['event_icon'][:50]}...")
+                # For multiple-option markets, prioritize event images from the events array
+                if is_event:
+                    if 'image' in event:
+                        market['event_image'] = event['image']
+                        logger.info(f"Using event image from events array for multi-option market: {market['event_image'][:50]}...")
+                        
+                    if 'icon' in event:
+                        market['event_icon'] = event['icon']
+                        logger.info(f"Using event icon from events array for multi-option market: {market['event_icon'][:50]}...")
+                # For binary markets, only use event images if we don't already have images
+                else:
+                    if (not market.get('event_image') or market.get('event_image') == '') and 'image' in event:
+                        market['event_image'] = event['image']
+                        logger.info(f"Using event image from events array as fallback: {market['event_image'][:50]}...")
+                        
+                    if (not market.get('event_icon') or market.get('event_icon') == '') and 'icon' in event:
+                        market['event_icon'] = event['icon']
+                        logger.info(f"Using event icon from events array as fallback: {market['event_icon'][:50]}...")
                 
             if 'option_images' in market:
                 logger.info(f"Market has {len(market['option_images'])} option images")
