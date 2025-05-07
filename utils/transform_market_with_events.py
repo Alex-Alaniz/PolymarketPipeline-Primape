@@ -8,6 +8,7 @@ to the format needed for ApeChain deployment, with proper event handling.
 import json
 import uuid
 import hashlib
+import logging
 from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
@@ -38,8 +39,46 @@ def extract_event_from_market(market_data: Dict[str, Any]) -> Tuple[Dict[str, An
     title = market_data.get('title') or market_data.get('question')
     description = market_data.get('description', '')
     
+    # First check for direct event data from the Gamma API 'events' field
+    api_events = market_data.get('events', [])
+    if api_events and isinstance(api_events, list) and len(api_events) > 0:
+        # Use the event data directly from the API
+        api_event = api_events[0]  # Use first event if multiple
+        
+        event_id = api_event.get('id')
+        event_name = api_event.get('title')
+        event_ticker = api_event.get('ticker')
+        event_description = api_event.get('description', '')
+        event_banner_url = api_event.get('image') 
+        event_icon_url = api_event.get('icon')
+        
+        logging.info(f"Using event directly from API: ID={event_id}, Name={event_name}")
+        
+        # Create event data structure from API data
+        event_data = {
+            'id': event_id,
+            'name': event_name or title,
+            'description': event_description or description,
+            'category': market_data.get('category', 'news'),
+            'banner_url': event_banner_url or market_data.get('image'),
+            'icon_url': event_icon_url or market_data.get('icon'),
+            'source_id': market_id,
+            'ticker': event_ticker,
+            'raw_data': {
+                'original_market': market_id,
+                'api_event_id': event_id,
+                'event_metadata': {
+                    'extracted_at': datetime.utcnow().isoformat(),
+                    'source': 'polymarket_api_events'
+                }
+            }
+        }
+        
+        # Return early with API-provided event data
+        return event_data, market_data
+    
+    # If no direct event data, use heuristics to extract
     # Try to extract event name from title or description
-    # This is a simplistic approach - enhance with more sophisticated logic as needed
     event_name = None
     
     # Check if title indicates an event within a larger category
@@ -93,7 +132,7 @@ def extract_event_from_market(market_data: Dict[str, Any]) -> Tuple[Dict[str, An
             'original_market': market_id,
             'event_metadata': {
                 'extracted_at': datetime.utcnow().isoformat(),
-                'source': 'polymarket'
+                'source': 'polymarket_heuristic'
             }
         }
     }

@@ -57,8 +57,11 @@ logging.basicConfig(
 )
 logger = logging.getLogger('fetch_gamma')
 
-# This script no longer has fallback mechanisms or sample data loading.
-# All data must come from the actual Polymarket API via the Gamma Markets endpoint.
+# IMPORTANT: This script MUST NEVER use fallback mechanisms or sample data.
+# ALL data MUST come from the actual Polymarket API via the Gamma Markets endpoint:
+# GET https://gamma-api.polymarket.com/markets
+# 
+# When the API is unreachable, the script should fail rather than use any fallback data.
 
 def main():
     """
