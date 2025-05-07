@@ -8,73 +8,50 @@ event-to-market relationship structure.
 """
 
 from main import app
-from models import Market
+from models import Market, db
 from sqlalchemy import func
-from collections import defaultdict
 
 def check_events():
     """Display markets grouped by events."""
+    # Get unique event IDs and names
+    events = db.session.query(Market.event_id, Market.event_name).filter(
+        Market.event_id.isnot(None)
+    ).distinct().all()
     
-    # Get count of markets by event
-    event_counts = db.session.query(
-        Market.event_id,
-        Market.event_name,
-        func.count(Market.id).label('market_count')
-    ).group_by(
-        Market.event_id,
-        Market.event_name
-    ).order_by(
-        func.count(Market.id).desc()
-    ).all()
-    
-    print(f"Found {len(event_counts)} events:")
-    for event_id, event_name, count in event_counts:
-        print(f"Event ID: {event_id or 'None'}")
-        print(f"Event Name: {event_name or 'None'}")
-        print(f"Market Count: {count}")
+    print(f"Found {len(events)} unique events:")
+    for event_id, event_name in events:
+        print(f"\nEvent: {event_name} (ID: {event_id})")
         
         # Get markets for this event
         markets = Market.query.filter_by(event_id=event_id).all()
-        for i, market in enumerate(markets, 1):
-            print(f"  {i}. {market.question} (Category: {market.category})")
         
-        print("---")
-
-    # Check for orphaned markets (no event)
-    orphaned = Market.query.filter(Market.event_id.is_(None)).all()
-    if orphaned:
-        print(f"\nFound {len(orphaned)} markets without events:")
-        for market in orphaned:
-            print(f"- {market.question} (ID: {market.id}, Category: {market.category})")
+        print(f"This event has {len(markets)} markets:")
+        for market in markets:
+            print(f"  - {market.question} (ID: {market.id}, Category: {market.category})")
 
 def check_event_categories():
     """Display events by category."""
-    # Get events by category
-    event_categories = defaultdict(list)
+    # Get categories with events
+    categories = db.session.query(Market.category, func.count(Market.event_id.distinct())).filter(
+        Market.event_id.isnot(None)
+    ).group_by(Market.category).all()
     
-    events = db.session.query(
-        Market.event_id,
-        Market.event_name,
-        Market.category
-    ).distinct().all()
-    
-    for event_id, event_name, category in events:
-        if event_id:  # Skip null events
-            event_categories[category].append((event_id, event_name))
-    
-    print("\nEvents by Category:")
-    for category, events in event_categories.items():
-        print(f"\n{category.upper()} ({len(events)} events):")
+    print("\nEvents by category:")
+    for category, count in categories:
+        print(f"{category}: {count} events")
+        
+        # Get events for this category
+        events = db.session.query(Market.event_id, Market.event_name).filter(
+            Market.category == category,
+            Market.event_id.isnot(None)
+        ).distinct().all()
+        
         for event_id, event_name in events:
-            count = Market.query.filter_by(event_id=event_id).count()
-            print(f"- {event_name} ({count} markets)")
+            # Count markets for this event
+            market_count = Market.query.filter_by(event_id=event_id).count()
+            print(f"  - {event_name}: {market_count} markets")
 
 if __name__ == "__main__":
-    from models import db
-    
     with app.app_context():
-        print("\n--- MARKETS BY EVENT ---\n")
         check_events()
-        
-        print("\n--- EVENTS BY CATEGORY ---\n")
         check_event_categories()

@@ -4,130 +4,101 @@
 Script to check for markets sharing the same events and analyze event categories
 """
 
-import requests
-import json
+from main import app
+from models import Market, PendingMarket
+from sqlalchemy import func, and_
 
 def check_shared_events():
     """Check for markets sharing the same events"""
-    # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    print("== Checking approved markets sharing events ==")
     
-    # Get a larger sample of markets
-    params = {
-        "limit": "50"  # Get 50 markets
-    }
+    # Get events with multiple markets
+    events_with_multiple_markets = db.session.query(
+        Market.event_id, 
+        Market.event_name, 
+        func.count(Market.id).label('market_count')
+    ).filter(
+        Market.event_id.isnot(None)
+    ).group_by(
+        Market.event_id, 
+        Market.event_name
+    ).having(
+        func.count(Market.id) > 1
+    ).all()
     
-    print("Fetching markets from Polymarket API...")
+    print(f"Found {len(events_with_multiple_markets)} events with multiple approved markets:")
+    for event_id, event_name, count in events_with_multiple_markets:
+        print(f"\nEvent: {event_name} (ID: {event_id})")
+        print(f"Has {count} approved markets:")
+        
+        markets = Market.query.filter_by(event_id=event_id).all()
+        for market in markets:
+            print(f"  - {market.question} (ID: {market.id}, Category: {market.category})")
     
-    response = requests.get(base_url, params=params)
+    print("\n== Checking for cross-category events ==")
     
-    if response.status_code != 200:
-        print(f"Failed to fetch markets: Status {response.status_code}")
-        return
+    # Get events with markets in different categories
+    cross_category_events = db.session.query(
+        Market.event_id,
+        Market.event_name,
+        func.count(Market.category.distinct()).label('category_count')
+    ).filter(
+        Market.event_id.isnot(None)
+    ).group_by(
+        Market.event_id,
+        Market.event_name
+    ).having(
+        func.count(Market.category.distinct()) > 1
+    ).all()
     
-    markets = response.json()
-    print(f"Successfully fetched {len(markets)} markets")
+    print(f"Found {len(cross_category_events)} events with markets in different categories:")
+    for event_id, event_name, count in cross_category_events:
+        print(f"\nEvent: {event_name} (ID: {event_id})")
+        print(f"Has markets in {count} different categories:")
+        
+        # Get categories for this event
+        categories = db.session.query(
+            Market.category,
+            func.count(Market.id).label('market_count')
+        ).filter(
+            Market.event_id == event_id
+        ).group_by(
+            Market.category
+        ).all()
+        
+        for category, market_count in categories:
+            print(f"  - {category}: {market_count} markets")
     
-    # Group markets by event
-    events_to_markets = {}
-    markets_with_events = 0
+    print("\n== Checking pending markets sharing events with approved markets ==")
     
-    for market in markets:
-        events = market.get("events", [])
-        if events:
-            markets_with_events += 1
+    # Find pending markets that share events with approved markets
+    shared_events = db.session.query(
+        Market.event_id,
+        Market.event_name
+    ).filter(
+        Market.event_id.isnot(None)
+    ).distinct().all()
+    
+    count = 0
+    for event_id, event_name in shared_events:
+        pending_markets = PendingMarket.query.filter_by(event_id=event_id).all()
+        if pending_markets:
+            count += 1
+            print(f"\nEvent: {event_name} (ID: {event_id})")
+            print(f"Has {len(pending_markets)} pending markets:")
             
-            for event in events:
-                event_id = event.get("id")
-                if event_id:
-                    if event_id not in events_to_markets:
-                        events_to_markets[event_id] = {
-                            "event": event,
-                            "markets": []
-                        }
-                    
-                    events_to_markets[event_id]["markets"].append({
-                        "id": market.get("id"),
-                        "question": market.get("question"),
-                        "image": market.get("image"),
-                        "icon": market.get("icon")
-                    })
-    
-    print(f"\nFound {markets_with_events} markets with events")
-    print(f"Found {len(events_to_markets)} unique events")
-    
-    # Find events with multiple markets
-    shared_events = {
-        event_id: data 
-        for event_id, data in events_to_markets.items() 
-        if len(data["markets"]) > 1
-    }
-    
-    print(f"Found {len(shared_events)} events shared by multiple markets")
-    
-    # Print some information about shared events
-    for i, (event_id, data) in enumerate(shared_events.items()):
-        if i >= 3:  # Limit to 3 examples
-            break
+            for pending in pending_markets:
+                print(f"  - {pending.question} (ID: {pending.poly_id}, Category: {pending.category})")
             
-        event = data["event"]
-        markets_list = data["markets"]
-        
-        print(f"\n--- Shared Event {i+1} ---")
-        print(f"Event ID: {event_id}")
-        print(f"Event Title: {event.get('title')}")
-        
-        # Check if the event has a category
-        if "category" in event:
-            print(f"Event Category: {event['category']}")
-        else:
-            print("Event does NOT have a category field")
-        
-        print(f"Event Image: {event.get('image')}")
-        print(f"Event Icon: {event.get('icon')}")
-        
-        print(f"\nThis event is shared by {len(markets_list)} markets:")
-        for j, market in enumerate(markets_list):
-            print(f"  Market {j+1}:")
-            print(f"    ID: {market['id']}")
-            print(f"    Question: {market['question']}")
-            print(f"    Image: {market['image']}")
-            print(f"    Icon: {market['icon']}")
-            
-            # Check if market image matches event image
-            if market['image'] == event.get('image'):
-                print("    Market image matches event image: Yes")
-            else:
-                print("    Market image matches event image: No")
-    
-    # Analyze event categories
-    events_with_categories = [
-        data["event"] for data in events_to_markets.values()
-        if "category" in data["event"]
-    ]
-    
-    print(f"\n--- Event Categories Analysis ---")
-    print(f"Found {len(events_with_categories)} events with categories out of {len(events_to_markets)} total events")
-    
-    if events_with_categories:
-        # Count occurrences of each category
-        category_counts = {}
-        for event in events_with_categories:
-            category = event["category"]
-            if category not in category_counts:
-                category_counts[category] = 0
-            category_counts[category] += 1
-        
-        # Sort categories by frequency
-        sorted_categories = sorted(
-            category_counts.items(),
-            key=lambda item: item[1],
-            reverse=True
-        )
-        
-        print("\nMost common event categories:")
-        for category, count in sorted_categories[:10]:  # Top 10
-            print(f"  {category}: {count} events")
+            # Show approved markets for this event
+            approved_markets = Market.query.filter_by(event_id=event_id).all()
+            print(f"And {len(approved_markets)} approved markets:")
+            for approved in approved_markets:
+                print(f"  - {approved.question} (ID: {approved.id}, Category: {approved.category})")
+                
+    print(f"\nFound {count} events with both pending and approved markets")
 
 if __name__ == "__main__":
-    check_shared_events()
+    with app.app_context():
+        from models import db
+        check_shared_events()

@@ -1,72 +1,107 @@
+#!/usr/bin/env python3
+
 """
-Inspect pending markets in the database to understand their structure.
+Inspect pending markets in the database.
+
+This script provides a detailed view of pending markets and their relationship to events.
 """
-import os
-import sys
-import json
-import logging
-from datetime import datetime
-from flask import Flask
+
 from main import app
-from models import db, PendingMarket
+from models import PendingMarket, Market, db
+import argparse
+import json
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger("inspect_pending_markets")
+def list_pending_markets():
+    """List all pending markets in the database."""
+    pending_markets = PendingMarket.query.all()
+    
+    print(f"Found {len(pending_markets)} pending markets:")
+    for market in pending_markets:
+        print(f"\nID: {market.poly_id}")
+        print(f"Question: {market.question}")
+        print(f"Category: {market.category}")
+        print(f"Event ID: {market.event_id or 'None'}")
+        print(f"Event Name: {market.event_name or 'None'}")
+        print(f"Posted: {market.posted}")
+        print(f"Slack Message ID: {market.slack_message_id or 'None'}")
+        
+        # Check if this is related to any approved markets
+        if market.event_id:
+            approved_count = Market.query.filter_by(event_id=market.event_id).count()
+            if approved_count > 0:
+                print(f"Related to {approved_count} approved markets with same event")
 
-def inspect_pending_markets():
-    """Inspect pending markets in the database."""
+def inspect_pending_market(market_id):
+    """Display detailed information about a specific pending market."""
+    market = PendingMarket.query.filter_by(poly_id=market_id).first()
+    
+    if not market:
+        print(f"Pending market with ID {market_id} not found")
+        return
+    
+    print(f"\nPending Market: {market.question}")
+    print(f"ID: {market.poly_id}")
+    print(f"Category: {market.category}")
+    print(f"Event ID: {market.event_id or 'None'}")
+    print(f"Event Name: {market.event_name or 'None'}")
+    print(f"Posted: {market.posted}")
+    print(f"Slack Message ID: {market.slack_message_id or 'None'}")
+    
+    # Display options
+    if market.options:
+        options = market.options
+        if isinstance(options, str):
+            try:
+                options = json.loads(options)
+            except json.JSONDecodeError:
+                options = {"Error": "Could not parse options JSON"}
+        
+        print("\nOptions:")
+        if isinstance(options, list):
+            for i, option in enumerate(options):
+                print(f"  {i+1}. {option}")
+        else:
+            print(f"  {options}")
+    else:
+        print("\nNo options available")
+    
+    # Display raw data
+    if market.raw_data:
+        print("\nRaw Data Sample (first 100 chars):")
+        raw_data = market.raw_data
+        if isinstance(raw_data, str):
+            try:
+                raw_data = json.loads(raw_data)
+                print(f"  {str(raw_data)[:100]}...")
+            except json.JSONDecodeError:
+                print(f"  {raw_data[:100]}...")
+        else:
+            print(f"  {str(raw_data)[:100]}...")
+    
+    # Check if this is related to any approved markets
+    if market.event_id:
+        related_markets = Market.query.filter_by(event_id=market.event_id).all()
+        if related_markets:
+            print(f"\nRelated to {len(related_markets)} approved markets with same event:")
+            for related in related_markets:
+                print(f"  - {related.question} (ID: {related.id}, Status: {related.status})")
+
+def main():
+    """Main function to inspect pending markets."""
+    parser = argparse.ArgumentParser(description='Inspect pending markets in the database')
+    parser.add_argument('--list', action='store_true', help='List all pending markets')
+    parser.add_argument('--market', type=str, help='Show details for a specific pending market ID')
+    
+    args = parser.parse_args()
     
     with app.app_context():
-        # Get markets from database
-        pending_markets = db.session.query(PendingMarket).all()
-        
-        if not pending_markets:
-            logger.info("No pending markets in the database")
-            return 0
-        
-        logger.info(f"Found {len(pending_markets)} pending markets in the database")
-        
-        # Inspect each market
-        for i, market in enumerate(pending_markets):
-            logger.info(f"Market {i+1}:")
-            logger.info(f"  Poly ID: {market.poly_id}")
-            logger.info(f"  Question: {market.question}")
-            logger.info(f"  Category: {market.category}")
-            logger.info(f"  Options type: {type(market.options)}")
-            
-            # If options is a string, try to parse it
-            if isinstance(market.options, str):
-                try:
-                    options_dict = json.loads(market.options)
-                    logger.info(f"  Options (parsed): {options_dict}")
-                except json.JSONDecodeError:
-                    logger.info(f"  Options (raw): {market.options}")
-            else:
-                logger.info(f"  Options (raw): {market.options}")
-                # If it's a list or dict, print the first few items in detail
-                if isinstance(market.options, (list, dict)) and market.options:
-                    if isinstance(market.options, list):
-                        for j, option in enumerate(market.options[:3]):  # Show first 3 options
-                            logger.info(f"    Option {j+1} type: {type(option)}")
-                            logger.info(f"    Option {j+1} content: {option}")
-                    elif isinstance(market.options, dict):
-                        for key, value in list(market.options.items())[:3]:  # Show first 3 key-value pairs
-                            logger.info(f"    Key: {key}, Value type: {type(value)}")
-                            logger.info(f"    Value: {value}")
-            
-            logger.info(f"  Event ID: {market.event_id}")
-            logger.info(f"  Event Name: {market.event_name}")
-            logger.info(f"  Banner URL: {market.banner_url}")
-            logger.info(f"  Icon URL: {market.icon_url}")
-            logger.info(f"  Posted: {market.posted}")
-            logger.info(f"  Slack Message ID: {market.slack_message_id}")
-            logger.info("---")
-        
-        return 0
+        if args.list:
+            list_pending_markets()
+        elif args.market:
+            inspect_pending_market(args.market)
+        else:
+            # Default to listing all pending markets
+            list_pending_markets()
 
 if __name__ == "__main__":
-    sys.exit(inspect_pending_markets())
+    main()

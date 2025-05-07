@@ -1,111 +1,103 @@
 #!/usr/bin/env python3
 
 """
-Simple script to inspect the events structure from the Polymarket API
+Inspect events in the database.
+
+This script provides a detailed view of events and their associated markets.
 """
 
-import requests
-import json
+from main import app
+from models import Market, PendingMarket, db
+from sqlalchemy import func, union, select
+import argparse
 
-def inspect_events():
-    """Inspect events from a few markets"""
-    # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+def get_all_events():
+    """Get all unique events from both markets and pending markets."""
+    # Get events from markets
+    market_events = db.session.query(
+        Market.event_id.label('event_id'),
+        Market.event_name.label('event_name')
+    ).filter(
+        Market.event_id.isnot(None)
+    ).distinct()
     
-    # Simple request to get a few markets
-    params = {
-        "limit": "3"  # Just get 3 markets
-    }
+    # Get events from pending markets
+    pending_events = db.session.query(
+        PendingMarket.event_id.label('event_id'),
+        PendingMarket.event_name.label('event_name')
+    ).filter(
+        PendingMarket.event_id.isnot(None)
+    ).distinct()
     
-    print("Fetching markets from Polymarket API...")
+    # Combine the queries
+    all_events = market_events.union(pending_events).all()
     
-    response = requests.get(base_url, params=params)
+    return all_events
+
+def display_event_markets(event_id):
+    """Display all markets (approved and pending) for a specific event."""
+    event_name = None
     
-    if response.status_code != 200:
-        print(f"Failed to fetch markets: Status {response.status_code}")
-        return
+    # Get approved markets for this event
+    approved_markets = Market.query.filter_by(event_id=event_id).all()
+    if approved_markets and approved_markets[0].event_name:
+        event_name = approved_markets[0].event_name
     
-    markets = response.json()
-    print(f"Successfully fetched {len(markets)} markets")
+    # Get pending markets for this event
+    pending_markets = PendingMarket.query.filter_by(event_id=event_id).all()
+    if not event_name and pending_markets and pending_markets[0].event_name:
+        event_name = pending_markets[0].event_name
     
-    # Check if any markets have events
-    markets_with_events = [m for m in markets if "events" in m and m["events"]]
+    print(f"\nEvent: {event_name} (ID: {event_id})")
     
-    if not markets_with_events:
-        print("None of the markets have events, trying more markets...")
+    # Display approved markets
+    print(f"Approved Markets ({len(approved_markets)}):")
+    for market in approved_markets:
+        print(f"  - {market.question}")
+        print(f"    ID: {market.id}")
+        print(f"    Category: {market.category}")
+        print(f"    Status: {market.status}")
+        print(f"    Apechain ID: {market.apechain_market_id or 'None'}")
+    
+    # Display pending markets
+    print(f"\nPending Markets ({len(pending_markets)}):")
+    for market in pending_markets:
+        print(f"  - {market.question}")
+        print(f"    ID: {market.poly_id}")
+        print(f"    Category: {market.category}")
+        print(f"    Posted: {market.posted}")
+
+def list_all_events():
+    """List all events in the database."""
+    events = get_all_events()
+    
+    print(f"Found {len(events)} unique events:")
+    for event_id, event_name in events:
+        # Count approved markets
+        approved_count = Market.query.filter_by(event_id=event_id).count()
         
-        # Try with more markets
-        params = {
-            "limit": "20"  # Get 20 markets this time
-        }
+        # Count pending markets
+        pending_count = PendingMarket.query.filter_by(event_id=event_id).count()
         
-        response = requests.get(base_url, params=params)
-        
-        if response.status_code != 200:
-            print(f"Failed to fetch more markets: Status {response.status_code}")
-            return
-        
-        markets = response.json()
-        markets_with_events = [m for m in markets if "events" in m and m["events"]]
-        
-        if not markets_with_events:
-            print("Still couldn't find any markets with events")
-            return
+        print(f"- {event_name} (ID: {event_id})")
+        print(f"  {approved_count} approved markets, {pending_count} pending markets")
+
+def main():
+    """Main function to inspect events."""
+    parser = argparse.ArgumentParser(description='Inspect events in the database')
+    parser.add_argument('--list', action='store_true', help='List all events')
+    parser.add_argument('--event', type=str, help='Show details for a specific event ID')
     
-    print(f"\nFound {len(markets_with_events)} markets with events")
+    args = parser.parse_args()
     
-    # Examine the first market with events
-    sample_market = markets_with_events[0]
-    print(f"\n--- Sample Market ---")
-    print(f"ID: {sample_market.get('id')}")
-    print(f"Question: {sample_market.get('question')}")
-    
-    # Examine its events
-    events = sample_market.get("events", [])
-    print(f"\nThis market has {len(events)} events")
-    
-    for i, event in enumerate(events):
-        print(f"\n--- Event {i+1} ---")
-        # Print all fields of the event
-        print("Event Fields:")
-        for key, value in event.items():
-            if key not in ["description"]:  # Skip long fields
-                print(f"  {key}: {value}")
-        
-        # Check if the event has a category
-        if "category" in event:
-            print(f"\nEvent has a category: {event['category']}")
+    with app.app_context():
+        if args.list:
+            list_all_events()
+        elif args.event:
+            display_event_markets(args.event)
         else:
-            print("\nEvent does NOT have a category field")
-        
-        # Print image and icon
-        print(f"Image: {event.get('image', 'None')}")
-        print(f"Icon: {event.get('icon', 'None')}")
-    
-    # Now check the market's image and icon
-    print(f"\n--- Market Image/Icon ---")
-    print(f"Market Image: {sample_market.get('image', 'None')}")
-    print(f"Market Icon: {sample_market.get('icon', 'None')}")
-    
-    # Check if the market's image/icon matches the event's image/icon
-    if events and sample_market.get('image') == events[0].get('image'):
-        print("\nMarket image matches event image")
-    else:
-        print("\nMarket image is different from event image")
-    
-    # Check if any other markets share the same event
-    event_id = events[0].get('id') if events else None
-    if event_id:
-        shared_markets = [
-            m['id'] for m in markets 
-            if "events" in m and m["events"] and 
-            any(e.get('id') == event_id for e in m["events"])
-        ]
-        
-        if len(shared_markets) > 1:
-            print(f"\nFound {len(shared_markets)} markets sharing the same event (ID: {event_id}):")
-            for m_id in shared_markets:
-                print(f"  - Market ID: {m_id}")
+            # Default to listing all events
+            list_all_events()
 
 if __name__ == "__main__":
-    inspect_events()
+    main()
