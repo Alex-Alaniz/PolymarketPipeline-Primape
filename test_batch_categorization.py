@@ -56,12 +56,35 @@ def enhance_sample_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]
         # Add ID if not present
         if "id" not in enhanced:
             enhanced["id"] = f"sample-{i}"
-            
-        # Extract question and options
-        enhanced["question"] = market.get("title", "")
+        
+        # Make sure we have proper question field
+        if "question" not in enhanced:
+            if "title" in enhanced:
+                enhanced["question"] = market.get("title", "")
+            else:
+                enhanced["question"] = f"Will the {['Democrats', 'Republicans', 'Market', 'Event'][i % 4]} win in {2024 + i}?"
+        
+        # Add description if needed
+        if "description" not in enhanced:
+            enhanced["description"] = f"This is a sample market description for market {i+1}."
         
         # Add to list
         enhanced_markets.append(enhanced)
+    
+    # Sample questions for testing if we have no markets
+    if not enhanced_markets:
+        sample_questions = [
+            "Will Joe Biden win the 2024 election?",
+            "Will Bitcoin price reach $100,000 before the end of 2024?",
+            "Will the New York Yankees win the World Series in 2024?"
+        ]
+        
+        for i, question in enumerate(sample_questions):
+            enhanced_markets.append({
+                "id": f"sample-{i}",
+                "question": question,
+                "description": f"This is a sample market description for market {i+1}."
+            })
     
     return enhanced_markets
 

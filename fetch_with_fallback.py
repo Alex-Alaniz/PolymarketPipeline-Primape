@@ -25,7 +25,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Local imports
 from models import db, PendingMarket, ProcessedMarket, PipelineRun
-from utils.market_categorizer import categorize_markets
+from utils.batch_categorizer import batch_categorize_markets
 
 # Import the main fetcher
 from fetch_and_categorize_markets import (
@@ -152,9 +152,9 @@ def main():
                 update_pipeline_run(pipeline_run, "completed", markets_processed=len(filtered_markets))
                 return 0
             
-            # Step 4: Categorize and store markets
-            logger.info(f"Categorizing {len(new_markets)} markets with GPT-4o-mini...")
-            categorized_markets = categorize_markets(new_markets)
+            # Step 4: Categorize and store markets (using efficient batch categorization)
+            logger.info(f"Batch categorizing {len(new_markets)} markets with GPT-4o-mini in a single API call...")
+            categorized_markets = batch_categorize_markets(new_markets)
             
             logger.info("Category distribution:")
             category_counts = {}
@@ -168,8 +168,69 @@ def main():
             for category, count in category_counts.items():
                 logger.info(f"  - {category}: {count} markets ({count/len(categorized_markets)*100:.1f}%)")
             
-            # Store categorized markets
-            stored_count = store_categorized_markets(categorized_markets)
+            # Store categorized markets - directly store markets we already categorized
+            # to avoid redundant API calls in store_categorized_markets function
+            stored_count = 0
+            
+            # Manually store each market to avoid redundant categorization
+            from fetch_and_categorize_markets import transform_market_options
+            
+            for market_data in categorized_markets:
+                try:
+                    # Extract key data
+                    market_id = market_data.get('conditionId') or market_data.get('id')
+                    question = market_data.get('question')
+                    
+                    # Skip if already in database (safety check)
+                    if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
+                        continue
+                    
+                    # Get category and manual review flag from categorization
+                    category = market_data.get('ai_category', 'news')
+                    needs_manual = market_data.get('needs_manual_categorization', True)
+                    
+                    # Transform options
+                    options, option_images = transform_market_options(market_data)
+                    
+                    # Create pending market entry
+                    pending_market = PendingMarket(
+                        poly_id=market_id,
+                        question=question,
+                        category=category,
+                        banner_url=market_data.get('image'),
+                        icon_url=market_data.get('icon'),
+                        options=options,
+                        option_images=option_images,
+                        expiry=market_data.get('endDate'),
+                        raw_data=market_data,
+                        needs_manual_categorization=needs_manual,
+                        posted=False
+                    )
+                    
+                    # Add to database
+                    db.session.add(pending_market)
+                    
+                    # Also add to processed_markets to prevent re-processing
+                    processed_market = ProcessedMarket(
+                        condition_id=market_id,
+                        question=question,
+                        category=category,
+                        raw_data=market_data,
+                        posted=False
+                    )
+                    
+                    db.session.add(processed_market)
+                    stored_count += 1
+                    
+                    logger.info(f"Stored market '{question[:50]}...' with category '{category}'")
+                    
+                except Exception as e:
+                    logger.error(f"Error storing market {market_data.get('id')}: {str(e)}")
+                    db.session.rollback()
+                    continue
+                
+            # Commit all changes
+            db.session.commit()
             
             logger.info(f"Successfully categorized and stored {stored_count} markets")
             update_pipeline_run(

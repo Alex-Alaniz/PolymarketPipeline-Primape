@@ -193,11 +193,47 @@ def batch_categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, An
         
         # Parse the response
         try:
-            result = json.loads(response.choices[0].message.content)
+            content = response.choices[0].message.content
+            # Handle both array and object responses
+            if isinstance(content, str):
+                content = content.strip()
+                if content.startswith('[') and content.endswith(']'):
+                    result = json.loads(content)
+                else:
+                    # Try to extract JSON from the response text
+                    import re
+                    json_match = re.search(r'\[.*\]', content, re.DOTALL)
+                    if json_match:
+                        result = json.loads(json_match.group(0))
+                    else:
+                        # Fall back to parsing the whole content
+                        try:
+                            result = json.loads(content)
+                        except:
+                            raise ValueError("Could not extract JSON array from response")
+            else:
+                result = content
+                
+            if not isinstance(result, list):
+                # If we got an object instead of an array, wrap it in a list
+                if isinstance(result, dict):
+                    result = [result]
+                else:
+                    raise ValueError(f"Expected list result, got {type(result)}")
+                    
             logger.info(f"Successfully received categorization for {len(result)} markets")
             
             # Create a map for quick lookups
-            categorization_map = {int(item.get('id')): item for item in result}
+            categorization_map = {}
+            for item in result:
+                if isinstance(item, dict) and 'id' in item:
+                    item_id = item['id']
+                    # Handle both string and int IDs
+                    try:
+                        categorization_map[int(item_id)] = item
+                    except ValueError:
+                        # If ID can't be converted to int, store with original key
+                        categorization_map[item_id] = item
             
             # Process each market
             for i, market in enumerate(markets):
