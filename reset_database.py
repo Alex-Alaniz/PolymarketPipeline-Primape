@@ -1,10 +1,12 @@
-#!/usr/bin/env python3
-
 """
-Reset Database
+Reset Database Completely
 
-This script performs a thorough reset of the database for testing purposes.
-It deletes data from all relevant tables while preserving the database structure.
+This script completely resets the database by:
+1. Dropping and recreating all tables
+2. Resetting auto-increment counters to start from 1
+3. Setting up a fresh environment for testing
+
+Use this for a true database reset.
 """
 
 import os
@@ -12,118 +14,108 @@ import sys
 import logging
 from datetime import datetime
 
-from models import db, PendingMarket, Market, ApprovalEvent, ProcessedMarket, PipelineRun
-from main import app
-
 # Configure logging
-logging.basicConfig(level=logging.INFO, 
-                    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-logger = logging.getLogger("db_reset")
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def reset_database_tables():
+def reset_database():
     """
-    Reset all relevant database tables.
-    
-    This deletes all data from the tables but preserves the structure.
-    Also resets the sequence IDs to start from 1 again.
+    Completely reset the database by dropping and recreating all tables.
+    This ensures auto-increment IDs start from 1 again.
     """
     try:
+        # Import within function to avoid circular dependencies
+        from main import app
+        from models import db, ProcessedMarket, Market, PendingMarket, ApprovalEvent, ApprovalLog, PipelineRun
+        
         with app.app_context():
-            # List of tables to clean
-            table_classes = [
-                (PendingMarket, "pending markets"),
-                (Market, "deployed markets"),
-                (ApprovalEvent, "approval events"),
-                (ProcessedMarket, "processed markets"),
-                (PipelineRun, "pipeline runs")
-            ]
+            # First report current state
+            logger.info("Current database state before reset:")
+            try:
+                processed_count = ProcessedMarket.query.count()
+                market_count = Market.query.count()
+                pending_count = PendingMarket.query.count()
+                approval_count = ApprovalEvent.query.count()
+                approval_log_count = ApprovalLog.query.count()
+                run_count = PipelineRun.query.count()
+                
+                logger.info(f"  - ProcessedMarket: {processed_count} records")
+                logger.info(f"  - Market: {market_count} records")
+                logger.info(f"  - PendingMarket: {pending_count} records")
+                logger.info(f"  - ApprovalEvent: {approval_count} records")
+                logger.info(f"  - ApprovalLog: {approval_log_count} records")
+                logger.info(f"  - PipelineRun: {run_count} records")
+                
+                # Get the max ID from PipelineRun to show the current counter
+                max_id_result = db.session.execute("SELECT MAX(id) FROM pipeline_runs").fetchone()
+                max_id = max_id_result[0] if max_id_result and max_id_result[0] else 0
+                logger.info(f"  - Max PipelineRun ID: {max_id}")
+            except Exception as e:
+                logger.warning(f"Error querying current state: {e}")
             
-            # Use SQLAlchemy to get the raw connection for SQL statements
-            connection = db.engine.raw_connection()
-            cursor = connection.cursor()
+            # Drop all tables
+            logger.info("Dropping all database tables...")
+            db.drop_all()
             
-            # Delete data from each table and reset sequence
-            for table_class, description in table_classes:
-                try:
-                    # Get table name from the model
-                    table_name = table_class.__tablename__
-                    
-                    # Count records before deletion
-                    count_before = db.session.query(table_class).count()
-                    logger.info(f"Found {count_before} {description} before cleaning")
-                    
-                    # Delete all records
-                    db.session.query(table_class).delete()
-                    
-                    # Reset the sequence for the primary key
-                    sequence_name = f"{table_name}_id_seq"
-                    try:
-                        # Check if the sequence exists
-                        cursor.execute(f"SELECT EXISTS(SELECT FROM pg_sequences WHERE sequencename = '{sequence_name}')")
-                        sequence_exists = cursor.fetchone()[0]
-                        
-                        if sequence_exists:
-                            cursor.execute(f"ALTER SEQUENCE {sequence_name} RESTART WITH 1")
-                            logger.info(f"Reset sequence for {table_name} to start from 1")
-                        else:
-                            logger.info(f"No sequence found for {table_name}")
-                    except Exception as seq_error:
-                        logger.warning(f"Could not reset sequence for {table_name}: {seq_error}")
-                    
-                    # Verify deletion
-                    count_after = db.session.query(table_class).count()
-                    logger.info(f"Found {count_after} {description} after cleaning")
-                except Exception as e:
-                    logger.error(f"Error clearing {description}: {e}")
-                    db.session.rollback()
-                    connection.close()
-                    return False
+            # Re-create all tables
+            logger.info("Recreating all database tables...")
+            db.create_all()
             
-            # Commit the transaction after all deletions
+            # Create a fresh initial PipelineRun with ID 1
+            logger.info("Creating initial PipelineRun record...")
+            new_run = PipelineRun(
+                start_time=datetime.utcnow(),
+                end_time=datetime.utcnow(),
+                status="SUCCESS",
+                markets_processed=0,
+                markets_approved=0,
+                markets_rejected=0,
+                markets_failed=0,
+                markets_deployed=0
+            )
+            db.session.add(new_run)
+            
+            # Commit changes
             db.session.commit()
-            connection.commit()
-            connection.close()
             
-            logger.info("Successfully reset all database tables and sequences")
+            # Verify reset
+            processed_count_after = ProcessedMarket.query.count()
+            market_count_after = Market.query.count()
+            pending_count_after = PendingMarket.query.count()
+            approval_count_after = ApprovalEvent.query.count()
+            approval_log_count_after = ApprovalLog.query.count()
+            run_count_after = PipelineRun.query.count()
+            
+            logger.info("Database after reset:")
+            logger.info(f"  - ProcessedMarket: {processed_count_after} records")
+            logger.info(f"  - Market: {market_count_after} records")
+            logger.info(f"  - PendingMarket: {pending_count_after} records")
+            logger.info(f"  - ApprovalEvent: {approval_count_after} records")
+            logger.info(f"  - ApprovalLog: {approval_log_count_after} records")
+            logger.info(f"  - PipelineRun: {run_count_after} records")
+            
+            # Verify PipelineRun ID
+            first_run = PipelineRun.query.first()
+            if first_run:
+                logger.info(f"  - First PipelineRun ID: {first_run.id}")
             
             return True
-            
     except Exception as e:
-        logger.error(f"Error resetting database: {e}")
-        db.session.rollback()
+        logger.error(f"Error resetting database: {str(e)}")
         return False
 
 def main():
-    """
-    Main function to run the database reset.
-    
-    Returns:
-        int: 0 if successful, 1 if there was an error
-    """
-    logger.info("Starting complete database reset")
-    
-    # Confirm with the user
-    print("WARNING: This will delete ALL data from your database tables.")
-    print("Are you sure you want to continue? (yes/no)")
-    
-    # Check if --force flag was provided
-    if "--force" in sys.argv:
-        confirmation = "yes"
-    else:
-        confirmation = input().strip().lower()
-    
-    if confirmation != "yes":
-        logger.info("Database reset cancelled by user")
-        return 0
-    
-    # Reset the database
-    success = reset_database_tables()
+    """Main function to reset database."""
+    logger.info("Starting database reset process...")
+    success = reset_database()
     
     if success:
-        logger.info("Successfully reset database")
+        logger.info("✅ Database reset completed successfully!")
+        logger.info("Auto-increment counters have been reset to 1.")
+        logger.info("The system is ready for testing with real data.")
         return 0
     else:
-        logger.error("Failed to reset database")
+        logger.error("❌ Database reset failed.")
         return 1
 
 if __name__ == "__main__":
