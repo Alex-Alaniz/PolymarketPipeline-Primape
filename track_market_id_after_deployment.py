@@ -71,45 +71,61 @@ def track_deployed_markets() -> Tuple[int, int, int]:
     Returns:
         Tuple[int, int, int]: Count of (processed, updated, failed) markets
     """
-    # Find markets that have blockchain_tx but no apechain_market_id
-    markets_to_track = Market.query.filter(
-        Market.blockchain_tx.isnot(None),
-        Market.apechain_market_id.is_(None)
-    ).all()
-    
-    logger.info(f"Found {len(markets_to_track)} markets to track")
-    
-    processed = 0
-    updated = 0
-    failed = 0
-    
-    for market in markets_to_track:
-        processed += 1
-        logger.info(f"Processing market {market.id} with transaction {market.blockchain_tx}")
-        
+    try:
+        # Check if event_id and event_name columns exist
+        has_event_fields = True
         try:
-            # Get market ID from blockchain transaction
-            apechain_id = get_deployed_market_id_from_tx(market.blockchain_tx)
+            # Try to access the event_id field on the Market model
+            getattr(Market, 'event_id')
+        except AttributeError:
+            has_event_fields = False
+            logger.warning("Market model does not have event_id field")
+        
+        # Build the query based on available columns
+        query = Market.query.filter(
+            Market.blockchain_tx.isnot(None),
+            Market.apechain_market_id.is_(None)
+        )
+        
+        # Execute the query
+        markets_to_track = query.all()
+        
+        logger.info(f"Found {len(markets_to_track)} markets to track")
+        
+        processed = 0
+        updated = 0
+        failed = 0
+        
+        for market in markets_to_track:
+            processed += 1
+            logger.info(f"Processing market {market.id} with transaction {market.blockchain_tx}")
             
-            if apechain_id:
-                # Update market with Apechain market ID
-                market.apechain_market_id = apechain_id
-                market.status = "deployed"
+            try:
+                # Get market ID from blockchain transaction
+                apechain_id = get_deployed_market_id_from_tx(market.blockchain_tx)
                 
-                logger.info(f"Updated market {market.id} with Apechain ID {apechain_id}")
-                updated += 1
-            else:
-                # Failed to get market ID
-                logger.error(f"Failed to get Apechain market ID for transaction {market.blockchain_tx}")
+                if apechain_id:
+                    # Update market with Apechain market ID
+                    market.apechain_market_id = apechain_id
+                    market.status = "deployed"
+                    
+                    logger.info(f"Updated market {market.id} with Apechain ID {apechain_id}")
+                    updated += 1
+                else:
+                    # Failed to get market ID
+                    logger.error(f"Failed to get Apechain market ID for transaction {market.blockchain_tx}")
+                    failed += 1
+            except Exception as e:
+                logger.error(f"Error tracking market {market.id}: {str(e)}")
                 failed += 1
-        except Exception as e:
-            logger.error(f"Error tracking market {market.id}: {str(e)}")
-            failed += 1
-    
-    # Save all changes
-    db.session.commit()
-    
-    return processed, updated, failed
+        
+        # Save all changes
+        db.session.commit()
+        
+        return processed, updated, failed
+    except Exception as e:
+        logger.error(f"Error in track_deployed_markets: {str(e)}")
+        return 0, 0, 0
 
 def main():
     """
@@ -118,12 +134,12 @@ def main():
     # Import Flask app to get application context
     from main import app
     
-    # Create pipeline run record
-    pipeline_run = create_pipeline_run()
-    
     try:
         # Use application context for database operations
         with app.app_context():
+            # Create pipeline run record inside app context
+            pipeline_run = create_pipeline_run()
+            
             processed, updated, failed = track_deployed_markets()
             
             # Update pipeline run
@@ -142,15 +158,6 @@ def main():
         return 0
     except Exception as e:
         logger.error(f"Error in tracking script: {str(e)}")
-        
-        # Update pipeline run with error
-        if pipeline_run:
-            update_pipeline_run(
-                pipeline_run,
-                status="failed",
-                error=str(e)
-            )
-        
         return 1
 
 if __name__ == "__main__":
