@@ -44,9 +44,11 @@ def test_individual_categorization():
     
     # Test each question
     for question in sample_questions:
-        category = categorize_market(question)
+        category_tuple = categorize_market(question)
+        category, needs_manual = category_tuple
+        
         logger.info(f"Question: {question}")
-        logger.info(f"Category: {category}")
+        logger.info(f"Category: {category}, Needs manual review: {needs_manual}")
         
         # Verify the category is valid
         assert category in VALID_CATEGORIES, f"Invalid category: {category}"
@@ -82,11 +84,12 @@ def test_batch_categorization():
     # Verify each market has a category
     for market in categorized_markets:
         assert 'ai_category' in market, "Market missing ai_category field"
+        assert 'needs_manual_categorization' in market, "Market missing needs_manual_categorization field"
         assert market['ai_category'] in VALID_CATEGORIES, f"Invalid category: {market['ai_category']}"
         assert market['ai_category'] != 'all', "Category should never be 'all'"
         
         logger.info(f"Question: {market['question']}")
-        logger.info(f"Category: {market['ai_category']}")
+        logger.info(f"Category: {market['ai_category']}, Needs manual review: {market['needs_manual_categorization']}")
         logger.info("-" * 40)
     
     logger.info("Batch categorization tests passed!")
