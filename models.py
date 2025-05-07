@@ -135,17 +135,21 @@ class PendingMarket(db.Model):
     icon_url = db.Column(db.Text)
     options = db.Column(JSON)
     option_images = db.Column(JSON)  # Mapping of option name -> image URL
+    option_market_ids = db.Column(JSON)  # Mapping of option name -> original market ID
     expiry = db.Column(db.BigInteger)
     slack_message_id = db.Column(db.String(255))
     raw_data = db.Column(JSON)  # Complete original data
     needs_manual_categorization = db.Column(db.Boolean, default=False)
     posted = db.Column(db.Boolean, default=False)  # Track if posted to Slack
+    is_event = db.Column(db.Boolean, default=False)  # Whether this is an event (not a binary market)
     fetched_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Event tracking fields
     event_id = db.Column(db.String(255))  # ID of the associated event
     event_name = db.Column(db.String(255))  # Name of the associated event
+    event_image = db.Column(db.Text)  # URL to event banner image
+    event_icon = db.Column(db.Text)  # URL to event icon
     
     def is_expired(self):
         """Check if this pending market has been waiting for approval too long."""
@@ -165,12 +169,16 @@ class PendingMarket(db.Model):
             'icon_url': self.icon_url,
             'options': self.options,
             'option_images': self.option_images,
+            'option_market_ids': self.option_market_ids,
             'expiry': self.expiry,
             'slack_message_id': self.slack_message_id,
             'needs_manual_categorization': self.needs_manual_categorization,
             'posted': self.posted,
+            'is_event': self.is_event,
             'event_id': self.event_id,
             'event_name': self.event_name,
+            'event_image': self.event_image,
+            'event_icon': self.event_icon,
             'fetched_at': self.fetched_at.isoformat() if self.fetched_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
