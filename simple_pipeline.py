@@ -175,55 +175,65 @@ def run_simple_pipeline():
     Returns:
         tuple: (fetched_count, categorized_count, posted_count)
     """
+    pipeline_run = None
     try:
-        # Record pipeline run
-        pipeline_run = PipelineRun(
-            start_time=datetime.utcnow(),
-            status="running"
-        )
-        db.session.add(pipeline_run)
-        db.session.commit()
-        
-        # Step 1: Fetch and filter markets
-        markets = fetch_and_filter_markets()
-        fetched_count = len(markets)
-        logger.info(f"Fetched {fetched_count} markets")
-        
-        if not markets:
-            pipeline_run.status = "completed"
-            pipeline_run.end_time = datetime.utcnow()
-            pipeline_run.markets_processed = 0
-            db.session.commit()
-            return (0, 0, 0)
-        
-        # Step 2: Categorize markets
-        categorized_markets = categorize_markets(markets)
-        categorized_count = len(categorized_markets)
-        logger.info(f"Categorized {categorized_count} markets")
-        
-        # Step 3: Store and post markets
-        posted_count = store_and_post_markets(categorized_markets)
-        logger.info(f"Posted {posted_count} markets to Slack")
-        
-        # Update pipeline run record
-        pipeline_run.status = "completed"
-        pipeline_run.end_time = datetime.utcnow()
-        pipeline_run.markets_processed = fetched_count
-        pipeline_run.markets_posted = posted_count
-        db.session.commit()
-        
-        return (fetched_count, categorized_count, posted_count)
-        
+        # Create app context if needed
+        if not app.app_context:
+            with app.app_context():
+                return _run_simple_pipeline_internal()
+        else:
+            return _run_simple_pipeline_internal()
     except Exception as e:
         logger.error(f"Error in simple pipeline: {str(e)}")
         try:
-            pipeline_run.status = "failed"
-            pipeline_run.end_time = datetime.utcnow()
-            pipeline_run.error = str(e)
-            db.session.commit()
-        except:
-            pass
+            if pipeline_run:
+                pipeline_run.status = "failed"
+                pipeline_run.end_time = datetime.utcnow()
+                pipeline_run.error = str(e)
+                db.session.commit()
+        except Exception as e2:
+            logger.error(f"Error updating pipeline run: {str(e2)}")
         return (0, 0, 0)
+
+def _run_simple_pipeline_internal():
+    """Internal function that runs with an app context"""
+    # Record pipeline run
+    pipeline_run = PipelineRun(
+        start_time=datetime.utcnow(),
+        status="running"
+    )
+    db.session.add(pipeline_run)
+    db.session.commit()
+    
+    # Step 1: Fetch and filter markets
+    markets = fetch_and_filter_markets()
+    fetched_count = len(markets)
+    logger.info(f"Fetched {fetched_count} markets")
+    
+    if not markets:
+        pipeline_run.status = "completed" 
+        pipeline_run.end_time = datetime.utcnow()
+        pipeline_run.markets_processed = 0
+        db.session.commit()
+        return (0, 0, 0)
+    
+    # Step 2: Categorize markets
+    categorized_markets = categorize_markets(markets)
+    categorized_count = len(categorized_markets)
+    logger.info(f"Categorized {categorized_count} markets")
+    
+    # Step 3: Store and post markets
+    posted_count = store_and_post_markets(categorized_markets)
+    logger.info(f"Posted {posted_count} markets to Slack")
+    
+    # Update pipeline run record
+    pipeline_run.status = "completed"
+    pipeline_run.end_time = datetime.utcnow()
+    pipeline_run.markets_processed = fetched_count
+    pipeline_run.markets_posted = posted_count
+    db.session.commit()
+    
+    return (fetched_count, categorized_count, posted_count)
 
 if __name__ == "__main__":
     with app.app_context():
