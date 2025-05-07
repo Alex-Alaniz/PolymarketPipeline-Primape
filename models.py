@@ -36,6 +36,10 @@ class Market(db.Model):
     # Event tracking fields for grouping related markets
     event_id = db.Column(db.String(255))  # ID of the associated event
     event_name = db.Column(db.String(255))  # Name of the associated event
+    event_image = db.Column(db.Text)  # URL to event banner image
+    event_icon = db.Column(db.Text)  # URL to event icon
+    is_event = db.Column(db.Boolean, default=False)  # Whether this is an event (not a binary market)
+    option_market_ids = db.Column(JSON)  # Mapping of option name -> original market ID
     
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -56,9 +60,15 @@ class Market(db.Model):
             'banner_uri': self.banner_uri,
             'icon_url': self.icon_url,
             'option_images': self.option_images,
+            'option_market_ids': self.option_market_ids,
             'apechain_market_id': self.apechain_market_id,
             'github_commit': self.github_commit,
             'blockchain_tx': self.blockchain_tx,
+            'event_id': self.event_id,
+            'event_name': self.event_name,
+            'event_image': self.event_image,
+            'event_icon': self.event_icon,
+            'is_event': self.is_event,
             'created_at': self.created_at.isoformat() if self.created_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None
         }

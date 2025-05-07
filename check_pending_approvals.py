@@ -120,18 +120,26 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
         bool: True if successful, False otherwise
     """
     try:
-        # Parse options from JSON string
-        options = json.loads(pending_market.options) if pending_market.options else []
+        # Generate a market ID (use poly_id for now, but consider using a UUID in production)
+        market_id = pending_market.poly_id
         
-        # Create Market entry
+        # Create Market entry with all the new event fields
         market = Market(
-            poly_id=pending_market.poly_id,
+            id=market_id,  # Use id, not poly_id for the Market table
             question=pending_market.question,
             category=pending_market.category,
             options=pending_market.options,  # Keep as JSON string
             expiry=pending_market.expiry,
+            original_market_id=pending_market.poly_id,  # Store the original poly_id
             event_id=pending_market.event_id,
-            event_name=pending_market.event_name
+            event_name=pending_market.event_name,
+            event_image=pending_market.event_image,
+            event_icon=pending_market.event_icon,
+            is_event=pending_market.is_event,
+            icon_url=pending_market.icon_url, 
+            option_images=pending_market.option_images,
+            option_market_ids=pending_market.option_market_ids,
+            status="approved"  # Set initial status
         )
         
         # Add to database
