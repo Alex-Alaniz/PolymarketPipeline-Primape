@@ -9,7 +9,7 @@ standard categories: politics, crypto, sports, business, culture, news, tech.
 import os
 import json
 import logging
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List, Dict, Any
 
 import openai
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -110,3 +110,53 @@ def categorize_market(question: str, description: Optional[str] = None) -> Tuple
     except Exception as e:
         logger.error(f"Error categorizing market: {str(e)}")
         return "news", True  # Default to news with manual flag on error
+
+def categorize_markets(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Categorize multiple markets using GPT-4o-mini.
+    
+    Args:
+        markets: List of market data dictionaries with 'question' and optional 'description' fields
+        
+    Returns:
+        List of market dictionaries with added 'ai_category' and 'needs_manual_categorization' fields
+    """
+    categorized_markets = []
+    total_markets = len(markets)
+    
+    logger.info(f"Categorizing {total_markets} markets with GPT-4o-mini...")
+    
+    for i, market in enumerate(markets):
+        try:
+            question = market.get('question', '')
+            description = market.get('description', '')
+            
+            if not question:
+                logger.warning(f"Market at index {i} has no question, defaulting to 'news' category")
+                market_copy = market.copy()
+                market_copy['ai_category'] = 'news'
+                market_copy['needs_manual_categorization'] = True
+                categorized_markets.append(market_copy)
+                continue
+                
+            # Call the single market categorization function
+            category, needs_manual = categorize_market(question, description)
+            
+            # Create a copy of the market with the category added
+            market_copy = market.copy()
+            market_copy['ai_category'] = category
+            market_copy['needs_manual_categorization'] = needs_manual
+            
+            categorized_markets.append(market_copy)
+            
+            logger.info(f"Categorized market {i+1}/{total_markets}: '{question[:30]}...' as {category}")
+            
+        except Exception as e:
+            logger.error(f"Error categorizing market at index {i}: {str(e)}")
+            # Add with default category
+            market_copy = market.copy()
+            market_copy['ai_category'] = 'news'
+            market_copy['needs_manual_categorization'] = True
+            categorized_markets.append(market_copy)
+    
+    return categorized_markets

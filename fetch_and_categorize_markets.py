@@ -27,7 +27,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Local imports
 from models import db, Market, PendingMarket, ProcessedMarket, PipelineRun
-from utils.market_categorizer import categorize_market
+from utils.market_categorizer import categorize_market, categorize_markets
 
 # Initialize app
 db.init_app(app)
@@ -264,21 +264,26 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     Returns:
         int: Number of markets stored
     """
+    # First, categorize all markets in a batch
+    logger.info(f"Batch categorizing {len(markets)} markets with GPT-4o-mini...")
+    categorized_markets = categorize_markets(markets)
+    logger.info(f"Completed batch categorization of {len(categorized_markets)} markets")
+    
     stored_count = 0
     
-    for market_data in markets:
+    for market_data in categorized_markets:
         try:
             # Extract key data
             market_id = market_data.get('conditionId') or market_data.get('id')
             question = market_data.get('question')
-            description = market_data.get('description', '')
             
             # Skip if already in database (safety check)
             if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
                 continue
             
-            # Categorize the market
-            category, needs_manual = categorize_market(question, description)
+            # Get category and manual review flag from categorization
+            category = market_data.get('ai_category', 'news')
+            needs_manual = market_data.get('needs_manual_categorization', True)
             
             # Transform options
             options, option_images = transform_market_options(market_data)
