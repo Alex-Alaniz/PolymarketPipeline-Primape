@@ -493,8 +493,8 @@ def format_market_with_images(market_data):
                 logger.info(f"Using fallback banner image from {field}: {banner_image}")
                 break
     
-    # Display the banner image if available
-    if banner_image and is_valid_url(banner_image):
+    # Display the banner image if available and accessible to Slack
+    if banner_image and is_valid_url(banner_image) and is_slack_accessible_url(banner_image):
         blocks.append(
             {
                 "type": "image",

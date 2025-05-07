@@ -1,239 +1,273 @@
+#!/usr/bin/env python3
 """
-Event filtering utilities for marketplace data.
+Event filter for processing market event images.
 
-This module provides functions to filter events and ensure
-that only active, non-closed events are included in market data.
+This module extracts and validates images from market events data,
+following specific rules for binary vs multi-option markets.
 """
 
-import json
 import logging
-from typing import Dict, List, Any
-from datetime import datetime
+import json
+from typing import Dict, Any, List, Optional, Union
 
-# Configure logging
+# Set up logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-def filter_inactive_events(market_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Filter the market data to only include active, non-closed events.
+def is_valid_url(url: str) -> bool:
+    """Check if a URL is valid.
     
     Args:
-        market_data: Raw market data with events array
+        url: URL to validate
         
     Returns:
-        Filtered market data with only active, non-closed events
+        bool: True if valid, False otherwise
     """
-    # Make a copy of the data to avoid modifying the original
-    filtered_data = market_data.copy()
+    if not url or not isinstance(url, str):
+        return False
     
-    # Check if the market has events
-    if 'events' in filtered_data and isinstance(filtered_data['events'], list):
-        original_events = filtered_data['events']
-        filtered_events = []
-        
-        # Filter events to only include active, non-closed ones
-        for event in original_events:
-            if event.get('active', False) and not event.get('closed', False):
-                # This event is active and not closed, keep it
-                filtered_events.append(event)
-                logger.info(f"Keeping event {event.get('id', 'Unknown')}: active and not closed")
-            else:
-                # This event is either inactive or closed, skip it
-                logger.info(f"Filtering out event {event.get('id', 'Unknown')}: active={event.get('active')}, closed={event.get('closed')}")
-        
-        # Replace the events array with the filtered version
-        filtered_data['events'] = filtered_events
-        
-        # Log how many events were filtered
-        logger.info(f"Filtered events: {len(original_events)} -> {len(filtered_events)}")
+    # Basic validation - must start with http/https
+    return url.startswith('http://') or url.startswith('https://')
+
+def is_binary_market(market_data: Dict[str, Any]) -> bool:
+    """Check if a market is a binary Yes/No market.
     
-    return filtered_data
+    Args:
+        market_data: Market data dictionary
+        
+    Returns:
+        bool: True if binary market, False otherwise
+    """
+    # Check explicit flag if available
+    if 'is_binary' in market_data:
+        return market_data['is_binary']
+    
+    # Check for Yes/No outcomes
+    outcomes = market_data.get('outcomes', [])
+    if isinstance(outcomes, str):
+        try:
+            outcomes = json.loads(outcomes)
+        except:
+            outcomes = []
+    
+    # Binary markets have Yes/No outcomes
+    if isinstance(outcomes, list) and len(outcomes) == 2:
+        yes_no = set(['Yes', 'No'])
+        outcomes_set = set([o.strip() if isinstance(o, str) else str(o) for o in outcomes])
+        if outcomes_set == yes_no:
+            return True
+    
+    return False
+
+def is_multiple_option_market(market_data: Dict[str, Any]) -> bool:
+    """Check if a market has multiple options (not binary Yes/No).
+    
+    Args:
+        market_data: Market data dictionary
+        
+    Returns:
+        bool: True if multiple-option market, False otherwise
+    """
+    # Check explicit flag if available
+    if 'is_multiple_option' in market_data:
+        return market_data['is_multiple_option']
+    
+    # Check option_markets field
+    option_markets = market_data.get('option_markets', [])
+    if option_markets and len(option_markets) > 1:
+        return True
+    
+    # Check events structure
+    events = market_data.get('events', [])
+    if events and isinstance(events, list) and len(events) > 0:
+        for event in events:
+            if isinstance(event, dict) and 'outcomes' in event:
+                outcomes = event.get('outcomes', [])
+                if len(outcomes) > 2:
+                    return True
+    
+    # Not a multiple-option market
+    return False
+
+def extract_option_icons(market_data: Dict[str, Any]) -> Dict[str, str]:
+    """Extract option icons from market data.
+    
+    Args:
+        market_data: Market data dictionary
+        
+    Returns:
+        Dict mapping option IDs to icon URLs
+    """
+    option_icons = {}
+    
+    # Extract from option_markets if available
+    option_markets = market_data.get('option_markets', [])
+    if option_markets:
+        for option_market in option_markets:
+            if isinstance(option_market, dict):
+                market_id = option_market.get('id', '')
+                icon_url = option_market.get('icon', '')
+                
+                if market_id and icon_url and is_valid_url(icon_url):
+                    option_icons[market_id] = icon_url
+                    logger.info(f"Added icon from option_markets for ID {market_id}: {icon_url[:30]}...")
+    
+    # Extract from events if available
+    events = market_data.get('events', [])
+    if events and isinstance(events, list) and len(events) > 0:
+        logger.info(f"Processing {len(events[0].get('outcomes', []))} outcomes from events array")
+        for event in events:
+            if isinstance(event, dict) and 'outcomes' in event:
+                outcomes = event.get('outcomes', [])
+                for outcome in outcomes:
+                    if isinstance(outcome, dict):
+                        outcome_id = outcome.get('id', '')
+                        icon_url = outcome.get('icon', '')
+                        
+                        if outcome_id and icon_url and is_valid_url(icon_url):
+                            option_icons[outcome_id] = icon_url
+                            logger.info(f"Added option icon for {outcome_id}: {icon_url[:30]}...")
+    
+    return option_icons
 
 def process_event_images(market_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Extract event images and option images from filtered event data.
+    """Process and extract images from market event data.
     
-    This function processes the events array and extracts images for the
-    main event banner and individual options.
-    
-    IMPORTANT IMAGE HANDLING RULES:
-    1. Binary markets (Yes/No outcomes): 
-       - Banner: use market-level image URL
-       - Icon: Do NOT use market-level icon URL
-      
-    2. Multi-option markets (grouped under an events array):
-       - Banner: MUST use market["events"][0]["image"] (NOT market["id"]["image"])
-       - Option icons: For each option, use option_market["icon"]
+    This function applies specific rules for extracting images:
+    1. For binary markets, use the main market image
+    2. For multi-option markets, use market["events"][0]["image"] for banner
+    3. For option icons, collect from both option_markets[].icon and events[0].outcomes[].icon
     
     Args:
-        market_data: Filtered market data with only active, non-closed events
+        market_data: Market data dictionary
         
     Returns:
-        Market data with extracted event_image, event_icon, and option_images
+        Processed market data with extracted images
     """
-    # Make a copy of the data to avoid modifying the original
+    # Make a copy to avoid modifying the original
     processed_data = market_data.copy()
     
-    # Initialize option images dict if not present
-    if 'option_images' not in processed_data:
-        processed_data['option_images'] = {}
+    # Determine market type
+    is_binary = is_binary_market(processed_data)
+    is_multiple_option = is_multiple_option_market(processed_data)
     
-    # Store these flags in the processed data for easier debugging
-    processed_data['is_binary'] = False
-    processed_data['is_multiple_option'] = False
-    
-    # First check if this is a multiple choice market from the API flag
-    is_multiple_choice = processed_data.get('is_multiple_choice', False)
-    
-    # Then check if this has an events array with multiple outcomes
-    has_event_array = (
-        'events' in processed_data 
-        and isinstance(processed_data['events'], list) 
-        and len(processed_data['events']) > 0
-    )
-    
-    # Determine if this is a binary market (Yes/No outcomes)
-    is_binary = False
-    outcomes_raw = processed_data.get("outcomes", "[]")
-    try:
-        if isinstance(outcomes_raw, str):
-            outcomes = json.loads(outcomes_raw)
-        else:
-            outcomes = outcomes_raw
-            
-        # Check if outcomes are exactly ["Yes", "No"]
-        if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
-            is_binary = True
-            processed_data['is_binary'] = True
-            logger.info("Detected binary Yes/No market")
-    except Exception as e:
-        logger.error(f"Error checking binary market status: {str(e)}")
-    
-    # A market is "multiple option" if it's either flagged as multiple choice
-    # OR it has an events array with options
-    is_multiple = (
-        is_multiple_choice
-        or processed_data.get('is_event', False)
-        or (has_event_array and not is_binary)
-    )
-    
-    # Store the flag for later use
-    processed_data['is_multiple_option'] = is_multiple
-    
-    # PRIORITY 1: Binary Markets (Yes/No outcomes)
     if is_binary:
-        # For binary markets, use market-level image
-        if 'image' in processed_data:
-            processed_data['event_image'] = processed_data['image']
-            logger.info(f"Binary market: Using market-level image: {processed_data['image'][:30]}...")
-        
-        # For binary markets, we don't use option icons
-        processed_data['option_images'] = {}
-        
-        # If there's no events array or we're done with binary processing, we can return early
-        if not has_event_array:
-            return processed_data
+        logger.info("Detected binary Yes/No market")
+        # RULE 1: For binary markets, use the market-level image URL
+        event_image = processed_data.get('image', '')
+        if event_image and is_valid_url(event_image):
+            processed_data['event_image'] = event_image
+            logger.info(f"Binary market: Using market-level image: {event_image[:30]}...")
+    elif is_multiple_option:
+        logger.info("Detected multi-option market")
+        # RULE 2: For multi-option markets, use market["events"][0]["image"] for banner
+        events = processed_data.get('events', [])
+        if events and isinstance(events, list) and len(events) > 0:
+            first_event = events[0]
+            if isinstance(first_event, dict) and 'image' in first_event:
+                event_image = first_event.get('image')
+                if is_valid_url(event_image):
+                    processed_data['event_image'] = event_image
+                    logger.info(f"Multi-option market: Using events[0].image for banner: {event_image[:30]}...")
     
-    # PRIORITY 2: Multi-option markets with events array
-    if is_multiple and has_event_array:
-        # Get the main event data (first event in array)
-        event = processed_data['events'][0]
-        
-        # Set event ID and name
-        if 'id' in event:
-            processed_data['event_id'] = event['id']
-        if 'title' in event:
-            processed_data['event_name'] = event['title']
-        
-        # RULE 2: For multi-option markets, MUST use market["events"][0]["image"]
-        if 'image' in event:
-            processed_data['event_image'] = event['image']
-            logger.info(f"Multi-option market: Using events[0].image for banner: {event['image'][:30]}...")
-        
-        # For multi-option markets, store event icon too
-        if 'icon' in event:
-            processed_data['event_icon'] = event['icon']
-            logger.info(f"Multi-option market: Using events[0].icon: {event['icon'][:30]}...")
-        
-        # Extract option images from outcomes if available
-        option_images = processed_data.get('option_images', {}) or {}
-        
-        # STEP 1: First get option icons from option_markets array (high priority)
+    # Mark the market type
+    processed_data['is_binary'] = is_binary
+    processed_data['is_multiple_option'] = is_multiple_option
+    processed_data['is_event'] = is_multiple_option
+    
+    # For multi-option markets, extract option icons
+    if is_multiple_option:
+        # RULE 3: For multi-option markets, extract option icons
         option_markets = processed_data.get('option_markets', [])
-        if option_markets and isinstance(option_markets, list):
-            logger.info(f"Processing {len(option_markets)} option markets for icons")
-            for option_market in option_markets:
-                if not isinstance(option_market, dict):
-                    continue
-                
-                # Get market ID and icon
-                market_id = option_market.get('id')
-                market_icon = option_market.get('icon')
-                
-                # Store the option icon if available
-                if market_id and market_icon:
-                    option_images[market_id] = market_icon
-                    logger.info(f"Added icon from option_markets for ID {market_id}: {market_icon[:30]}...")
+        logger.info(f"Processing {len(option_markets)} option markets for icons")
+        option_icons = extract_option_icons(processed_data)
         
-        # STEP 2: For option icons from events.outcomes
-        if 'outcomes' in event and isinstance(event['outcomes'], list):
-            logger.info(f"Processing {len(event['outcomes'])} outcomes from events array")
-            for outcome in event['outcomes']:
-                # Skip if no outcome data
-                if not isinstance(outcome, dict):
-                    continue
-                    
-                # Get option ID, name, and icon
-                option_id = outcome.get('id')
-                option_name = outcome.get('title') or outcome.get('name')
-                
-                # Prefer icon over image for option icons
-                option_icon = outcome.get('icon')
-                if not option_icon:
-                    option_icon = outcome.get('image')
-                
-                # Store option image if available - use ID as key if available, otherwise name
-                key = option_id if option_id else option_name
-                if key and option_icon:
-                    option_images[key] = option_icon
-                    logger.info(f"Added option icon for {key}: {option_icon[:30]}...")
-        
-        # Update option images
-        processed_data['option_images'] = option_images
+        # Store the extracted icons
+        processed_data['option_images'] = option_icons
     
-    # Log the final image decisions for debugging
+    # Log what we found
     logger.info(f"""
     Final image decisions:
-    - is_binary: {processed_data.get('is_binary', False)}
-    - is_multiple_option: {processed_data.get('is_multiple_option', False)}
+    - is_binary: {is_binary}
+    - is_multiple_option: {is_multiple_option}
     - event_image: {processed_data.get('event_image', 'None')[:30]}...
-    - event_icon: {processed_data.get('event_icon', 'None')[:30]}...
+    - event_icon: {processed_data.get('event_icon', 'None')}...
     - option_images: {len(processed_data.get('option_images', {}))} images
     """)
     
     return processed_data
 
-def filter_and_process_market_events(markets: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+def filter_inactive_events(events):
     """
-    Filter and process events for a list of markets.
+    Filter out inactive events from a list of events.
     
     Args:
-        markets: List of market data dictionaries
+        events: List of event dictionaries
         
     Returns:
-        List of markets with filtered events and processed images
+        List of active events
     """
+    if not events:
+        return []
+    
+    active_events = []
+    for event in events:
+        # Check if the event is still active based on its end date
+        if isinstance(event, dict):
+            end_date = event.get('endDate')
+            if end_date:
+                try:
+                    # Parse the end date and compare with current time
+                    from datetime import datetime
+                    import dateutil.parser
+                    
+                    now = datetime.utcnow()
+                    event_end = dateutil.parser.parse(end_date)
+                    
+                    if event_end > now:
+                        active_events.append(event)
+                except Exception as e:
+                    logger.error(f"Error parsing event end date: {e}")
+                    # If date parsing fails, include the event by default
+                    active_events.append(event)
+            else:
+                # If no end date, include it by default
+                active_events.append(event)
+    
+    logger.info(f"Filtered events: {len(events)} original, {len(active_events)} active")
+    return active_events
+
+def filter_and_process_market_events(markets):
+    """
+    Filter events and process images for a list of markets.
+    
+    This function combines event filtering and image processing:
+    1. Filters out inactive events in each market
+    2. Processes images for each market according to the image handling rules
+    
+    Args:
+        markets: List of market dictionaries
+        
+    Returns:
+        List of processed market dictionaries
+    """
+    if not markets:
+        return []
+    
     processed_markets = []
-    
     for market in markets:
-        # First filter inactive events
-        filtered_market = filter_inactive_events(market)
-        
-        # Then process images from the filtered events
-        processed_market = process_event_images(filtered_market)
-        
-        # Add to processed list
-        processed_markets.append(processed_market)
+        try:
+            # Filter inactive events
+            if 'events' in market and isinstance(market['events'], list):
+                market['events'] = filter_inactive_events(market['events'])
+            
+            # Process images
+            processed_market = process_event_images(market)
+            processed_markets.append(processed_market)
+        except Exception as e:
+            logger.error(f"Error processing market: {e}")
+            # If processing fails, include the original market
+            processed_markets.append(market)
     
+    logger.info(f"Processed {len(processed_markets)} markets")
     return processed_markets
