@@ -218,25 +218,64 @@ def transform_market_options(market_data: Dict[str, Any]) -> Tuple[List[Dict[str
     Returns:
         Tuple of (options list, option_images dict)
     """
-    # Get options from market data (either 'options' or 'outcomes')
-    api_options = market_data.get('options') or market_data.get('outcomes') or []
+    # Get outcomes from market data - handles both object and string formats
+    api_outcomes_raw = market_data.get('outcomes')
+    api_options_raw = market_data.get('options')
     
     # Format options for our database
     options = []
     option_images = {}
     
-    for opt in api_options:
-        option_id = opt.get('id')
-        value = opt.get('value')
-        image_url = opt.get('image')
-        
-        options.append({
-            'id': option_id,
-            'value': value
-        })
-        
-        if image_url:
-            option_images[value] = image_url
+    # First try to parse the outcomes (in Gamma API, this is a JSON string)
+    if api_outcomes_raw and isinstance(api_outcomes_raw, str):
+        try:
+            # Try to parse as JSON string
+            outcomes = json.loads(api_outcomes_raw)
+            
+            # If successful, create option objects
+            if isinstance(outcomes, list):
+                for i, value in enumerate(outcomes):
+                    options.append({
+                        'id': str(i),
+                        'value': value
+                    })
+                    
+            logger.info(f"Parsed {len(options)} outcomes from JSON string")
+            return options, option_images
+            
+        except json.JSONDecodeError:
+            logger.warning(f"Failed to parse outcomes as JSON: {api_outcomes_raw}")
+    
+    # If that didn't work, try the object format (for backward compatibility)
+    api_options = []
+    if isinstance(api_outcomes_raw, list):
+        api_options = api_outcomes_raw
+    elif isinstance(api_options_raw, list):
+        api_options = api_options_raw
+    
+    # Process options in object format
+    if api_options:
+        for opt in api_options:
+            if isinstance(opt, dict):
+                option_id = opt.get('id', '')
+                value = opt.get('value', '')
+                image_url = opt.get('image', '')
+                
+                options.append({
+                    'id': option_id,
+                    'value': value
+                })
+                
+                if image_url:
+                    option_images[value] = image_url
+    
+    # If still no options, create default Yes/No options
+    if not options:
+        logger.warning(f"No options found or parsed, defaulting to Yes/No")
+        options = [
+            {"id": "0", "value": "Yes"},
+            {"id": "1", "value": "No"}
+        ]
     
     return options, option_images
 
