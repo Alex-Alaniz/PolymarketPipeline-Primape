@@ -9,7 +9,7 @@ to support proper event tracking and grouping of related markets.
 import logging
 import sys
 from flask import Flask
-from sqlalchemy import Column, String
+from sqlalchemy import Column, String, text
 from sqlalchemy.exc import OperationalError
 
 # Set up logging
@@ -28,15 +28,16 @@ def add_event_fields():
         # Add columns if they don't exist
         with app.app_context():
             # Check if the columns already exist
-            columns = [column['column_name'] for column in db.session.execute(
-                "SELECT column_name FROM information_schema.columns "
-                "WHERE table_name = 'pending_markets'"
-            ).fetchall()]
+            result = db.session.execute(
+                text("SELECT column_name FROM information_schema.columns "
+                "WHERE table_name = 'pending_markets'")
+            ).fetchall()
+            columns = [row[0] for row in result]
             
             # Add event_id if it doesn't exist
             if 'event_id' not in columns:
                 db.session.execute(
-                    "ALTER TABLE pending_markets ADD COLUMN event_id VARCHAR(255)"
+                    text("ALTER TABLE pending_markets ADD COLUMN event_id VARCHAR(255)")
                 )
                 logger.info("Added 'event_id' column to pending_markets table")
             else:
@@ -45,7 +46,7 @@ def add_event_fields():
             # Add event_name if it doesn't exist
             if 'event_name' not in columns:
                 db.session.execute(
-                    "ALTER TABLE pending_markets ADD COLUMN event_name VARCHAR(255)"
+                    text("ALTER TABLE pending_markets ADD COLUMN event_name VARCHAR(255)")
                 )
                 logger.info("Added 'event_name' column to pending_markets table")
             else:
