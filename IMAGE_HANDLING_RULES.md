@@ -50,8 +50,31 @@ This document outlines the rules for handling images in the Polymarket pipeline.
 
 2. **Slack Accessibility:**
    - Only use image URLs from domains that Slack can access
-   - For testing, we whitelist reliable domains like `upload.wikimedia.org`
+   - For testing, we prioritize Imgur (`i.imgur.com`) which is confirmed to be reliable and Slack-accessible
+   - Wikimedia (`upload.wikimedia.org`) may sometimes work but is less reliable than Imgur
    - For production, prioritize using `polymarket-upload.s3.us-east-2.amazonaws.com` URLs
+
+## Slack-Compatible Image Domains
+
+The following domains have been confirmed to work reliably with Slack:
+
+1. **Highest Priority (Most Reliable):**
+   - `i.imgur.com` - Imgur direct image links (confirmed working in all tests)
+   - `polymarket-upload.s3.us-east-2.amazonaws.com` - Polymarket's official S3 bucket
+   - `files.slack.com` - Slack's own CDN
+
+2. **Reliable Media Platforms:**
+   - `pbs.twimg.com` - Twitter image CDN
+   - `cdn.discordapp.com` - Discord CDN
+   - `media.discordapp.net` - Discord media network
+   - `media.giphy.com` - Giphy media CDN
+
+3. **Image Services:**
+   - `images.unsplash.com` - Unsplash CDN
+   - `cdn.pixabay.com` - Pixabay CDN
+
+4. **Variable Reliability:**
+   - `upload.wikimedia.org` - Sometimes works but can be inconsistent
 
 ## Common Issues and Solutions
 

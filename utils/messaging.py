@@ -668,6 +668,15 @@ def format_market_with_images(market_data):
         # Prepare the fields list for the section - following Rule 2 structure for Slack payload
         option_fields = []
         
+        # First deduplicate options by entity (team, candidate, etc.) to prevent duplicate logos
+        # We're going to map each unique entity to its best display name and icon URL
+        deduplicated_options = {}  # Key: entity_name, Value: (option_id, display_name, icon_url)
+        question_pattern = r"will\s+(.*?)\s+win"  # Pattern to extract entity from questions
+        
+        # Group options by the entity they represent (e.g., "Real Madrid" vs "Will Real Madrid win...")
+        entity_mapping = {}  # Maps option_id to an entity name (e.g., "real-madrid" -> "Real Madrid")
+        
+        # First pass - try to identify entities from all options
         for option in options:
             # Use the option name from our mapping if available, otherwise use ID
             display_name = option_info.get(option, option) if option_info else option
@@ -675,34 +684,81 @@ def format_market_with_images(market_data):
             # Get option icon URL
             icon_url = option_images.get(option, '')
             
-            # Only include valid image URLs, don't show the raw JSON
-            if icon_url and is_valid_url(icon_url):
-                # Format option with both name and icon URL for proper display in Slack
-                # Using the format "*Name* : url" to ensure Slack displays it correctly
+            # Skip invalid URLs
+            if not icon_url or not is_valid_url(icon_url) or not is_slack_accessible_url(icon_url):
+                continue
+                
+            # Try to identify the entity this option represents
+            entity_name = None
+            
+            # If the option ID is from events[0].outcomes, use the title as entity name
+            if not option.isdigit() and market_data.get('events'):
+                for event in market_data.get('events', []):
+                    for outcome in event.get('outcomes', []):
+                        if outcome.get('id') == option:
+                            entity_name = outcome.get('title')
+                            break
+                    if entity_name:
+                        break
+            
+            # If still no entity name, try to extract it from questions like "Will X win..."
+            if not entity_name and "will" in display_name.lower():
+                import re
+                match = re.search(question_pattern, display_name.lower())
+                if match:
+                    entity_name = match.group(1).strip().title()  # Title case the entity name
+            
+            # If still no entity, use the display name directly
+            if not entity_name:
+                entity_name = display_name
+                
+            # Store this mapping
+            entity_mapping[option] = entity_name
+            
+            # For deduplication, normalize the entity name
+            normalized_entity = entity_name.lower().strip()
+            
+            # Store or update in deduplicated options
+            if normalized_entity not in deduplicated_options:
+                deduplicated_options[normalized_entity] = (option, entity_name, icon_url)
+            elif len(entity_name) < len(deduplicated_options[normalized_entity][1]):
+                # Prefer shorter, cleaner names (like "Real Madrid" over "Will Real Madrid win...")
+                deduplicated_options[normalized_entity] = (option, entity_name, icon_url)
+        
+        # Log what we're doing
+        logger.info(f"Deduplicated {len(options)} options into {len(deduplicated_options)} unique options")
+        
+        # Now process the deduplicated options
+        for normalized_name, (option_id, display_name, icon_url) in deduplicated_options.items():
+            # Add the option field for the name
+            option_field = {
+                "type": "mrkdwn",
+                "text": f"*{display_name}*"
+            }
+            option_fields.append(option_field)
+            
+            # Add the image as a separate block
+            blocks.append({
+                "type": "image",
+                "image_url": icon_url,
+                "alt_text": f"Option icon for {display_name}"
+            })
+            
+            logger.info(f"Added deduplicated option with image: {display_name}")
+        
+        # For any options without valid icons, just add their names
+        for option in options:
+            display_name = option_info.get(option, option) if option_info else option
+            normalized_name = display_name.lower().strip()
+            
+            # If this option wasn't included in the deduplicated list with icons
+            if normalized_name not in deduplicated_options:
                 option_field = {
                     "type": "mrkdwn",
                     "text": f"*{display_name}*"
                 }
                 option_fields.append(option_field)
-                
-                # Add the image as a separate block for better rendering
-                # Only add if the URL is accessible to Slack
-                if is_slack_accessible_url(icon_url):
-                    blocks.append({
-                        "type": "image",
-                        "image_url": icon_url,
-                        "alt_text": f"Option icon for {display_name}"
-                    })
-                
-                logger.info(f"Added option field with separate image block: {display_name}")
-            else:
-                # No icon available, just show the name
-                option_field = {
-                    "type": "mrkdwn",
-                    "text": f"*{display_name}*"
-                }
-                option_fields.append(option_field)
-                logger.info(f"Added option field without image: {display_name}")
+                logger.info(f"Added option without image: {display_name}")
         
         # Add all option fields in a single section
         if option_fields:
