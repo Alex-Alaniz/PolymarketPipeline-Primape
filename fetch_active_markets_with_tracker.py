@@ -19,7 +19,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from models import db, ProcessedMarket
 from filter_active_markets import fetch_markets, transform_markets, filter_active_markets
-from utils.messaging import post_markets_to_slack
+from utils.messaging import post_markets_to_slack, format_market_with_images
 
 # Configure logging
 logging.basicConfig(
