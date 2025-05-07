@@ -77,6 +77,8 @@ def test_multi_option_market():
     Test formatting for a multi-option event market.
     """
     print("\n\n===== TESTING MULTI-OPTION MARKET =====")
+    
+    # Create test market data for a multi-option event
     market_data = {
         "id": "multi-123",
         "question": "Which team will win the Champions League 2025?",
@@ -85,6 +87,9 @@ def test_multi_option_market():
         "is_binary": False,
         "is_multiple_option": True,
         "is_event": True,
+        
+        # These are the key fields for multi-option markets
+        # The events array with outcomes is critical for option images
         "events": [
             {
                 "id": "event-456",
@@ -115,9 +120,24 @@ def test_multi_option_market():
                 ]
             }
         ],
+        
+        # These are fields set by our event filter
         "event_image": "https://blog.replit.com/images/site/logo.png",
         "event_id": "event-456",
         "event_name": "Champions League 2025",
+        
+        # Add options as an array so they'll be displayed
+        "options": ["real-madrid", "manchester-city", "bayern-munich", "psg"],
+        
+        # Map option IDs to names
+        "option_info": {
+            "real-madrid": "Real Madrid",
+            "manchester-city": "Manchester City",
+            "bayern-munich": "Bayern Munich",
+            "psg": "PSG"
+        },
+        
+        # Provide the option images mapping
         "option_images": {
             "real-madrid": "https://blog.replit.com/images/site/logo.png",
             "manchester-city": "https://blog.replit.com/images/site/logo.png",

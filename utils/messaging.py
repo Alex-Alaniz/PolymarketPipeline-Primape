@@ -505,7 +505,7 @@ def format_market_with_images(market_data):
     
     # Handle options based on whether this is an event or regular market
     if is_event:
-        # For events, use main event image and icon - no individual option images
+        # For events, use main event image and icon plus individual option images
         # Try to extract options from events structure first (best source)
         options = []
         option_info = {}  # Dictionary to store option_id -> option_name mapping
@@ -521,9 +521,12 @@ def format_market_with_images(market_data):
                             # Process outcomes
                             for outcome in event_outcomes:
                                 if isinstance(outcome, dict):
-                                    # For events data, we have IDs and names
+                                    # For events data, we have IDs and names/titles
                                     outcome_id = outcome.get('id', '')
-                                    outcome_name = outcome.get('name', '')
+                                    # Support both name and title fields
+                                    outcome_name = outcome.get('title', '')
+                                    if not outcome_name:
+                                        outcome_name = outcome.get('name', '')
                                     
                                     if outcome_id and outcome_name:
                                         options.append(outcome_id)  # Store the ID as the option
@@ -640,8 +643,27 @@ def format_market_with_images(market_data):
             except Exception as e:
                 logger.error(f"Error extracting option icons from events data: {str(e)}")
                 
+        # Also look for option_info directly in the data (for testing or pre-processed data)
+        if isinstance(market_data.get('option_info'), dict) and market_data['option_info']:
+            direct_option_info = market_data['option_info']
+            for option_id, option_name in direct_option_info.items():
+                option_info[option_id] = option_name
+                if option_id not in options:
+                    options.append(option_id)
+                logger.info(f"Using provided option info: {option_id} -> {option_name}")
+        
+        # Also check for direct option_images field (for testing or pre-processed data)
+        if isinstance(market_data.get('option_images'), dict) and market_data['option_images']:
+            direct_option_images = market_data['option_images'] 
+            for option_id, option_url in direct_option_images.items():
+                option_images[option_id] = option_url
+                if option_id not in options:
+                    options.append(option_id)
+                logger.info(f"Using provided option image: {option_id} -> {option_url[:30]}...")
+        
         # Log what we found
         logger.info(f"Found {len(option_images)} option icons and {len(option_info)} option names")
+        logger.info(f"Options to display: {options}")
         
         # Prepare the fields list for the section - following Rule 2 structure for Slack payload
         option_fields = []
@@ -661,6 +683,7 @@ def format_market_with_images(market_data):
                     "text": f"*{display_name}* : {icon_url}"
                 }
                 option_fields.append(option_field)
+                logger.info(f"Added option field with image: {display_name}")
             else:
                 # No icon available, just show the name
                 option_field = {
@@ -668,9 +691,11 @@ def format_market_with_images(market_data):
                     "text": f"*{display_name}*"
                 }
                 option_fields.append(option_field)
+                logger.info(f"Added option field without image: {display_name}")
         
         # Add all option fields in a single section
         if option_fields:
+            logger.info(f"Adding {len(option_fields)} option fields to message")
             blocks.append({
                 "type": "section",
                 "fields": option_fields

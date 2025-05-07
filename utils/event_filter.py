@@ -159,8 +159,26 @@ def process_event_images(market_data: Dict[str, Any]) -> Dict[str, Any]:
         # Extract option images from outcomes if available
         option_images = processed_data.get('option_images', {}) or {}
         
-        # RULE 2: For option icons, use option_market["icon"]
+        # STEP 1: First get option icons from option_markets array (high priority)
+        option_markets = processed_data.get('option_markets', [])
+        if option_markets and isinstance(option_markets, list):
+            logger.info(f"Processing {len(option_markets)} option markets for icons")
+            for option_market in option_markets:
+                if not isinstance(option_market, dict):
+                    continue
+                
+                # Get market ID and icon
+                market_id = option_market.get('id')
+                market_icon = option_market.get('icon')
+                
+                # Store the option icon if available
+                if market_id and market_icon:
+                    option_images[market_id] = market_icon
+                    logger.info(f"Added icon from option_markets for ID {market_id}: {market_icon[:30]}...")
+        
+        # STEP 2: For option icons from events.outcomes
         if 'outcomes' in event and isinstance(event['outcomes'], list):
+            logger.info(f"Processing {len(event['outcomes'])} outcomes from events array")
             for outcome in event['outcomes']:
                 # Skip if no outcome data
                 if not isinstance(outcome, dict):
