@@ -348,7 +348,7 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
         else:
             category_counts[category] = 1
     
-    logger.info("Category distribution:")
+    logger.info("Category distribution from GPT-4o-mini categorization:")
     for category, count in category_counts.items():
         percentage = count / len(categorized_batch) * 100
         logger.info(f"  - {category}: {count} markets ({percentage:.1f}%)")
@@ -359,6 +359,8 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
         if batch_id in categorization_map:
             category = categorization_map[batch_id].get('ai_category', 'news')
             original_market['category'] = category
+            original_market['ai_category'] = category  # Add explicitly to ensure it's available
+            original_market['needs_manual_categorization'] = categorization_map[batch_id].get('needs_manual_categorization', False)
             original_markets[batch_id] = original_market
     
     # Step 3: Transform markets with event handling
@@ -411,7 +413,8 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
             
             if transformed_market:
                 # Get category and event info from transformed market
-                category = transformed_market.get('category') or original_market.get('category') or 'news'
+                # Prioritize ai_category over category to ensure AI categories are used
+                category = transformed_market.get('ai_category') or transformed_market.get('category') or original_market.get('ai_category') or original_market.get('category') or 'news'
                 event_id = transformed_market.get('event_id')
                 event_name = transformed_market.get('event_name')
                 options = transformed_market.get('options', [])

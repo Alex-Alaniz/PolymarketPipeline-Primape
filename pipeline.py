@@ -187,23 +187,25 @@ class PolymarketPipeline:
         for category, count in categories.items():
             logger.info(f"  - {category}: {count} markets")
         
-        # Batch categorize markets using GPT-4o-mini
-        logger.info("Categorizing markets with GPT-4o-mini")
-        categorized_markets = batch_categorize_markets(filtered_markets)
+        # NOTE: We've moved batch categorization to fetch_gamma_markets.py
+        # This ensures categorization happens before markets are stored in the database
+        # The fetch_gamma_markets.py file already does batch categorization in a single API call
         
-        # Update markets with their AI categories
-        for i, market in enumerate(filtered_markets):
-            if i < len(categorized_markets):
-                market["ai_category"] = categorized_markets[i].get("ai_category", "news")
-                market["needs_manual_categorization"] = categorized_markets[i].get("needs_manual_categorization", False)
+        # Just check for any markets without categories and log them
+        markets_without_categories = [m for m in filtered_markets if not m.get("category") and not m.get("ai_category")]
+        if markets_without_categories:
+            logger.warning(f"Found {len(markets_without_categories)} markets without categories")
+            for m in markets_without_categories[:3]:  # Log up to 3 examples
+                logger.warning(f"Market without category: {m.get('question', '')[:40]}...")
         
-        # Check final category distribution after AI categorization
+        # Check category distribution 
         categories = {}
         for market in filtered_markets:
-            category = market.get("ai_category", "news")
+            # Look for ai_category first, then category, default to news
+            category = market.get("ai_category") or market.get("category") or "news"
             categories[category] = categories.get(category, 0) + 1
         
-        logger.info("Final market category distribution after AI categorization:")
+        logger.info("Market category distribution:")
         for category, count in categories.items():
             logger.info(f"  - {category}: {count} markets")
         
