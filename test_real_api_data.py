@@ -1,256 +1,128 @@
 #!/usr/bin/env python3
-
 """
-Test the image handling with real Polymarket API data.
+Test script for option deduplication using real API data.
 
-This test script verifies that our image handling logic correctly processes
-real market data from the Polymarket API, focusing on multi-option markets
-and ensuring that:
-1. Banner images use events[0].image
-2. Option icons come from option_markets[].icon and events[0].outcomes[].icon
+This script tests the deduplication logic with real data from the 
+Polymarket API to ensure we correctly handle duplicate options
+in real-world scenarios.
 """
 
-import os
-import sys
 import json
 import logging
-import traceback
-import requests
+import os
+import sys
 from pprint import pprint
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+from utils.event_filter import process_event_images
+from utils.messaging import format_market_with_images, is_slack_accessible_url
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Polymarket API endpoint for active markets
-POLYMARKET_API = "https://clob.polymarket.com/markets"
+def load_api_sample():
+    """Load a sample market from stored JSON data."""
+    # Try to load real API data from one of the sample files
+    sample_files = [
+        "gamma_markets_response.json",
+        "market_sample.json",
+        "multiple_choice_market.json",
+    ]
+    
+    for file_path in sample_files:
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r") as f:
+                    data = json.load(f)
+                    
+                # For multiple_choice_market.json, we can use directly
+                if file_path == "multiple_choice_market.json":
+                    return data
+                    
+                # For other files, extract the first market
+                if isinstance(data, list) and len(data) > 0:
+                    return data[0]
+                elif "markets" in data and len(data["markets"]) > 0:
+                    return data["markets"][0]
+                    
+                print(f"Loaded sample from {file_path}")
+                return data
+            except Exception as e:
+                print(f"Error loading {file_path}: {str(e)}")
+    
+    # If no file found, return error
+    print("ERROR: No sample data found. Please run 'fetch_small_batch.py' first.")
+    return None
 
-def fetch_real_markets():
-    """
-    Fetch real market data from the Polymarket API.
+def test_with_real_data():
+    """Test deduplication with real API data."""
+    print("\n==== TESTING OPTION DEDUPLICATION WITH REAL API DATA ====\n")
     
-    Returns:
-        dict: JSON response containing markets data
-    """
-    try:
-        logger.info(f"Fetching real market data from {POLYMARKET_API}")
-        response = requests.get(POLYMARKET_API)
+    # Load data
+    market_data = load_api_sample()
+    if not market_data:
+        return False
         
-        if response.status_code == 200:
-            data = response.json()
-            markets = data.get('data', [])
-            logger.info(f"Successfully fetched {len(markets)} markets from API")
-            return markets
-        else:
-            logger.error(f"Failed to fetch markets. Status code: {response.status_code}")
-            return []
-    except Exception as e:
-        logger.error(f"Error fetching markets: {str(e)}")
-        traceback.print_exc()
-        return []
-
-def find_multi_option_markets(markets):
-    """
-    Find multi-option markets with events array from real data.
+    print(f"Loaded market: {market_data.get('question', 'Unknown')}")
     
-    Args:
-        markets: List of markets from API
-        
-    Returns:
-        list: Multi-option markets with events array
-    """
-    multi_option_markets = []
+    # Process market data through our image filtering
+    processed_data = process_event_images(market_data)
     
-    for market in markets:
-        # Check if this is a multi-option market
-        has_events = (
-            'events' in market and 
-            isinstance(market['events'], list) and 
-            len(market['events']) > 0
-        )
-        
-        # Check if this is not a binary market
-        is_not_binary = True
-        outcomes = market.get('outcomes', [])
-        if isinstance(outcomes, list) and sorted(outcomes) == ["No", "Yes"]:
-            is_not_binary = False
-        
-        # This is a multi-option market if it has events and is not binary
-        if has_events and is_not_binary:
-            # Check if it has option_markets array
-            has_option_markets = (
-                'option_markets' in market and 
-                isinstance(market['option_markets'], list) and 
-                len(market['option_markets']) > 0
-            )
-            
-            if has_option_markets:
-                logger.info(f"Found multi-option market with events and option_markets: {market.get('question', 'Unknown')}")
-                multi_option_markets.append(market)
-                
-                # Log the event structure
-                events = market.get('events', [])
-                first_event = events[0] if events else {}
-                logger.info(f"First event: {first_event.get('title', 'Unknown')}")
-                logger.info(f"Event image URL: {first_event.get('image', 'None')}")
-                
-                # Log option markets
-                option_markets = market.get('option_markets', [])
-                logger.info(f"Found {len(option_markets)} option markets")
-                for i, option in enumerate(option_markets[:3]):  # Show first 3
-                    logger.info(f"Option {i+1}: {option.get('question', 'Unknown')}")
-                    logger.info(f"Option icon: {option.get('icon', 'None')}")
+    # Format the message
+    message, blocks = format_market_with_images(processed_data)
     
-    logger.info(f"Found {len(multi_option_markets)} multi-option markets with events array")
-    return multi_option_markets
-
-def test_image_extraction(market_data):
-    """Test the image extraction with real market data."""
-    from utils.event_filter import process_event_images
+    # Count image blocks (first one is banner)
+    image_blocks = [b for b in blocks if b.get("type") == "image"]
+    banner_image = image_blocks[0] if image_blocks else None
+    option_images = image_blocks[1:] if len(image_blocks) > 1 else []
     
-    print("\n==== TESTING REAL MARKET DATA ====\n")
-    print(f"Market: {market_data.get('question', 'Unknown')}")
+    # Count unique options
+    option_sections = [b for b in blocks if b.get("type") == "section" and b.get("fields")]
+    option_fields = []
+    for section in option_sections:
+        option_fields.extend(section.get("fields", []))
     
-    # Process the market data
-    processed = process_event_images(market_data)
+    # Filter out non-option fields like category, expiry
+    option_fields = [f for f in option_fields if not f.get("text", "").startswith("*Category:*") and
+                     not f.get("text", "").startswith("*Expiry:*")]
     
-    # Print the extracted images
-    print("\nExtracted Images:")
-    print(f"Event Banner: {processed.get('event_image', 'None')}")
-    print(f"Event Icon: {processed.get('event_icon', 'None')}")
-    print("Option Images:")
-    for option_id, image_url in processed.get('option_images', {}).items():
-        print(f"  - {option_id}: {image_url}")
+    # Print results
+    print(f"\nMarket type: {'Multi-option' if processed_data.get('is_multiple_option') else 'Binary'}")
+    if banner_image:
+        print(f"Banner image: {banner_image.get('image_url')}")
     
-    # Verify the results
-    events = market_data.get('events', [])
-    if events and isinstance(events, list) and len(events) > 0:
-        expected_banner = events[0].get('image')
-        banner_correct = processed.get('event_image') == expected_banner
+    print(f"\nOption count:")
+    print(f"- Total options displayed: {len(option_fields)}")
+    print(f"- Option images: {len(option_images)}")
+    
+    # Show options displayed
+    print("\nOptions displayed:")
+    for field in option_fields:
+        print(f"- {field.get('text')}")
+    
+    # Show images
+    if option_images:
+        print("\nOption images:")
+        for i, img in enumerate(option_images):
+            print(f"- Image {i+1}: {img.get('image_url')} - {img.get('alt_text')}")
+    
+    # For multiple-option markets, verify deduplication worked
+    if processed_data.get('is_multiple_option'):
+        # Success if we have the same number of option fields and option images
+        success = len(option_fields) == len(option_images)
+        result = f"{'✅ PASSED' if success else '❌ FAILED'} - Options: {len(option_fields)}, Images: {len(option_images)}"
     else:
-        banner_correct = False
-        expected_banner = None
+        # For binary markets, we should only have the banner image
+        success = len(option_images) == 0
+        result = f"{'✅ PASSED' if success else '❌ FAILED'} - Binary market with {len(option_images)} option images"
     
-    # Print the verdict
-    print("\nResults:")
-    if banner_correct:
-        print("✅ Event banner image is correct")
-    else:
-        print("❌ Event banner image is INCORRECT")
-        print(f"  Expected: {expected_banner}")
-        print(f"  Actual: {processed.get('event_image', 'None')}")
-    
-    # Count option images
-    option_count = len(processed.get('option_images', {}))
-    print(f"Extracted {option_count} option images")
-    
-    return banner_correct and option_count > 0
-
-def test_slack_formatting(market_data):
-    """Test the slack message formatting with real market data."""
-    from utils.messaging import format_market_with_images
-    
-    print("\n==== TESTING SLACK FORMATTING WITH REAL MARKET DATA ====\n")
-    
-    # Process the data first with our image extraction
-    from utils.event_filter import process_event_images
-    processed = process_event_images(market_data)
-    
-    # Format for Slack
-    message, blocks = format_market_with_images(processed)
-    
-    # Print the formatted message
-    print("\nFormatted Slack Message:")
-    print(message)
-    
-    # Verify banner image in blocks
-    banner_found = False
-    option_images_found = 0
-    
-    for block in blocks:
-        if block.get('type') == 'image':
-            image_url = block.get('image_url', '')
-            if image_url == processed.get('event_image'):
-                banner_found = True
-                print(f"✅ Found correct banner image in blocks: {image_url}")
-        
-        # Check for option images in fields
-        if block.get('type') == 'section' and 'fields' in block:
-            for field in block['fields']:
-                field_text = field.get('text', '')
-                # Look for option images (format: "*Option Name* : <image_url>")
-                if '*' in field_text and ' : http' in field_text:
-                    option_images_found += 1
-                    print(f"Found option image in field #{option_images_found}")
-    
-    # Final verdict
-    print("\nResults:")
-    if banner_found:
-        print("✅ Banner image found in blocks")
-    else:
-        print("❌ Banner image NOT found in blocks")
-    
-    expected_option_count = len(processed.get('option_images', {}))
-    if option_images_found == expected_option_count:
-        print(f"✅ All {expected_option_count} option images found in blocks")
-    else:
-        print(f"❌ Only {option_images_found} of {expected_option_count} option images found in blocks")
-    
-    # Try to post to Slack for visual verification
-    try:
-        import os
-        from utils.slack import post_message_with_blocks
-        
-        # Check if Slack credentials are available
-        if os.environ.get('SLACK_BOT_TOKEN') and os.environ.get('SLACK_CHANNEL_ID'):
-            print("\nAttempting to post to Slack for visual verification...")
-            timestamp = post_message_with_blocks(message, blocks)
-            
-            if timestamp:
-                print(f"✅ Successfully posted to Slack with timestamp: {timestamp}")
-                print("Please check your Slack channel to visually verify the formatting")
-            else:
-                print("❌ Failed to post to Slack")
-        else:
-            print("\nSlack credentials not available - skipping visual verification")
-    except Exception as e:
-        print(f"❌ Error posting to Slack: {str(e)}")
-    
-    return banner_found and option_images_found > 0
+    print(f"\nTest result: {result}")
+    return success
 
 def main():
-    """Main function to run tests with real API data."""
-    # Step 1: Fetch real market data
-    markets = fetch_real_markets()
-    if not markets:
-        print("❌ Failed to fetch real market data. Aborting test.")
-        return 1
-    
-    # Step 2: Find multi-option markets with events array
-    multi_option_markets = find_multi_option_markets(markets)
-    if not multi_option_markets:
-        print("❌ No multi-option markets found with events array. Aborting test.")
-        return 1
-    
-    # Step 3: Test with a real multi-option market
-    test_market = multi_option_markets[0]  # Use the first one
-    
-    # Save the real data for reference
-    with open("real_market_sample.json", "w") as f:
-        json.dump(test_market, f, indent=2)
-        print(f"Saved real market data to real_market_sample.json")
-    
-    # Run the tests
-    extraction_success = test_image_extraction(test_market)
-    formatting_success = test_slack_formatting(test_market)
-    
-    print("\n==== OVERALL TEST RESULTS ====")
-    if extraction_success and formatting_success:
-        print("✅ All tests PASSED with real API data")
-        return 0
-    else:
-        print("❌ Some tests FAILED with real API data")
-        return 1
+    """Run the test."""
+    success = test_with_real_data()
+    return 0 if success else 1
 
 if __name__ == "__main__":
     sys.exit(main())

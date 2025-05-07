@@ -19,6 +19,10 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Sample data with duplicated option representations
+# First run the utils/event_filter.py image processing
+from utils.event_filter import process_event_images
+
+# Create test data for La Liga with duplicate entries for teams
 TEST_DATA = {
     "question": "Which team will win La Liga 2024-25?",
     "category": "sports",
@@ -67,8 +71,29 @@ TEST_DATA = {
             "question": "Will Atletico Madrid win La Liga?",
             "icon": "https://i.imgur.com/8JVdNGY.png"  # Same logo
         }
-    ]
+    ],
+    # Add pre-extracted option images for testing
+    "option_images": {
+        "real-madrid": "https://i.imgur.com/HnG0ZAw.png",
+        "barcelona": "https://i.imgur.com/T14BXyP.png",
+        "atletico-madrid": "https://i.imgur.com/8JVdNGY.png",
+        "101": "https://i.imgur.com/HnG0ZAw.png",
+        "102": "https://i.imgur.com/T14BXyP.png",
+        "103": "https://i.imgur.com/8JVdNGY.png"
+    },
+    # Pre-populated option info (display names)
+    "option_info": {
+        "real-madrid": "Real Madrid",
+        "barcelona": "Barcelona",  
+        "atletico-madrid": "Atletico Madrid",
+        "101": "Will Real Madrid win La Liga?",
+        "102": "Will Barcelona win La Liga?",
+        "103": "Will Atletico Madrid win La Liga?"
+    }
 }
+
+# Process the data through our event_filter
+TEST_DATA = process_event_images(TEST_DATA)
 
 def test_option_deduplication():
     """Test the option deduplication logic."""

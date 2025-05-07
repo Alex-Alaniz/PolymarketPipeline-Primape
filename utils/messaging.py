@@ -668,13 +668,10 @@ def format_market_with_images(market_data):
         # Prepare the fields list for the section - following Rule 2 structure for Slack payload
         option_fields = []
         
-        # Let's implement proper deduplication to ensure we don't show
-        # both "Real Madrid" and "Will Real Madrid win..." as separate options
+        # Implement deduplication to prevent showing both "Real Madrid" and "Will Real Madrid win..."
+        # We want to show each entity (team, candidate, etc.) only once with their icon
         
-        # First group by team/entity
-        entity_groups = {}  # Maps normalized entity name -> list of (option_id, display_name, icon_url)
-        
-        # Regular expression to extract team names from questions
+        # Define patterns to extract entities from question format
         import re
         question_patterns = [
             r"will\s+(.*?)\s+win",  # Will X win...
@@ -682,9 +679,12 @@ def format_market_with_images(market_data):
             r"will\s+(.*?)$"        # Will X (at end of string)
         ]
         
-        # Helper function to extract entity name from display names
+        # Helper to extract the entity from a display name
         def extract_entity(name):
             """Extract the entity (team, candidate) from a display name."""
+            if not name:
+                return name
+                
             name_lower = name.lower()
             
             # Direct match for event outcome titles (like "Real Madrid")
@@ -702,51 +702,57 @@ def format_market_with_images(market_data):
                     
             # If we couldn't extract, return the original
             return name
+        
+        # Step 1: Gather all options with their proper entity names and icons
+        entity_options = {}  # Maps entity_name -> list of (option_id, display_name, icon_url)
+        
+        for option_id in options:
+            # Get option info
+            display_name = option_info.get(option_id, option_id)
+            icon_url = option_images.get(option_id, '')
             
-        # First pass - collect all options and their entity representations
-        for option in options:
-            # Get display name and icon
-            display_name = option_info.get(option, option) if option_info else option
-            icon_url = option_images.get(option, '')
-            
-            # Make sure we have a valid URL for this option
+            # Skip options without valid URLs
             if not icon_url or not is_valid_url(icon_url):
-                logger.warning(f"Option {option} has invalid icon URL: {icon_url}")
                 continue
                 
-            # Extract the entity this option represents
+            # Find the entity this represents (team name, candidate, etc.)
             entity_name = extract_entity(display_name)
+            if not entity_name:
+                continue
+                
+            # Create normalized key for grouping
+            normalized_key = entity_name.lower().strip()
             
-            # For grouping, normalize the entity name 
-            normalized_entity = entity_name.lower().strip()
+            # Add to the appropriate group
+            if normalized_key not in entity_options:
+                entity_options[normalized_key] = []
             
-            # Add to the appropriate entity group
-            if normalized_entity not in entity_groups:
-                entity_groups[normalized_entity] = []
-            
-            entity_groups[normalized_entity].append((option, display_name, icon_url))
+            # Store option details
+            entity_options[normalized_key].append((option_id, display_name, icon_url))
         
-        # Second pass - select the best representation for each entity
-        deduplicated_options = {}  # Final deduplicated options
+        # Step 2: Choose the best representation for each entity
+        deduplicated_options = {}
         
-        for normalized_entity, options_list in entity_groups.items():
+        for normalized_entity, options_list in entity_options.items():
+            if not options_list:
+                continue
+                
             # Default to the first option
-            best_option = options_list[0]  
+            best_option = options_list[0]
             
-            # Prioritize options from events array (usually cleaner names)
-            for option_id, display_name, icon_url in options_list:
-                # Non-numeric IDs usually come from events array
-                if not option_id.isdigit():
-                    best_option = (option_id, display_name, icon_url)
+            # First priority: non-numeric IDs (usually from events array, cleaner names)
+            for opt_id, name, url in options_list:
+                if not opt_id.isdigit():
+                    best_option = (opt_id, name, url)
                     break
             
-            # If all are numeric, prefer shorter display names
+            # Second priority: shorter name (prefer "Real Madrid" over longer question formats)
+            # Only if the best option has a numeric ID
             if best_option[0].isdigit():
-                # Sort by display name length and take the shortest
                 options_list.sort(key=lambda x: len(x[1]))
                 best_option = options_list[0]
             
-            # Store the best option
+            # Store the best option for this entity
             deduplicated_options[normalized_entity] = best_option
         
         # Log what we're doing
@@ -761,12 +767,16 @@ def format_market_with_images(market_data):
             }
             option_fields.append(option_field)
             
-            # Add the image as a separate block
-            blocks.append({
-                "type": "image",
-                "image_url": icon_url,
-                "alt_text": f"Option icon for {display_name}"
-            })
+            # Add the image as a separate block, but only if it's Slack-accessible
+            if is_slack_accessible_url(icon_url):
+                blocks.append({
+                    "type": "image",
+                    "image_url": icon_url,
+                    "alt_text": f"Option icon for {display_name}"
+                })
+                logger.info(f"Added image block for {display_name}: {icon_url[:30]}...")
+            else:
+                logger.warning(f"Skipping inaccessible image URL for {display_name}: {icon_url[:30]}...")
             
             logger.info(f"Added deduplicated option with image: {display_name}")
         
