@@ -28,13 +28,109 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 from models import db, PendingMarket, Market, ApprovalEvent, ProcessedMarket, PipelineRun
 from utils.market_categorizer import categorize_market
 from utils.messaging import post_formatted_message_to_slack, get_message_reactions, add_reaction_to_message
-from post_unposted_pending_markets import format_market_message
 from utils.deployment_formatter import format_deployment_message
 from utils.apechain import create_market, get_deployed_market_id_from_tx
+from typing import List, Dict, Any, Tuple
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+def safe_get_message_reactions(message_ts: Optional[str]) -> Dict[str, List[str]]:
+    """
+    Safely get reactions on a Slack message, handling None message IDs.
+    
+    Args:
+        message_ts: Message timestamp (ID), can be None
+        
+    Returns:
+        Dictionary mapping reaction names to lists of users who reacted
+    """
+    if not message_ts:
+        logger.warning("Cannot get reactions for None message ID")
+        return {}
+        
+    return get_message_reactions(message_ts)
+
+def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, Any]]]:
+    """
+    Format a market message for posting to Slack with category badge.
+    
+    Args:
+        market: PendingMarket model instance
+        
+    Returns:
+        Tuple[str, List[Dict]]: Formatted message text and blocks
+    """
+    # Define emoji map for categories
+    category_emoji = {
+        'politics': ':ballot_box_with_ballot:',
+        'crypto': ':coin:',
+        'sports': ':sports_medal:',
+        'business': ':chart_with_upwards_trend:',
+        'culture': ':performing_arts:',
+        'tech': ':computer:',
+        'news': ':newspaper:',
+        # Add fallback for unknown categories
+        'unknown': ':question:'
+    }
+    
+    # Get emoji for this category
+    category = market.category.lower() if market.category else 'news'
+    emoji = category_emoji.get(category, category_emoji['unknown'])
+    
+    # Format options list for display
+    option_values = []
+    if isinstance(market.options, list):
+        if all(isinstance(option, dict) for option in market.options):
+            # Handle options as list of dictionaries
+            for option in market.options:
+                option_value = option.get('value', 'Unknown')
+                option_values.append(option_value)
+        else:
+            # Handle options as simple list of strings
+            option_values = market.options
+    
+    options_str = ', '.join(option_values) if option_values else 'Yes, No'
+    
+    # Format message text to exactly match the original format
+    message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {market.question}  Options: {options_str} "
+    
+    # Create blocks for rich formatting exactly matching the original format
+    blocks = [
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*New Market for Review*\n*Category:* {emoji} {category.capitalize()}"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Question:* {market.question}"
+            }
+        },
+        {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"Options: {options_str}"
+            }
+        },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": "React with :white_check_mark: to approve or :x: to reject"
+                }
+            ]
+        }
+    ]
+    
+    return message_text, blocks
 
 # Initialize database
 db.init_app(app)
@@ -309,7 +405,7 @@ def run_full_pipeline_test():
     input()
     
     # Check if approved
-    reactions = get_message_reactions(message_id)
+    reactions = safe_get_message_reactions(message_id)
     if "white_check_mark" not in reactions:
         logger.info("Automatically approving the pending market...")
         # Approve the pending market
@@ -345,7 +441,7 @@ def run_full_pipeline_test():
     input()
     
     # Check if approved
-    reactions = get_message_reactions(deployment_message_id)
+    reactions = get_message_reactions(deployment_message_id) if deployment_message_id else {}
     if "white_check_mark" not in reactions:
         logger.info("Automatically approving the deployment...")
         # Approve the deployment
