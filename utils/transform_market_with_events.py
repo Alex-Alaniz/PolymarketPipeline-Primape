@@ -118,11 +118,42 @@ def extract_market_options(market_data: Dict[str, Any]) -> List[Dict[str, Any]]:
     options = []
     
     # Get outcomes from the right field based on API structure
-    outcomes = market_data.get('outcomes') or market_data.get('options') or []
+    api_outcomes_raw = market_data.get('outcomes')
+    api_options_raw = market_data.get('options')
+    
+    # First, try to handle the JSON string format for outcomes (Gamma API)
+    if api_outcomes_raw and isinstance(api_outcomes_raw, str):
+        try:
+            # Try to parse as JSON string
+            outcomes = json.loads(api_outcomes_raw)
+            
+            # If successful, create option objects
+            if isinstance(outcomes, list):
+                for i, value in enumerate(outcomes):
+                    options.append({
+                        'id': f"option_{i}",
+                        'value': value,
+                        'image_url': None  # No images in the JSON string format
+                    })
+                return options
+            
+        except json.JSONDecodeError:
+            print(f"Failed to parse outcomes as JSON: {api_outcomes_raw}")
+    
+    # If we reach here, either parsing JSON failed or the format wasn't a JSON string
+    # Try other formats for backward compatibility
+    outcomes = None
+    if isinstance(api_outcomes_raw, list):
+        outcomes = api_outcomes_raw
+    elif isinstance(api_options_raw, list):
+        outcomes = api_options_raw
+    else:
+        # Default to empty list if no options found
+        outcomes = []
     
     # Handle different API formats
     if isinstance(outcomes, list):
-        # Simple list of option strings
+        # Simple list of option strings or objects
         for i, outcome in enumerate(outcomes):
             if isinstance(outcome, str):
                 options.append({
@@ -136,7 +167,7 @@ def extract_market_options(market_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 options.append({
                     'id': option_id,
                     'value': outcome.get('value') or outcome.get('name'),
-                    'image_url': outcome.get('image_url') or outcome.get('icon')
+                    'image_url': outcome.get('image_url') or outcome.get('image') or outcome.get('icon')
                 })
     elif isinstance(outcomes, dict):
         # Dictionary of options with IDs as keys
@@ -151,8 +182,15 @@ def extract_market_options(market_data: Dict[str, Any]) -> List[Dict[str, Any]]:
                 options.append({
                     'id': option_id,
                     'value': option_data.get('value') or option_data.get('name'),
-                    'image_url': option_data.get('image_url') or option_data.get('icon')
+                    'image_url': option_data.get('image_url') or option_data.get('image') or option_data.get('icon')
                 })
+    
+    # If no options were found, provide default Yes/No
+    if not options:
+        options = [
+            {'id': 'option_0', 'value': 'Yes', 'image_url': None},
+            {'id': 'option_1', 'value': 'No', 'image_url': None}
+        ]
     
     return options
 

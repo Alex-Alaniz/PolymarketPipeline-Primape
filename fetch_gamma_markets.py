@@ -282,6 +282,7 @@ def transform_market_options(market_data: Dict[str, Any]) -> Tuple[List[Dict[str
 def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     """
     Categorize and store markets in the database using batch processing.
+    Takes events into account for proper grouping.
     
     Args:
         markets: List of market data dictionaries
@@ -294,9 +295,13 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
         logger.info("No markets to categorize")
         return 0
     
-    # Prepare markets for batch categorization
+    # Import event-based transformation utilities
+    from utils.transform_market_with_events import transform_markets_batch
+    
+    # Step 1: First do batch categorization to get categories
     batch_ready_markets = []
     original_markets = {}  # Map to track original market data by batch ID
+    market_id_to_batch_id = {}  # To map market IDs back to batch IDs
     
     for i, market in enumerate(markets):
         # Extract question from the market (in Gamma API, it's in the 'question' field)
@@ -317,6 +322,11 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
         
         # Store original market data for later use
         original_markets[i] = market
+        
+        # Keep track of market ID to batch ID mapping
+        market_id = market.get('conditionId') or market.get('id')
+        if market_id:
+            market_id_to_batch_id[market_id] = i
     
     # Batch categorize all markets in a single API call
     logger.info(f"Batch categorizing {len(batch_ready_markets)} markets with GPT-4o-mini in a single API call...")
@@ -343,50 +353,98 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
         percentage = count / len(categorized_batch) * 100
         logger.info(f"  - {category}: {count} markets ({percentage:.1f}%)")
     
-    # Store markets with their categories
+    # Step 2: Apply categories to markets before transformation
+    for batch_id, original_market in list(original_markets.items()):
+        # Apply the assigned category to the original market
+        if batch_id in categorization_map:
+            category = categorization_map[batch_id].get('ai_category', 'news')
+            original_market['category'] = category
+            original_markets[batch_id] = original_market
+    
+    # Step 3: Transform markets with event handling
+    try:
+        # Convert dictionary to list
+        markets_list = list(original_markets.values())
+        
+        # Transform markets, extracting events
+        events, transformed_markets = transform_markets_batch(markets_list)
+        
+        # Log transformation results
+        logger.info(f"Extracted {len(events)} unique events from {len(transformed_markets)} markets")
+        
+        # Events found
+        for i, event in enumerate(events[:5]):  # Show first 5 events
+            logger.info(f"Event {i+1}: {event['name']} (ID: {event['id']})")
+    
+    except Exception as e:
+        logger.error(f"Error transforming markets with events: {str(e)}")
+        logger.error(f"Error type: {type(e).__name__}")
+        # Continue with original markets if transformation fails
+        transformed_markets = []
+    
+    # Step 4: Store markets and events in database
     stored_count = 0
     
+    # Create a map of transformed markets by ID for easier lookup
+    transformed_market_map = {}
+    for tm in transformed_markets:
+        market_id = tm.get('id')
+        if market_id:
+            transformed_market_map[market_id] = tm
+    
+    # Store each market
     for batch_id, original_market in original_markets.items():
         try:
-            # Extract Polymarket ID and question
-            # In Gamma API, the ID is in the conditionId field
-            market_id = original_market.get('conditionId')
-            if not market_id:
-                market_id = original_market.get('id')
-                logger.warning(f"Using fallback id field for market: {market_id}")
-                
-            # In Gamma API, the question is in the question field
-            question = original_market.get('question', '')
+            # Extract market ID
+            market_id = original_market.get('conditionId') or original_market.get('id')
             
-            # Skip if already in database (safety check)
+            # Skip if already in database
             if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
                 logger.info(f"Market {market_id} already exists in database, skipping")
                 continue
             
-            # Get category from batch categorization results
-            if batch_id in categorization_map:
-                batch_result = categorization_map[batch_id]
-                category = batch_result.get('ai_category', 'news')
-                needs_manual = batch_result.get('needs_manual_categorization', True)
-                logger.info(f"Using batch categorization for market {batch_id}: {category}")
-            else:
-                # Fallback to keyword-based categorization if not found in batch results
-                from utils.batch_categorizer import keyword_based_categorization
-                category = keyword_based_categorization(question)
-                needs_manual = True
-                logger.warning(f"Market {batch_id} not found in batch results, using keyword fallback: {category}")
+            # Get question
+            question = original_market.get('question', '')
             
-            # Process outcome options with error handling
-            try:
-                options, option_images = transform_market_options(original_market)
-            except Exception as e:
-                logger.warning(f"Error transforming options for market {market_id}: {str(e)}")
-                # Create fallback options for binary markets
-                options = [
-                    {"value": "Yes", "displayName": "Yes"},
-                    {"value": "No", "displayName": "No"}
-                ]
-                option_images = {"Yes": None, "No": None}
+            # Get category - first check transformed market, then categorization results
+            transformed_market = transformed_market_map.get(market_id)
+            
+            if transformed_market:
+                # Get category and event info from transformed market
+                category = transformed_market.get('category') or original_market.get('category') or 'news'
+                event_id = transformed_market.get('event_id')
+                event_name = transformed_market.get('event_name')
+                options = transformed_market.get('options', [])
+                option_images = transformed_market.get('option_images', {})
+            else:
+                # Fallback to original categorization
+                if batch_id in categorization_map:
+                    batch_result = categorization_map[batch_id]
+                    category = batch_result.get('ai_category', 'news')
+                else:
+                    # Use keyword-based categorization as last resort
+                    from utils.batch_categorizer import keyword_based_categorization
+                    category = keyword_based_categorization(question)
+                
+                # No event info available in fallback path
+                event_id = None
+                event_name = None
+                
+                # Process options with error handling
+                try:
+                    from utils.transform_market_with_events import extract_market_options
+                    options = extract_market_options(original_market)
+                    option_images = {}
+                    for opt in options:
+                        if opt.get('image_url'):
+                            option_images[opt['id']] = opt['image_url']
+                except Exception as e:
+                    logger.warning(f"Error extracting options (fallback): {str(e)}")
+                    options = [
+                        {"id": "option_0", "value": "Yes"},
+                        {"id": "option_1", "value": "No"}
+                    ]
+                    option_images = {}
             
             # Create pending market entry
             pending_market = PendingMarket(
@@ -399,8 +457,10 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
                 option_images=option_images,
                 expiry=original_market.get('endDate'),
                 raw_data=original_market,
-                needs_manual_categorization=needs_manual,
-                posted=False
+                needs_manual_categorization=batch_id not in categorization_map,
+                posted=False,
+                event_id=event_id,
+                event_name=event_name
             )
             
             # Add to database
@@ -418,12 +478,16 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
             db.session.add(processed_market)
             stored_count += 1
             
-            logger.info(f"Stored market '{question[:50]}...' with category '{category}'")
+            # Log with event info if available
+            if event_name:
+                logger.info(f"Stored market '{question[:40]}...' with category '{category}' under event '{event_name}'")
+            else:
+                logger.info(f"Stored market '{question[:40]}...' with category '{category}'")
             
         except Exception as e:
-            # Use batch_id as fallback if market_id isn't set yet
+            # Use batch_id as fallback if market_id isn't set
             market_id_display = f"batch_id_{batch_id}"
-            if 'market_id' in locals() and market_id is not None:
+            if 'market_id' in locals() and market_id:
                 market_id_display = market_id
                 
             logger.error(f"Error storing market {market_id_display}: {str(e)}")
@@ -434,7 +498,7 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     # Commit all changes
     db.session.commit()
     
-    logger.info(f"Completed efficient batch categorization and stored {stored_count} markets")
+    logger.info(f"Completed batch categorization and stored {stored_count} markets with event grouping")
     return stored_count
 
 def main():

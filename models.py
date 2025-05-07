@@ -138,6 +138,10 @@ class PendingMarket(db.Model):
     fetched_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
+    # Event tracking fields
+    event_id = db.Column(db.String(255))  # ID of the associated event
+    event_name = db.Column(db.String(255))  # Name of the associated event
+    
     def is_expired(self):
         """Check if this pending market has been waiting for approval too long."""
         if not self.fetched_at:
@@ -160,6 +164,8 @@ class PendingMarket(db.Model):
             'slack_message_id': self.slack_message_id,
             'needs_manual_categorization': self.needs_manual_categorization,
             'posted': self.posted,
+            'event_id': self.event_id,
+            'event_name': self.event_name,
             'fetched_at': self.fetched_at.isoformat() if self.fetched_at else None,
             'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
