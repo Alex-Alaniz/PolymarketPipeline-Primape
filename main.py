@@ -348,38 +348,209 @@ HTML_TEMPLATE = """
         
         // Keep the old function implementations as fallbacks
         function runPipeline() {
-            // Use jQuery instead
-            $("#run-pipeline").click();
+            // Direct implementation to avoid circular reference
+            fetch('/run-pipeline', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update the UI status
+                    document.getElementById('status').textContent = 'running';
+                    
+                    // Disable the button
+                    document.getElementById('run-pipeline').disabled = true;
+                    
+                    // Show a message in the status box
+                    const statusBox = document.querySelector('.status-box');
+                    statusBox.innerHTML = '<div class="alert alert-info"><strong>Pipeline started!</strong> Processing markets from Polymarket API...</div>';
+                    
+                    // Refresh page after a delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to start pipeline: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while starting the pipeline');
+            });
         }
         
         function checkMarketApprovals() {
-            // Use jQuery instead
-            $("#check-approvals").click();
+            // Direct implementation to avoid circular reference
+            fetch('/check-market-approvals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Disable button
+                    document.getElementById('check-approvals').disabled = true;
+                    
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to check market approvals: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while checking market approvals');
+            });
         }
         
         function runDeploymentApprovals() {
-            // Use jQuery instead
-            $("#run-deployment").click();
+            // Direct implementation
+            fetch('/run-deployment-approvals', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Disable button
+                    document.getElementById('run-deployment').disabled = true;
+                    
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to start deployment approvals: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while checking deployment approvals');
+            });
         }
         
         function syncSlackDb() {
-            // Use jQuery instead
-            $("#sync-slack-db").click();
+            // Direct implementation
+            fetch('/sync-slack-db', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Disable button
+                    document.getElementById('sync-slack-db').disabled = true;
+                    
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to sync Slack & DB: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while syncing Slack & DB');
+            });
         }
         
         function postUnpostedMarkets() {
-            // Use jQuery instead
-            $("#post-unposted").click();
+            // Direct implementation
+            fetch('/post-unposted-markets', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Disable button
+                    document.getElementById('post-unposted').disabled = true;
+                    
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to post unposted markets: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while posting unposted markets');
+            });
         }
         
         function postUnpostedPendingMarkets() {
-            // Use jQuery instead
-            $("#post-unposted-pending").click();
+            // Direct implementation
+            fetch('/post-unposted-pending-markets', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Disable button
+                    document.getElementById('post-unposted-pending').disabled = true;
+                    
+                    // Refresh page after delay
+                    setTimeout(() => {
+                        window.location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to post unposted pending markets: ' + data.message);
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('An error occurred while posting unposted pending markets');
+            });
         }
         
         function flushUnpostedMarkets() {
-            // Use jQuery instead
-            $("#flush-unposted").click();
+            // Confirm before proceeding
+            if (confirm("WARNING: This will delete all unposted markets from the database. This action cannot be undone. Markets already posted to Slack will be preserved.\n\nDo you want to continue?")) {
+                // Direct implementation
+                fetch('/flush-unposted-markets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        // Disable button
+                        document.getElementById('flush-unposted').disabled = true;
+                        
+                        // Refresh page after delay
+                        setTimeout(() => {
+                            window.location.reload();
+                        }, 2000);
+                    } else {
+                        alert('Failed to flush unposted markets: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while flushing unposted markets');
+                });
+            }
         }
     </script>
 </body>
