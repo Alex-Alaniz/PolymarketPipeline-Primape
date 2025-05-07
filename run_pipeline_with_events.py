@@ -34,7 +34,7 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 }
 
 # Import updated models
-from models_updated import db, Event, Market, PendingMarket, ProcessedMarket, SlackApprovalMessage
+from models_updated import db, Event, Market, PendingMarket, ProcessedMarket
 db.init_app(app)
 
 # Import utility functions
@@ -840,6 +840,12 @@ def run_pipeline(max_markets: int = 20, max_events: int = 10) -> int:
         return 1
 
 if __name__ == "__main__":
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Run the Polymarket pipeline with event support.')
+    parser.add_argument('--max-markets', type=int, default=20, help='Maximum number of binary markets to process')
+    parser.add_argument('--max-events', type=int, default=10, help='Maximum number of events to process')
+    args = parser.parse_args()
+    
     with app.app_context():
         # Check if database has necessary tables
         from sqlalchemy import inspect
@@ -848,4 +854,5 @@ if __name__ == "__main__":
             logger.error("Database schema is not initialized. Run reset_and_setup_events_model.py first.")
             sys.exit(1)
     
-    sys.exit(run_pipeline())
+    logger.info(f"Starting pipeline with max_markets={args.max_markets}, max_events={args.max_events}")
+    sys.exit(run_pipeline(max_markets=args.max_markets, max_events=args.max_events))
