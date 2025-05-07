@@ -414,20 +414,99 @@ def post_new_markets(markets: List[Dict[str, Any]], max_to_post: int = 20) -> Li
                 market_data_list.append(raw_data)
         
         # Post directly to Slack, preserving the structure of multi-option markets
-        posted_results = post_markets_to_slack(market_data_list, max_to_post)
+        # Define a custom formatter function to use with post_markets_to_slack
+        def format_market_message(market):
+            """Custom formatter for raw market data"""
+            category = market.get('event_category', 'news')
+            question = market.get('question', 'Unknown Question')
+            
+            # Define emoji map for categories
+            category_emoji = {
+                'politics': ':ballot_box_with_ballot:',
+                'crypto': ':coin:',
+                'sports': ':sports_medal:',
+                'business': ':chart_with_upwards_trend:',
+                'culture': ':performing_arts:',
+                'tech': ':computer:',
+                'news': ':newspaper:',
+                # Add fallback for unknown categories
+                'unknown': ':question:'
+            }
+            
+            # Get emoji for this category
+            emoji = category_emoji.get(category.lower(), category_emoji['unknown'])
+            
+            # Format options list for display
+            option_values = []
+            if market.get('is_multiple_option', False):
+                outcomes_raw = market.get("outcomes", "[]")
+                try:
+                    if isinstance(outcomes_raw, str):
+                        outcomes = json.loads(outcomes_raw)
+                    else:
+                        outcomes = outcomes_raw
+                    option_values = outcomes
+                except Exception as e:
+                    logger.error(f"Error parsing outcomes: {str(e)}")
+            else:
+                # Binary market
+                option_values = ["Yes", "No"]
+            
+            options_str = ', '.join(option_values) if option_values else 'Yes, No'
+            
+            # Format message text with category badge
+            message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {question}  Options: {options_str} "
+            
+            # Create blocks for rich formatting
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*New Market for Review*\n*Category:* {emoji} {category.capitalize()}"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Question:* {question}"
+                    }
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"Options: {options_str}"
+                    }
+                },
+                {
+                    "type": "context",
+                    "elements": [
+                        {
+                            "type": "mrkdwn",
+                            "text": "React with :white_check_mark: to approve or :x: to reject"
+                        }
+                    ]
+                }
+            ]
+            
+            return message_text, blocks
         
-        # Update database records with message IDs
+        # Use utils.messaging version with formatter function
+        posted_count = post_markets_to_slack(market_data_list, format_market_message_func=format_market_message)
+        logger.info(f"Posted {posted_count} markets to Slack")
+        
+        # Update database records for posted markets
         posted_markets = []
         
-        for i, (raw_data, message_id) in enumerate(posted_results):
-            if i >= len(to_post):
-                break
-                
-            market = to_post[i]
-            
-            if message_id:
+        # We can't iterate over results since post_markets_to_slack only returns a count now
+        # Instead, update all markets that were attempted to be posted
+        for i, market in enumerate(to_post):
+            if i < posted_count:
+                # This market was successfully posted
                 market.posted = True
-                market.message_id = message_id
+                # We can't know the message_id here, but it's stored in the function
                 posted_markets.append(market)
                 logger.info(f"Posted market {market.condition_id} to Slack")
             else:
