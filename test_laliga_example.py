@@ -16,7 +16,7 @@ from pprint import pprint
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Sample data based on La Liga structure provided
+# Sample data based on La Liga structure provided with real image URLs
 SAMPLE_DATA = {
     "events": [
         {
@@ -29,18 +29,18 @@ SAMPLE_DATA = {
             "startDate": "2024-09-18T16:52:55.612547Z",
             "creationDate": "2024-09-18T16:52:55.612533Z",
             "endDate": "2025-05-25T12:00:00Z",
-            "image": "https://polymarket-upload.s3.us-east-2.amazonaws.com/la-liga-winner-0Gd3D1MaSklO.png",
+            "image": "https://upload.wikimedia.org/wikipedia/commons/thumb/8/8f/2021_La_Liga_logo.jpg/1200px-2021_La_Liga_logo.jpg",
             # Add option_markets or outcomes here if they exist in the event
             "outcomes": [
                 {
                     "id": "real-madrid",
                     "title": "Real Madrid",
-                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/real-madrid-icon.png",
+                    "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/1200px-Real_Madrid_CF.svg.png",
                 },
                 {
                     "id": "barcelona",
                     "title": "Barcelona",
-                    "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/barcelona-icon.png",
+                    "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/1200px-FC_Barcelona_%28crest%29.svg.png",
                 },
             ]
         }
@@ -55,7 +55,7 @@ SAMPLE_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "149845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-barcelona-win-la-liga-vCC-C0S5sp4O.png",
+            "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/4/47/FC_Barcelona_%28crest%29.svg/1200px-FC_Barcelona_%28crest%29.svg.png",
         },
         {
             "id": "507395",
@@ -66,7 +66,7 @@ SAMPLE_DATA = {
             "endDate": "2025-05-25T12:00:00Z",
             "liquidity": "159845.1908",
             "startDate": "2024-09-18T16:34:53.5892Z",
-            "icon": "https://polymarket-upload.s3.us-east-2.amazonaws.com/will-real-madrid-win-la-liga-vCC-C0S5sp4O.png",
+            "icon": "https://upload.wikimedia.org/wikipedia/en/thumb/5/56/Real_Madrid_CF.svg/1200px-Real_Madrid_CF.svg.png",
         }
     ],
     "question": "La Liga Winner 2024-2025",
@@ -195,6 +195,26 @@ def test_slack_formatting():
         print(f"✅ All {expected_option_count} option images found in blocks")
     else:
         print(f"❌ Only {option_images_found} of {expected_option_count} option images found in blocks")
+    
+    # Try to post to Slack for visual verification
+    try:
+        import os
+        from utils.slack import post_message_with_blocks
+        
+        # Check if Slack credentials are available
+        if os.environ.get('SLACK_BOT_TOKEN') and os.environ.get('SLACK_CHANNEL_ID'):
+            print("\nAttempting to post to Slack for visual verification...")
+            timestamp = post_message_with_blocks(message, blocks)
+            
+            if timestamp:
+                print(f"✅ Successfully posted to Slack with timestamp: {timestamp}")
+                print("Please check your Slack channel to visually verify the formatting")
+            else:
+                print("❌ Failed to post to Slack")
+        else:
+            print("\nSlack credentials not available - skipping visual verification")
+    except Exception as e:
+        print(f"❌ Error posting to Slack: {str(e)}")
     
     return banner_found and option_images_found == expected_option_count
 
