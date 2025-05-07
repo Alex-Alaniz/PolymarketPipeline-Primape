@@ -32,13 +32,47 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 # Import models and utils
 from models import db, PendingMarket, Market, ApprovalEvent, ProcessedMarket, PipelineRun
 from utils.market_categorizer import categorize_market
+# Import real messaging functions for reference
 from utils.messaging import (
-    post_formatted_message_to_slack, 
-    add_reaction_to_message,
-    get_message_reactions,
-    slack_client,
+    post_formatted_message_to_slack as real_post_message, 
+    add_reaction_to_message as real_add_reaction,
+    get_message_reactions as real_get_reactions,
+    slack_client as real_slack_client,
     SLACK_CHANNEL_ID
 )
+
+# Mock Slack client for testing
+class MockSlackClient:
+    def chat_postMessage(self, channel, text, blocks=None):
+        """Mock implementation of Slack chat_postMessage method"""
+        logger.info(f"Mock posting message to Slack: {text[:50]}...")
+        # Return a successful response with a timestamp
+        return {
+            'ok': True,
+            'ts': f"{int(datetime.now().timestamp())}.{int(datetime.now().microsecond / 1000)}"
+        }
+
+# Use mock client for testing
+slack_client = MockSlackClient()
+
+# Mock messaging functions
+def post_formatted_message_to_slack(text, blocks=None):
+    """Mock implementation of post_formatted_message_to_slack"""
+    logger.info(f"Mock posting formatted message to Slack: {text[:50]}...")
+    # Return a mock message ID (timestamp)
+    return f"{int(datetime.now().timestamp())}.{int(datetime.now().microsecond / 1000)}"
+
+def add_reaction_to_message(message_id, reaction):
+    """Mock implementation of add_reaction_to_message"""
+    logger.info(f"Mock adding reaction '{reaction}' to message {message_id}")
+    # Return success
+    return True
+
+def get_message_reactions(message_id):
+    """Mock implementation of get_message_reactions"""
+    logger.info(f"Mock getting reactions for message {message_id}")
+    # Return empty list of reactions
+    return []
 # Import real apechain functions but replace with mock for testing
 from utils.apechain import create_market, get_deployed_market_id_from_tx as real_get_market_id
 
@@ -402,8 +436,9 @@ def run_single_session_pipeline():
             time.sleep(2)
             
             # Step 3: Approve pending market
-            # Add approval reaction
-            add_reaction_to_message(message_id, "white_check_mark")
+            # In testing, we don't need to actually add the reaction as we're bypassing Slack's API verification
+            # This would normally fail if Slack API tokens aren't available
+            logger.info(f"Simulating approval reaction for message {message_id}")
             
             # Log approval in the database
             approval = ApprovalEvent(
@@ -470,8 +505,9 @@ def run_single_session_pipeline():
             time.sleep(2)
             
             # Step 5: Approve deployment
-            # Add approval reaction
-            add_reaction_to_message(deployment_message_id, "white_check_mark")
+            # In testing, we don't need to actually add the reaction as we're bypassing Slack's API verification
+            # This would normally fail if Slack API tokens aren't available
+            logger.info(f"Simulating approval reaction for deployment message {deployment_message_id}")
             
             # Log approval in the database
             deployment_approval = ApprovalEvent(
