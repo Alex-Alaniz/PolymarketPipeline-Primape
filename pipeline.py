@@ -34,6 +34,8 @@ from models import db, Market, ProcessedMarket, PipelineRun
 from filter_active_markets import fetch_markets, filter_active_markets
 from fetch_active_markets_with_tracker import post_new_markets, filter_new_markets
 from check_market_approvals import check_market_approvals
+from check_deployment_approvals import check_deployment_approvals, post_markets_for_deployment_approval
+from categorize_approved_markets import get_uncategorized_approved_markets, categorize_markets
 from utils.market_transformer import MarketTransformer
 from utils.option_image_fixer import apply_image_fixes, verify_option_images
 
@@ -334,6 +336,18 @@ class PolymarketPipeline:
         )
         
         logger.info(f"Approval results: {pending} pending, {approved} approved, {rejected} rejected")
+        
+        # Categorize approved markets before deployment approval
+        if approved > 0:
+            logger.info("Categorizing newly approved markets using batch categorization")
+            uncategorized_markets = get_uncategorized_approved_markets()
+            if uncategorized_markets:
+                logger.info(f"Found {len(uncategorized_markets)} uncategorized approved markets")
+                categorized_count = categorize_markets(uncategorized_markets)
+                logger.info(f"Successfully categorized {categorized_count} markets")
+            else:
+                logger.info("No uncategorized approved markets found")
+        
         return (pending, approved, rejected)
     
     def run(self) -> int:
@@ -362,18 +376,26 @@ class PolymarketPipeline:
                 # Post markets for approval
                 posted = self.post_markets_for_approval(markets)
                 
-                # Check for approvals
+                # Check for approvals and categorize approved markets
                 self.check_approvals()
                 
-                # TODO: Generate banner images
+                # Post categorized markets for deployment approval
+                logger.info("Posting categorized markets for deployment approval")
+                deployment_ready_markets = post_markets_for_deployment_approval()
+                if deployment_ready_markets:
+                    logger.info(f"Posted {len(deployment_ready_markets)} markets for deployment approval")
+                else:
+                    logger.info("No markets ready for deployment approval")
                 
-                # TODO: Post banners for approval
+                # Check for deployment approvals
+                logger.info("Checking for deployment approvals")
+                pending_deploy, approved_deploy, rejected_deploy = check_deployment_approvals()
+                logger.info(f"Deployment results: {pending_deploy} pending, {approved_deploy} approved, {rejected_deploy} rejected")
                 
-                # TODO: Check for banner approvals
-                
-                # Note: Deployment to Apechain is now a separate step
-                # It's not part of the main pipeline to allow for final QA
-                # Run check_deployment_approvals.py manually to process deployments
+                # Update deployment stats
+                self.update_stats(
+                    markets_deployed=self.stats.get("markets_deployed", 0) + approved_deploy
+                )
                 
                 # Update final statistics
                 self.update_run_record(status="completed")

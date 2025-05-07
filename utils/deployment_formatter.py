@@ -62,7 +62,7 @@ def format_deployment_message(
     message_text = f"*Deployment Approval*\n\n*Question:* {question}\n*Category:* {emoji} {category.capitalize() if category else 'Unknown'}"
     
     # Ensure options is a list
-    if not options:
+    if options is None:
         options = ["Yes", "No"]
     
     # Create rich message blocks

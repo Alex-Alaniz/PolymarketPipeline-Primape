@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """
 Categorize approved markets before deployment approval.
 
@@ -8,32 +9,20 @@ categorization is available during the final deployment decision.
 """
 
 import os
-import sys
 import logging
-from typing import List, Dict, Any, Tuple
-from datetime import datetime
+import sys
+import json
+from typing import List, Dict, Any
 
-# Set up logging
+from utils.batch_categorizer import batch_categorize_markets
+from models import db, Market
+
+# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
-logger = logging.getLogger('categorize_approved_markets')
-
-# Import required modules
-from utils.batch_categorizer import batch_categorize_markets
-
-# Flask app for database context
-from flask import Flask
-app = Flask(__name__)
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
-app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
-    "pool_recycle": 300,
-    "pool_pre_ping": True,
-}
-
-from models_updated import db, Market, PendingMarket
-db.init_app(app)
+logger = logging.getLogger("categorize_approved_markets")
 
 def get_uncategorized_approved_markets() -> List[Market]:
     """
@@ -42,19 +31,13 @@ def get_uncategorized_approved_markets() -> List[Market]:
     Returns:
         List[Market]: Markets ready for categorization
     """
-    with app.app_context():
-        # Find markets that:
-        # 1. Have been approved (status == 'approved')
-        # 2. Have not been categorized (category is null or needs_manual_categorization is True)
-        # 3. Have not been deployed (deployment_status is null)
-        markets = Market.query.filter(
-            Market.status == 'approved',
-            (Market.category.is_(None) | Market.needs_manual_categorization == True),
-            Market.deployment_status.is_(None)
-        ).all()
-        
-        logger.info(f"Found {len(markets)} approved markets needing categorization")
-        return markets
+    # Find markets that are approved but don't have a category yet
+    markets = Market.query.filter(
+        Market.status == "new",  # New status means approved but not yet deployed
+        (Market.category == None) | (Market.category == "")  # No category assigned
+    ).all()
+    
+    return markets
 
 def categorize_markets(markets: List[Market]) -> int:
     """
@@ -70,67 +53,97 @@ def categorize_markets(markets: List[Market]) -> int:
         logger.info("No markets to categorize")
         return 0
     
-    # Prepare market data for batch categorization
-    market_data_list = []
+    logger.info(f"Categorizing {len(markets)} markets")
+    
+    # Convert Market objects to dictionaries for batch categorization
+    market_dicts = []
     for market in markets:
-        market_data_list.append({
-            'id': market.id,  # Use database ID as identifier
-            'question': market.question,
-            'description': market.description if hasattr(market, 'description') else ''
-        })
-    
-    # Batch categorize markets
-    logger.info(f"Categorizing {len(market_data_list)} markets")
-    categorized_markets = batch_categorize_markets(market_data_list)
-    
-    # Create a map for quick lookup
-    category_map = {}
-    for categorized in categorized_markets:
-        market_id = categorized.get('id')
-        if market_id:
-            category_map[market_id] = {
-                'category': categorized.get('ai_category', 'news'),
-                'needs_manual': categorized.get('needs_manual_categorization', False)
-            }
-    
-    # Update markets with categories
-    updated_count = 0
-    with app.app_context():
-        for market in markets:
-            if market.id in category_map:
-                category_info = category_map[market.id]
+        # Prepare options
+        options = []
+        if market.options:
+            try:
+                if isinstance(market.options, str):
+                    options_data = json.loads(market.options)
+                    for opt in options_data:
+                        if isinstance(opt, dict) and 'value' in opt:
+                            options.append(opt['value'])
+                        else:
+                            options.append(str(opt))
+                elif isinstance(market.options, list):
+                    for opt in market.options:
+                        if isinstance(opt, dict) and 'value' in opt:
+                            options.append(opt['value'])
+                        else:
+                            options.append(str(opt))
+            except Exception as e:
+                logger.error(f"Error parsing options for market {market.id}: {str(e)}")
+                options = ["Yes", "No"]  # Fallback
                 
-                # Update market category
-                market.category = category_info['category']
-                market.needs_manual_categorization = category_info['needs_manual']
-                market.categorized_at = datetime.utcnow()
+        # Create dictionary with required fields
+        market_dict = {
+            "id": market.id,
+            "question": market.question,
+            "description": market.description or "",
+            "options": options,
+            "type": market.type or "binary",
+            "event_name": getattr(market, "event_name", None)
+        }
+        market_dicts.append(market_dict)
+    
+    # Batch categorize the markets
+    try:
+        categorized_markets = batch_categorize_markets(market_dicts)
+        
+        # Update the original Market objects with categories
+        categorized_count = 0
+        for i, market_dict in enumerate(categorized_markets):
+            if "ai_category" in market_dict and market_dict["ai_category"]:
+                # Get the original market
+                market = markets[i]
                 
-                updated_count += 1
+                # Update category
+                market.category = market_dict["ai_category"]
+                
+                # Add an 'ai_confidence' field if available
+                if "ai_confidence" in market_dict:
+                    market.ai_confidence = market_dict["ai_confidence"]
+                
+                categorized_count += 1
                 logger.info(f"Categorized market {market.id} as '{market.category}'")
         
-        # Commit all changes at once
-        db.session.commit()
-        logger.info(f"Updated {updated_count} markets with categories")
+        # Save all changes
+        if categorized_count > 0:
+            db.session.commit()
+            logger.info(f"Saved {categorized_count} categorized markets")
+        
+        return categorized_count
     
-    return updated_count
+    except Exception as e:
+        logger.error(f"Error during batch categorization: {str(e)}")
+        return 0
 
 def main():
     """
     Main function to run the categorization process.
     """
-    try:
-        # Get markets that need categorization
-        markets = get_uncategorized_approved_markets()
-        
-        # Categorize markets
-        updated_count = categorize_markets(markets)
-        
-        logger.info(f"Successfully categorized {updated_count} markets")
-        return 0
+    # Import Flask app to get application context
+    from main import app
     
-    except Exception as e:
-        logger.error(f"Error in categorize_approved_markets: {str(e)}")
-        return 1
+    # Use application context for database operations
+    with app.app_context():
+        try:
+            # Get uncategorized approved markets
+            markets = get_uncategorized_approved_markets()
+            logger.info(f"Found {len(markets)} uncategorized approved markets")
+            
+            # Categorize markets
+            categorized_count = categorize_markets(markets)
+            logger.info(f"Successfully categorized {categorized_count} markets")
+            
+            return 0
+        except Exception as e:
+            logger.error(f"Error: {str(e)}")
+            return 1
 
 if __name__ == "__main__":
     sys.exit(main())
