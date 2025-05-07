@@ -54,7 +54,7 @@ predictor_abi = load_abi(PREDICTOR_ABI_PATH) if os.path.exists(PREDICTOR_ABI_PAT
 market_abi = load_abi(MARKET_ABI_PATH) if os.path.exists(MARKET_ABI_PATH) else []
 
 # Predictor contract address (the factory for creating markets)
-PREDICTOR_ADDRESS = '0xPredictorContractAddress'  # Replace with actual address
+PREDICTOR_ADDRESS = '0x90b92F7ec91bAa3E6e7a62A9209bC4041b17F813'  # Freshly deployed contract
 
 def create_market(question: str, options: List[str], end_time: int, category: str) -> Optional[str]:
     """

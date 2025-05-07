@@ -110,8 +110,20 @@ def update_market_ids(markets: List[Market]) -> int:
                 logger.warning(f"Failed to get market ID for transaction {market.blockchain_tx}")
                 continue
             
-            # Update market
+            # Update market with the Apechain market ID
             market.apechain_market_id = market_id
+            
+            # Also verify market info to make sure we can access it
+            market_info = utils.apechain.get_market_info(market_id)
+            if market_info:
+                logger.info(f"Successfully verified market info for market ID {market_id}")
+                logger.info(f"Market Question: {market_info.get('question')}")
+                logger.info(f"Market Category: {market_info.get('category')}")
+                logger.info(f"Market Options: {market_info.get('options')}")
+            else:
+                logger.warning(f"Could not retrieve market info for market ID {market_id}")
+            
+            # Commit the changes
             db.session.commit()
             
             logger.info(f"Updated market {market.id} with Apechain market ID {market_id}")
