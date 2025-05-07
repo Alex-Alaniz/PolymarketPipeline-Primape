@@ -129,7 +129,9 @@ def filter_active_non_expired_markets(markets: List[Dict[str, Any]]) -> List[Dic
     Returns:
         List[Dict[str, Any]]: Filtered list of markets
     """
-    now = datetime.now().timestamp() * 1000  # Current time in milliseconds
+    # Get current time in UTC with timezone info
+    from datetime import timezone
+    now = datetime.now(timezone.utc)
     
     filtered_markets = []
     for market in markets:
@@ -138,9 +140,22 @@ def filter_active_non_expired_markets(markets: List[Dict[str, Any]]) -> List[Dic
             continue
         
         # Skip if market has already expired
-        end_date = market.get('endDate')
-        if end_date and int(end_date) < now:
-            continue
+        end_date_str = market.get('endDate')
+        if end_date_str:
+            try:
+                # Parse ISO format date string (e.g. "2024-06-17T12:00:00Z")
+                from dateutil import parser
+                end_date = parser.parse(end_date_str)
+                # Make sure end_date has timezone info
+                if end_date.tzinfo is None:
+                    end_date = end_date.replace(tzinfo=timezone.utc)
+                
+                if end_date < now:
+                    logger.info(f"Skipping expired market ending on {end_date_str}")
+                    continue
+            except Exception as e:
+                logger.warning(f"Could not parse end date '{end_date_str}': {str(e)}")
+                # Don't filter out markets with unparseable dates
         
         # Skip if market doesn't have question/title
         if not market.get('question'):
@@ -295,8 +310,14 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     for batch_id, original_market in original_markets.items():
         try:
             # Extract Polymarket ID and question
-            market_id = original_market.get('conditionId') or original_market.get('id')
-            question = original_market.get('title') or original_market.get('question', '')
+            # In Gamma API, the ID is in the conditionId field
+            market_id = original_market.get('conditionId')
+            if not market_id:
+                market_id = original_market.get('id')
+                logger.warning(f"Using fallback id field for market: {market_id}")
+                
+            # In Gamma API, the question is in the question field
+            question = original_market.get('question', '')
             
             # Skip if already in database (safety check)
             if db.session.query(PendingMarket).filter_by(poly_id=market_id).count() > 0:
@@ -361,7 +382,11 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
             logger.info(f"Stored market '{question[:50]}...' with category '{category}'")
             
         except Exception as e:
-            market_id_display = market_id if 'market_id' in locals() else f"batch_id_{batch_id}"
+            # Use batch_id as fallback if market_id isn't set yet
+            market_id_display = f"batch_id_{batch_id}"
+            if 'market_id' in locals() and market_id is not None:
+                market_id_display = market_id
+                
             logger.error(f"Error storing market {market_id_display}: {str(e)}")
             logger.error(f"Error type: {type(e).__name__}")
             db.session.rollback()
@@ -421,8 +446,21 @@ def main():
         
         except Exception as e:
             logger.error(f"Error in main function: {str(e)}")
-            if 'pipeline_run' in locals():
-                update_pipeline_run(pipeline_run, "failed", error=str(e))
+            
+            # Only update pipeline_run if it exists
+            pipeline_run_obj = None
+            if 'pipeline_run' in locals() and pipeline_run is not None:
+                pipeline_run_obj = pipeline_run
+            else:
+                try:
+                    # Create a new pipeline run record for the error
+                    pipeline_run_obj = create_pipeline_run()
+                except Exception as inner_e:
+                    logger.error(f"Could not create pipeline run for error logging: {str(inner_e)}")
+                
+            if pipeline_run_obj is not None:
+                update_pipeline_run(pipeline_run_obj, "failed", error=str(e))
+                
             return 1
 
 if __name__ == "__main__":
