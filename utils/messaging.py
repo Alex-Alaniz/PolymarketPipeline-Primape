@@ -398,7 +398,33 @@ def format_market_with_images(market_data):
         blocks.append(event_block)
     
     # Add event banner image if available
-    event_image = market_data.get('event_image')
+    # First check if we have an event image in the proper events array format
+    event_image = None
+    
+    # Check if we have events data in raw JSON format and extract the image
+    events_data = market_data.get('events')
+    if events_data:
+        try:
+            # The events data might be a string, list, or directly accessible
+            if isinstance(events_data, str):
+                if events_data.startswith('[') or events_data.startswith('{'):
+                    events_data = json.loads(events_data)
+            
+            # If it's a list, take the first event's image
+            if isinstance(events_data, list) and len(events_data) > 0:
+                first_event = events_data[0]
+                if isinstance(first_event, dict) and 'image' in first_event:
+                    event_image = first_event.get('image')
+                    logger.info(f"Found event image from events array: {event_image}")
+        except Exception as e:
+            logger.error(f"Error parsing events data for image: {str(e)}")
+    
+    # If we couldn't get the image from events, try the direct event_image field
+    if not event_image:
+        event_image = market_data.get('event_image')
+        logger.info(f"Using direct event_image field: {event_image}")
+    
+    # Display the event image if available
     if event_image and is_valid_url(event_image):
         blocks.append(
             {
@@ -415,22 +441,48 @@ def format_market_with_images(market_data):
     # Handle options based on whether this is an event or regular market
     if is_event:
         # For events, use main event image and icon - no individual option images
-        # First try to get options from outcomes field (proper API format)
+        # Try to extract options from events structure first (best source)
         options = []
-        outcomes_raw = market_data.get("outcomes", "[]")
-        try:
-            if isinstance(outcomes_raw, str):
-                outcomes = json.loads(outcomes_raw)
-            else:
-                outcomes = outcomes_raw
-                
-            if isinstance(outcomes, list):
-                options = outcomes
-                logger.info(f"Extracted {len(options)} options from outcomes field")
-        except Exception as e:
-            logger.error(f"Error parsing outcomes field: {str(e)}")
-            
-        # If no options found in outcomes, try the options field
+        option_info = {}  # Dictionary to store option_id -> option_name mapping
+        
+        # Try to get event outcomes from events array (best source for multiple-choice markets)
+        if events_data:
+            try:
+                if isinstance(events_data, list) and len(events_data) > 0:
+                    for event_obj in events_data:
+                        if isinstance(event_obj, dict) and 'outcomes' in event_obj:
+                            event_outcomes = event_obj.get('outcomes', [])
+                            
+                            # Process outcomes
+                            for outcome in event_outcomes:
+                                if isinstance(outcome, dict):
+                                    # For events data, we have IDs and names
+                                    outcome_id = outcome.get('id', '')
+                                    outcome_name = outcome.get('name', '')
+                                    
+                                    if outcome_id and outcome_name:
+                                        options.append(outcome_id)  # Store the ID as the option
+                                        option_info[outcome_id] = outcome_name  # Map ID to name
+                                        logger.info(f"Found outcome from events: {outcome_id} -> {outcome_name}")
+            except Exception as e:
+                logger.error(f"Error extracting options from events: {str(e)}")
+        
+        # If no options found in events, try the outcomes field
+        if not options:
+            outcomes_raw = market_data.get("outcomes", "[]")
+            try:
+                if isinstance(outcomes_raw, str):
+                    outcomes = json.loads(outcomes_raw)
+                else:
+                    outcomes = outcomes_raw
+                    
+                if isinstance(outcomes, list):
+                    options = outcomes
+                    logger.info(f"Extracted {len(options)} options from outcomes field")
+            except Exception as e:
+                logger.error(f"Error parsing outcomes field: {str(e)}")
+        
+        # If still no options, try the options field
         if not options:
             options = market_data.get('options', [])
             logger.info(f"Using {len(options)} options from options field")
@@ -453,13 +505,40 @@ def format_market_with_images(market_data):
         
         # For each option, show the option name with its icon INLINE
         option_images = market_data.get('option_images', {})
+        
+        # Check if we have option images in the events data with "id" and "image" structure
+        if events_data and option_images == {}:
+            try:
+                logger.info("Checking events data for option images...")
+                # First, try to extract option images from events data
+                if isinstance(events_data, list) and len(events_data) > 0:
+                    for event_obj in events_data:
+                        if isinstance(event_obj, dict) and 'outcomes' in event_obj:
+                            outcomes_data = event_obj.get('outcomes', [])
+                            
+                            # Process each outcome for images
+                            for outcome in outcomes_data:
+                                if isinstance(outcome, dict) and 'id' in outcome and 'image' in outcome:
+                                    outcome_id = outcome.get('id', '')
+                                    outcome_image = outcome.get('image', '')
+                                    
+                                    # Store in our option_images dict with outcome ID as key
+                                    if outcome_id and outcome_image:
+                                        option_images[outcome_id] = outcome_image
+                                        logger.info(f"Found option image for {outcome_id}: {outcome_image[:30]}...")
+            except Exception as e:
+                logger.error(f"Error extracting option images from events data: {str(e)}")
+        
         for option in options:
-            option_text = f"*{option}*"
+            # Use the option name from our mapping if available, otherwise use ID
+            display_name = option_info.get(option, option) if option_info else option
+            option_text = f"*{display_name}*"
             
             # Get option image if available
             option_image_url = None
             if option in option_images and option_images[option]:
                 option_image_url = option_images[option]
+                logger.info(f"Using image for option '{display_name}': {option_image_url[:30]}...")
             
             # If we have an image, display it inline with the option
             if option_image_url and is_valid_url(option_image_url):
