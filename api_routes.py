@@ -104,7 +104,7 @@ def get_market_data(market_id):
             "banner_uri": market.banner_uri,
             "option_images": market.option_images,
             "created_at": market.created_at.isoformat() if market.created_at else None,
-            "deployed_at": market.deployed_at.isoformat() if market.deployed_at else None
+            "updated_at": market.updated_at.isoformat() if market.updated_at else None
         }
         
         return jsonify({
@@ -168,7 +168,7 @@ def get_markets():
                 "status": market.status,
                 "banner_uri": market.banner_uri,
                 "created_at": market.created_at.isoformat() if market.created_at else None,
-                "deployed_at": market.deployed_at.isoformat() if market.deployed_at else None
+                "updated_at": market.updated_at.isoformat() if market.updated_at else None
             }
             market_list.append(market_data)
         
