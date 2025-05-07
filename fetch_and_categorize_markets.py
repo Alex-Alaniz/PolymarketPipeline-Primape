@@ -27,7 +27,8 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
 
 # Local imports
 from models import db, Market, PendingMarket, ProcessedMarket, PipelineRun
-from utils.market_categorizer import categorize_market, categorize_markets
+from utils.market_categorizer import categorize_market
+from utils.batch_categorizer import batch_categorize_markets
 
 # Initialize app
 db.init_app(app)
@@ -264,10 +265,10 @@ def store_categorized_markets(markets: List[Dict[str, Any]]) -> int:
     Returns:
         int: Number of markets stored
     """
-    # First, categorize all markets in a batch
-    logger.info(f"Batch categorizing {len(markets)} markets with GPT-4o-mini...")
-    categorized_markets = categorize_markets(markets)
-    logger.info(f"Completed batch categorization of {len(categorized_markets)} markets")
+    # First, categorize all markets in a batch with a single API call
+    logger.info(f"Batch categorizing {len(markets)} markets with GPT-4o-mini using single API call...")
+    categorized_markets = batch_categorize_markets(markets)
+    logger.info(f"Completed efficient batch categorization of {len(categorized_markets)} markets")
     
     stored_count = 0
     
