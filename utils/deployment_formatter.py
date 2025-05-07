@@ -14,7 +14,9 @@ def format_deployment_message(
     market_type: str,
     options: List[str],
     expiry: str,
-    banner_uri: Optional[str] = None
+    banner_uri: Optional[str] = None,
+    event_name: Optional[str] = None,
+    event_id: Optional[str] = None
 ) -> Tuple[str, List[Dict[str, Any]]]:
     """
     Format a market message for deployment approval.
@@ -27,6 +29,8 @@ def format_deployment_message(
         options: List of option values
         expiry: Human-readable expiry date 
         banner_uri: Optional banner image URI
+        event_name: Optional name of the event this market belongs to
+        event_id: Optional ID of the event this market belongs to
         
     Returns:
         Tuple of (message text, blocks)
@@ -38,6 +42,8 @@ def format_deployment_message(
     
     # Simple message text (matching original format)
     message_text = f"*Market for Deployment Approval*  *Question:* {question}"
+    if event_name:
+        message_text += f"  *Event:* {event_name}"
     
     # Create blocks with exact same format as original messages
     blocks = [
@@ -55,7 +61,20 @@ def format_deployment_message(
                 "type": "mrkdwn",
                 "text": f"*Question:* {question}"
             }
-        },
+        }
+    ]
+    
+    # Add event information if available
+    if event_name:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Event:* {event_name}"
+            }
+        })
+    
+    blocks.extend([
         {
             "type": "section",
             "fields": [
@@ -81,15 +100,28 @@ def format_deployment_message(
                     "text": f"*ID:* {market_id}"
                 }
             ]
-        },
-        {
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": options_text
-            }
         }
-    ]
+    ])
+    
+    # Add event ID if available
+    if event_id:
+        blocks.append({
+            "type": "section",
+            "fields": [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*Event ID:* {event_id}"
+                }
+            ]
+        })
+    
+    blocks.append({
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": options_text
+        }
+    })
     
     # Add banner if available
     if banner_uri:

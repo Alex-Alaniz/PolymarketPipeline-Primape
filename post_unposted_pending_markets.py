@@ -70,7 +70,7 @@ def update_pipeline_run(pipeline_run, status, markets_processed=0, markets_appro
 
 def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, Any]]]:
     """
-    Format a market message for posting to Slack with category badge.
+    Format a market message for posting to Slack with category badge and event information.
     
     Args:
         market: PendingMarket model instance
@@ -103,10 +103,14 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
             option_values.append(option_value)
     options_str = ', '.join(option_values) if option_values else 'Yes, No'
     
-    # Format message text to exactly match the original format
-    message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {market.question}  Options: {options_str} "
+    # Determine if this market is part of an event
+    has_event = market.event_id and market.event_name
+    event_text = f"Event: {market.event_name}" if has_event else ""
     
-    # Create blocks for rich formatting exactly matching the original format
+    # Format message text including event information if available
+    message_text = f"*New Market for Review* *Category:* {emoji} {category.capitalize()}  *Question:* {market.question}  Options: {options_str} {event_text}"
+    
+    # Create blocks for rich formatting
     blocks = [
         {
             "type": "section",
@@ -114,7 +118,20 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
                 "type": "mrkdwn",
                 "text": f"*New Market for Review*\n*Category:* {emoji} {category.capitalize()}"
             }
-        },
+        }
+    ]
+    
+    # Add event information if available
+    if has_event:
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"*Event:* {market.event_name}"
+            }
+        })
+    
+    blocks.extend([
         {
             "type": "section",
             "text": {
@@ -138,7 +155,7 @@ def format_market_message(market: PendingMarket) -> Tuple[str, List[Dict[str, An
                 }
             ]
         }
-    ]
+    ])
     
     return message_text, blocks
 
