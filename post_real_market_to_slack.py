@@ -99,6 +99,7 @@ def prepare_market_for_posting(market_data):
         
     # Clone the market data to avoid modifying the original
     import copy
+    import json
     processed_market = copy.deepcopy(market_data)
     
     # Set the category to uncategorized
@@ -117,66 +118,127 @@ def prepare_market_for_posting(market_data):
                 logger.info(f"Formatted expiry date: {processed_market['expiry_time']}")
         except Exception as e:
             logger.error(f"Error formatting expiry date: {e}")
-            
-    # If no image_url is available, add a placeholder image
-    if not processed_market.get("image_url"):
-        # Use a generic prediction market image
-        processed_market["image_url"] = "https://i.imgur.com/MRLqEOy.png"
-        logger.info("Added placeholder image URL")
-        
-    # Handle options based on market type
-    is_multiple = processed_market.get("is_multiple_option", False)
     
-    if not is_multiple:
-        # Binary market - add Yes/No options with images
-        processed_market["option_images"] = {
-            "Yes": processed_market.get("image_url", "https://i.imgur.com/MRLqEOy.png"),
-            "No": processed_market.get("image_url", "https://i.imgur.com/MRLqEOy.png")
-        }
-        logger.info(f"Added Yes/No option images")
-    else:
-        # Multiple choice market - set up options with images
-        processed_market["options"] = []
-        processed_market["option_images"] = {}
+    # Get the image URLs for this market
+    market_image = None
+    market_icon = None
+    
+    # First check if the market itself has image/icon fields
+    if "image" in processed_market and processed_market["image"]:
+        market_image = processed_market["image"]
+        logger.info(f"Found market image: {market_image[:50]}...")
         
-        # Try to get options from different fields in the data
-        options = []
-        if "outcomes" in processed_market and isinstance(processed_market["outcomes"], list):
-            options = processed_market["outcomes"]
-            logger.info(f"Found {len(options)} options in 'outcomes' field")
-        elif "answers" in processed_market and isinstance(processed_market["answers"], list):
-            options = processed_market["answers"]
-            logger.info(f"Found {len(options)} options in 'answers' field")
-        
-        # If options were found, add them with images
-        if options:
-            processed_market["options"] = options
+    if "icon" in processed_market and processed_market["icon"]:
+        market_icon = processed_market["icon"]
+        logger.info(f"Found market icon: {market_icon[:50]}...")
+    
+    # If no market image/icon, check events array for images
+    if (not market_image or not market_icon) and "events" in processed_market:
+        events = processed_market["events"]
+        if events and len(events) > 0:
+            event = events[0]  # Use the first event
             
-            # Add an image for each option
-            for option in options:
-                processed_market["option_images"][option] = processed_market.get("image_url", "https://i.imgur.com/MRLqEOy.png")
-            
-            logger.info(f"Added {len(options)} multiple choice options with images")
-        else:
-            # If no options found, create some placeholder options
-            default_options = ["Option A", "Option B", "Option C"]
-            processed_market["options"] = default_options
-            
-            for option in default_options:
-                processed_market["option_images"][option] = processed_market.get("image_url", "https://i.imgur.com/MRLqEOy.png")
+            if not market_image and "image" in event and event["image"]:
+                market_image = event["image"]
+                logger.info(f"Using event image: {market_image[:50]}...")
                 
-            logger.info("Added default multiple choice options with images")
+            if not market_icon and "icon" in event and event["icon"]:
+                market_icon = event["icon"]
+                logger.info(f"Using event icon: {market_icon[:50]}...")
     
-    # Set event image if available
-    processed_market["event_image"] = processed_market.get("image_url", "https://i.imgur.com/MRLqEOy.png")
-    logger.info(f"Set event image: {processed_market['event_image'][:50]}...")
+    # Set the image URLs in the market data
+    if market_image:
+        processed_market["event_image"] = market_image
+    else:
+        # If still no image, use a placeholder
+        processed_market["event_image"] = "https://i.imgur.com/MRLqEOy.png"
+        logger.info(f"No image found, using placeholder")
+    
+    # Now handle the market options
+    # Determine if this is a binary or multiple choice market
+    outcomes = []
+    outcomes_str = processed_market.get("outcomes", "[]")
+    
+    # Parse outcomes if it's a string (expected format: "[\"Yes\", \"No\"]")
+    if isinstance(outcomes_str, str):
+        try:
+            outcomes = json.loads(outcomes_str)
+            logger.info(f"Parsed outcomes: {outcomes}")
+        except Exception as e:
+            logger.error(f"Error parsing outcomes: {e}")
+            outcomes = []
+    
+    # If outcomes is already a list, use it directly
+    elif isinstance(outcomes_str, list):
+        outcomes = outcomes_str
+    
+    # Determine if this is a binary or multiple choice market
+    is_binary = len(outcomes) == 2 and "Yes" in outcomes and "No" in outcomes
+    
+    if is_binary:
+        # Binary market - Yes/No options
+        logger.info("Processing as binary market (Yes/No)")
+        processed_market["option_images"] = {
+            "Yes": market_icon or market_image or "https://i.imgur.com/MRLqEOy.png",
+            "No": market_icon or market_image or "https://i.imgur.com/MRLqEOy.png"
+        }
+        processed_market["options"] = ["Yes", "No"]
+    else:
+        # Multiple choice market
+        if outcomes:
+            logger.info(f"Processing as multiple choice market with {len(outcomes)} options")
+            processed_market["options"] = outcomes
+            
+            # Set up option images
+            processed_market["option_images"] = {}
+            for option in outcomes:
+                processed_market["option_images"][option] = market_icon or market_image or "https://i.imgur.com/MRLqEOy.png"
+        else:
+            # Fallback for markets with no outcomes
+            logger.warning("No outcomes found in market data")
+            processed_market["options"] = ["Yes", "No"]  # Default to binary
+            processed_market["option_images"] = {
+                "Yes": market_icon or market_image or "https://i.imgur.com/MRLqEOy.png",
+                "No": market_icon or market_image or "https://i.imgur.com/MRLqEOy.png"
+            }
+    
+    # If this is part of an event, also extract event info
+    if "events" in processed_market and processed_market["events"]:
+        event = processed_market["events"][0]
+        processed_market["event_id"] = event.get("id")
+        processed_market["event_name"] = event.get("title")
+        logger.info(f"Added event info: {processed_market.get('event_name')}")
     
     return processed_market
 
 def post_real_market_to_slack():
     """Fetch a real market and post it to Slack."""
-    # Fetch a real market
-    market = fetch_one_market()
+    # First try to fetch a multiple-choice market
+    market = None
+    try:
+        # Try to find a multiple choice market
+        market_list = fetch_markets()
+        
+        if market_list:
+            import json
+            # Look for a market with more than 2 options
+            for m in market_list:
+                if "outcomes" in m and isinstance(m["outcomes"], str):
+                    try:
+                        outcomes = json.loads(m["outcomes"])
+                        if len(outcomes) > 2:
+                            logger.info(f"Found multiple choice market with {len(outcomes)} options: {m.get('question')}")
+                            market = m
+                            break
+                    except:
+                        pass
+    except Exception as e:
+        logger.error(f"Error searching for multiple choice market: {e}")
+    
+    # If no multiple choice market found, fallback to any market
+    if not market:
+        logger.info("No multiple choice market found, falling back to a binary market")
+        market = fetch_one_market(prefer_multiple=False)
     
     if not market:
         logger.error("Failed to fetch a market")
@@ -185,7 +247,19 @@ def post_real_market_to_slack():
     # Log key details for debugging
     logger.info(f"Market question: {market.get('question', 'Unknown')}")
     logger.info(f"Market endDate: {market.get('endDate', 'Unknown')}")
-    logger.info(f"Market image URL: {market.get('image_url', 'None')}")
+    logger.info(f"Market image: {market.get('image', 'None')}")
+    logger.info(f"Market icon: {market.get('icon', 'None')}")
+    
+    # Log event info if available
+    if "events" in market and market["events"]:
+        event = market["events"][0]
+        logger.info(f"Event title: {event.get('title', 'Unknown')}")
+        logger.info(f"Event image: {event.get('image', 'None')}")
+        logger.info(f"Event icon: {event.get('icon', 'None')}")
+        
+    # Log outcomes
+    if "outcomes" in market:
+        logger.info(f"Market outcomes: {market.get('outcomes', 'None')}")
     
     # Prepare market for posting
     processed_market = prepare_market_for_posting(market)
