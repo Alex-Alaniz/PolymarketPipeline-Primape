@@ -1,171 +1,175 @@
-# Event-Based Market Transformation
+# Event Market Transformation Guide
 
-This document explains how we transform Polymarket's binary markets into event-based markets with team options.
+## Overview
 
-## Problem Statement
+This document explains the process of transforming individual prediction markets into event-based grouped markets for the Polymarket-to-Apechain pipeline. The event transformation process is a critical step that allows related markets to be properly grouped, displayed with appropriate imagery, and deployed as a unified entity.
 
-The Polymarket API provides markets in a binary format, where each market represents a yes/no question about a specific team or outcome:
+## Market Types
 
-```
-Will Inter Milan win the UEFA Champions League?
-"outcomes": ["Yes", "No"]
+The pipeline handles two main types of markets:
 
-Will Arsenal win the UEFA Champions League?
-"outcomes": ["Yes", "No"]
-
-Will PSG win the UEFA Champions League?
-"outcomes": ["Yes", "No"]
-```
-
-For a better user experience, we want to transform these related binary markets into a single event market with multiple options:
-
-```
-Event Market: Champions League Winner
-Options:
-- Inter Milan
-- Arsenal 
-- PSG
-```
+1. **Standalone Markets**: Individual markets with binary (Yes/No) outcomes, not related to other markets.
+2. **Event-Based Markets**: Groups of related markets that share a common event (e.g., "Champions League"), where each option represents a possible outcome (e.g., different teams that could win).
 
 ## Transformation Process
 
-1. **Identify Events**: Markets with the same `event_id` are grouped together
-2. **Extract Teams**: Team names are extracted from binary market questions
-3. **Create Event Market**: A new event market is created with teams as options
-4. **Preserve Market IDs**: Original market IDs are preserved for each team option
+The transformation process follows these steps:
 
-## Implementation
+1. **Identify Related Markets**: Markets about the same event (e.g., "Will Real Madrid win Champions League?", "Will Barcelona win Champions League?") are detected as related.
 
-The transformation is implemented in `utils/transform_markets_with_events.py`:
+2. **Group by Common Event**: Related markets are grouped under a common event entity (e.g., "Champions League 2025").
 
-```python
-def transform_markets_with_events(raw_markets):
-    # Step 1: Collect all events and their markets
-    events_map = {}
-    standalone_markets = []
-    
-    for market in raw_markets:
-        # Check if market has events information
-        events = market.get("events", [])
-        
-        if not events:
-            # This is a standalone market, keep as-is
-            standalone_markets.append(market)
-            continue
-        
-        # Process market with event information
-        for event in events:
-            event_id = event.get("id")
-            if not event_id:
-                continue
-                
-            # Initialize event if we haven't seen it yet
-            if event_id not in events_map:
-                events_map[event_id] = {
-                    "event_data": event,
-                    "markets": []
-                }
-            
-            # Add this market to the event
-            events_map[event_id]["markets"].append(market)
-    
-    # Step 2: Transform events into their own "markets"
-    transformed_markets = []
-    
-    # Process events first
-    for event_id, event_info in events_map.items():
-        event_data = event_info["event_data"]
-        markets = event_info["markets"]
-        
-        # Skip events with only one market
-        if len(markets) <= 1:
-            standalone_markets.extend(markets)
-            continue
-        
-        # Create a new "market" representing the event
-        event_market = {
-            "id": f"event_{event_id}",
-            "question": event_data.get("name", "Event"),
-            "is_event": True,
-            "category": markets[0].get("category", "unknown"),
-            "expiry_time": max(market.get("endDate", "") for market in markets),
-            "event_id": event_id,
-            "event_name": event_data.get("name", ""),
-            "event_image": event_data.get("image"),
-            "event_icon": event_data.get("icon"),
-            "options": [],  # Team names
-            "option_images": {},  # Team images
-            "option_market_ids": {}  # Original market IDs
-        }
-        
-        # Extract team names from the markets in this event
-        for market in markets:
-            # Extract team name from question
-            question = market.get("question", "")
-            parts = question.split("Will ")
-            if len(parts) < 2:
-                continue
-                
-            team_part = parts[1].split(" win")[0].strip()
-            if not team_part:
-                continue
-            
-            # Add team as an option
-            event_market["options"].append(team_part)
-            
-            # Save market ID for this option
-            event_market["option_market_ids"][team_part] = market.get("id")
-            
-            # Add option image if available
-            if market.get("icon"):
-                event_market["option_images"][team_part] = market.get("icon")
-        
-        # Only add events with at least 2 options
-        if len(event_market["options"]) >= 2:
-            transformed_markets.append(event_market)
-    
-    # Step 3: Add standalone markets
-    transformed_markets.extend(standalone_markets)
-    
-    return transformed_markets
+3. **Create Event Structure**: An event market is created with:
+   - A descriptive name (e.g., "Champions League 2025")
+   - A banner image representing the event
+   - Options corresponding to each related market (e.g., team names)
+   - Option images for each option (e.g., team logos)
+   - Mappings to the original market IDs
+
+4. **Transform Data Format**: The original order book structure is transformed to a parimutel format suitable for Apechain deployment.
+
+## Data Structure
+
+### Input Format (Individual Markets)
+
+```json
+[
+  {
+    "id": "market_real",
+    "question": "Will Real Madrid win the UEFA Champions League?",
+    "category": "sports",
+    "expiry_time": "2025-07-07T00:00:00Z",
+    "icon": "https://i.imgur.com/vvL5yfp.png"
+  },
+  {
+    "id": "market_barca",
+    "question": "Will Barcelona win the UEFA Champions League?",
+    "category": "sports",
+    "expiry_time": "2025-07-07T00:00:00Z",
+    "icon": "https://i.imgur.com/7kLZZSQ.png"
+  }
+]
 ```
 
-## Slack Message Formatting
+### Output Format (Event-Based Structure)
 
-When posting to Slack, event markets have a different formatting:
+```json
+[
+  {
+    "id": "event_ucl_test",
+    "question": "UEFA Champions League 2025",
+    "category": "sports",
+    "is_event": true,
+    "event_id": "ucl_test",
+    "event_name": "UEFA Champions League 2025",
+    "event_image": "https://i.imgur.com/Ux7r6Fp.png",
+    "event_icon": "https://i.imgur.com/Ux7r6Fp.png",
+    "options": ["Real Madrid", "Barcelona"],
+    "option_images": {
+      "Real Madrid": "https://i.imgur.com/vvL5yfp.png",
+      "Barcelona": "https://i.imgur.com/7kLZZSQ.png"
+    },
+    "option_market_ids": {
+      "Real Madrid": "market_real",
+      "Barcelona": "market_barca"
+    }
+  }
+]
+```
 
-1. The message title shows "New Event for Approval"
-2. The event banner image is shown
-3. Each team option is listed with its icon
-4. The binary "Yes/No" options are removed
-5. Original market IDs are preserved for tracking
+## Database Schema Extensions
+
+To support event-based markets, the following fields were added to both the `Market` and `PendingMarket` tables:
+
+```
+event_id          - Unique identifier for the event
+event_name        - Display name for the event
+event_image       - URL to the event banner image
+event_icon        - URL to the event icon
+is_event          - Boolean flag indicating if this is an event market
+option_market_ids - JSON mapping of option values to original market IDs
+```
+
+## Implementation Details
+
+### Key Components
+
+1. **transform_markets_with_events.py**
+   - Main utility for transforming markets into event-based format
+   - Groups related markets and creates event structures
+
+2. **add_event_fields_migration.py**
+   - Migration script that adds event-related fields to database tables
+
+3. **check_pending_approvals.py**
+   - Handles approval process for event-based markets
+   - Creates proper Market entries from approved PendingMarkets
+
+4. **deploy_event_markets.py**
+   - Specialized script for deploying event markets to Apechain
+   - Handles the mapping of option images and market IDs
+
+### Event-Based Market API
+
+The API provides endpoints to retrieve markets in event-based format:
+
+- **GET /api/markets-with-events**
+  - Returns all markets grouped by events
+  - Includes both event markets and standalone markets
+
+```json
+{
+  "events": [
+    {
+      "id": "ucl_test",
+      "name": "UEFA Champions League 2025",
+      "image": "https://i.imgur.com/Ux7r6Fp.png",
+      "icon": "https://i.imgur.com/Ux7r6Fp.png",
+      "category": "sports",
+      "options": ["Real Madrid", "Barcelona", "Inter Milan", "Arsenal"],
+      "option_images": {
+        "Real Madrid": "https://i.imgur.com/vvL5yfp.png",
+        "Barcelona": "https://i.imgur.com/7kLZZSQ.png"
+      },
+      "option_market_ids": {
+        "Real Madrid": "market_real",
+        "Barcelona": "market_barca"
+      }
+    }
+  ],
+  "markets": [
+    {
+      "id": "market_btc",
+      "question": "Will Bitcoin exceed $100,000 in 2025?",
+      "category": "crypto",
+      "options": ["Yes", "No"],
+      "expiry": null,
+      "banner_uri": null,
+      "apechain_market_id": null,
+      "status": "approved"
+    }
+  ]
+}
+```
+
+## Deployment Workflow
+
+1. **Initial Approval**: Events are posted to Slack for initial approval as grouped entities with proper formatting.
+
+2. **Database Storage**: Approved events are stored in the Market table with their event relationships.
+
+3. **Deployment**: The specialized deployment script handles deployment of events to Apechain.
+
+4. **Frontend Integration**: Event images and option images are properly mapped for frontend display.
 
 ## Testing
 
-You can test the event market transformation with:
+Testing event market transformation can be done using the following scripts:
 
-```
-python post_test_market_to_slack.py
-```
+- **run_event_pipeline_test.py**: Runs an end-to-end test of the event pipeline.
+- **clean_db_for_event_testing.py**: Cleans the database for testing event markets.
+- **check_events.py**: Displays event relationships in the database.
 
-This will post a sample event market for "UEFA Champions League Winner" with multiple team options and their icons.
+## Conclusion
 
-## Benefits
-
-This transformation:
-
-1. Reduces information overload by consolidating related markets
-2. Creates a cleaner, more intuitive user interface
-3. Maintains all the original data for tracking and deployment
-4. Preserves the relationship between teams and their original market IDs
-5. Properly displays event banner images and team icons
-
-## Pipeline Integration
-
-The transformation is integrated into the pipeline flow:
-
-1. Fetch markets from Polymarket API
-2. Transform binary markets into event-based markets
-3. Categorize the transformed markets
-4. Post to Slack for approval
-5. Store in database with proper relationships
+The event-based market transformation is a critical enhancement that allows the pipeline to properly handle related markets, improving the user experience by grouping related betting opportunities under a common event. This structure provides better categorization, more intuitive interfaces, and proper relationships between markets.
