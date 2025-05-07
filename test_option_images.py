@@ -37,7 +37,7 @@ def fetch_test_markets() -> List[Dict[str, Any]]:
     ]
     
     all_markets = []
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     try:
         for query in queries:

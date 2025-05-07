@@ -42,7 +42,7 @@ for directory in [DATA_DIR, TMP_DIR, LOGS_DIR]:
 # Polymarket configuration
 POLYMARKET_BASE = os.environ.get("POLYMARKET_BASE", "https://clob.polymarket.com")
 POLYMARKET_API = os.environ.get("POLYMARKET_API", "https://clob.polymarket.com")
-POLYMARKET_GQL = os.environ.get("POLYMARKET_GQL", "https://gamma-api.poly.market/graphql")
+POLYMARKET_GQL = os.environ.get("POLYMARKET_GQL", "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 ")
 
 # Slack configuration
 SLACK_BOT_TOKEN = os.environ.get("SLACK_BOT_TOKEN")

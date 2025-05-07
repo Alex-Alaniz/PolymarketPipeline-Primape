@@ -41,7 +41,7 @@ from utils.batch_categorizer import batch_categorize_markets
 db.init_app(app)
 
 # Constants
-GAMMA_API_URL = "https://gamma-api.polymarket.com/markets"
+GAMMA_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
 
 def fetch_limited_markets(limit: int = 10):
     """

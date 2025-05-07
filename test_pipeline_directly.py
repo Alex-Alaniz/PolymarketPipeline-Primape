@@ -45,7 +45,7 @@ from utils.market_transformer import MarketTransformer
 from utils.option_image_fixer import apply_image_fixes, verify_option_images
 
 # Constants
-MARKET_API_URL = "https://gamma-api.poly.market/graphql"
+MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 "
 MARKETS_QUERY = """
 query FetchMarkets($first: Int!, $skip: Int!) {
   markets(

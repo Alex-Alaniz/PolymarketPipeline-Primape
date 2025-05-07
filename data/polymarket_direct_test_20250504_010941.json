@@ -99,7 +99,7 @@
   ],
   "graphql_results": [
     {
-      "url": "https://gamma-api.poly.market/graphql",
+      "url": "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 ",
       "success": false,
       "status_code": null,
       "error": "Request error: HTTPSConnectionPool(host='gamma-api.poly.market', port=443): Max retries exceeded with url: /graphql (Caused by NameResolutionError(\"<urllib3.connection.HTTPSConnection object at 0x7f96e3127e10>: Failed to resolve 'gamma-api.poly.market' ([Errno -2] Name or service not known)\"))",

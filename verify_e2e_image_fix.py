@@ -32,7 +32,7 @@ def fetch_real_markets():
     all_markets = []
     
     for category in categories:
-        url = "https://gamma-api.polymarket.com/markets"
+        url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
         params = {
             "cat": category,
             "limit": 50

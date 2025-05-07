@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 def fetch_sports_markets() -> List[Dict[str, Any]]:
     """Fetch sports markets from Polymarket"""
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Define categories to search
     categories = ["soccer", "nba", "nfl", "mlb", "nhl", "sports"]

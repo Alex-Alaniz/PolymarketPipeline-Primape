@@ -47,7 +47,7 @@ def fetch_markets(limit: int = 200, variant: int = 0) -> List[Dict[str, Any]]:
         List of market data dictionaries
     """
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Base parameters with anti-caching timestamp
     timestamp = datetime.now().strftime("%Y%m%d%H%M%S")

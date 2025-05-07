@@ -19,7 +19,7 @@ logger = logging.getLogger("test_historical_events")
 def fetch_historical_markets():
     """Fetch some historical markets that might have event categories"""
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Try different parameters to find historical markets
     params_list = [
@@ -114,7 +114,7 @@ def check_event_categories(markets: List[Dict[str, Any]]):
 def examine_single_market(market_id):
     """Examine a specific market in detail"""
     # Base API URL
-    base_url = f"https://gamma-api.polymarket.com/markets/{market_id}"
+    base_url = f"https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100/{market_id}"
     
     logger.info(f"Fetching market with ID: {market_id}")
     

@@ -41,7 +41,7 @@ from utils.transform_market_with_events import transform_markets_batch
 db.init_app(app)
 
 # Constants
-GAMMA_API_URL = "https://gamma-api.polymarket.com/markets"
+GAMMA_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
 
 def fetch_limited_markets(limit: int = 5) -> List[Dict[str, Any]]:
     """Fetch a limited number of markets for testing"""

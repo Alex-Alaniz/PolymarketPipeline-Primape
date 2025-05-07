@@ -38,7 +38,7 @@ def fetch_specific_markets() -> Dict[str, List[Dict[str, Any]]]:
     ]
     
     results = {}
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     for query in queries:
         params = {

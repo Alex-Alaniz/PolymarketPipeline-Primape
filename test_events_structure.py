@@ -11,7 +11,7 @@ from pprint import pprint
 def test_events_structure():
     """Test API call to Polymarket focusing on events"""
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Get markets from multiple categories to check event structures
     categories = ["sports", "politics", "crypto", "entertainment"]

@@ -11,7 +11,7 @@ from pprint import pprint
 def test_api_call():
     """Test API call to Polymarket"""
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Get just a few markets from 'politics' category
     params = {

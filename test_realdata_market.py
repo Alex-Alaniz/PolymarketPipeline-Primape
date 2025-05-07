@@ -26,7 +26,7 @@ def fetch_sample_market():
     logger.info("Fetching sample market from Polymarket API...")
     
     # Use the Champions League market query as it has multiple options
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     params = {
         "search": "Champions League",
         "limit": 5,

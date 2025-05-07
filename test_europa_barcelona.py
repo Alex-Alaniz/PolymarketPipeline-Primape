@@ -24,7 +24,7 @@ SLACK_CHANNEL_ID = os.environ.get("SLACK_CHANNEL_ID")
 
 def fetch_europa_league_markets() -> List[Dict[str, Any]]:
     """Fetch Europa League markets from Polymarket"""
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     params = {"limit": 30, "q": "Europa League", "cat": "soccer"}
     
     try:
@@ -49,7 +49,7 @@ def fetch_europa_league_markets() -> List[Dict[str, Any]]:
 
 def fetch_champions_league_markets() -> List[Dict[str, Any]]:
     """Fetch Champions League markets from Polymarket"""
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     params = {"limit": 30, "q": "Champions League", "cat": "soccer"}
     
     try:
@@ -252,7 +252,7 @@ def analyze_and_fix_champions_league(markets: List[Dict[str, Any]]):
 
 def fetch_la_liga_markets() -> List[Dict[str, Any]]:
     """Fetch La Liga markets from Polymarket"""
-    url = "https://gamma-api.polymarket.com/markets"
+    url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     params = {"limit": 30, "q": "La Liga", "cat": "soccer"}
     
     try:

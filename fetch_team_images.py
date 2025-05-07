@@ -18,7 +18,7 @@ def fetch_specific_team_images() -> None:
     ]
     
     # URL setup
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     for search_term, team_name, expected_question in teams:
         print(f"\nSearching for {team_name} in {search_term}...")

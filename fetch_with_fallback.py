@@ -59,7 +59,7 @@ logger = logging.getLogger('fetch_gamma')
 
 # IMPORTANT: This script MUST NEVER use fallback mechanisms or sample data.
 # ALL data MUST come from the actual Polymarket API via the Gamma Markets endpoint:
-# GET https://gamma-api.polymarket.com/markets
+# GET https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100
 # 
 # When the API is unreachable, the script should fail rather than use any fallback data.
 

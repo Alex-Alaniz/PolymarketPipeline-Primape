@@ -22,7 +22,7 @@
   },
   {
     "name": "Polymarket GraphQL API",
-    "base_url": "https://gamma-api.poly.market/graphql",
+    "base_url": "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 ",
     "working_paths": [],
     "samples": {},
     "schema": {}

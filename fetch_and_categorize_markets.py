@@ -45,7 +45,7 @@ logging.basicConfig(
 logger = logging.getLogger('fetch_markets')
 
 # Constants
-MARKET_API_URL = "https://gamma-api.poly.market/graphql"
+MARKET_API_URL = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100 "
 MARKETS_QUERY = """
 query FetchMarkets($first: Int!, $skip: Int!) {
   markets(

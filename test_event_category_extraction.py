@@ -19,7 +19,7 @@ logger = logging.getLogger("test_event_category")
 def fetch_sample_markets():
     """Fetch a few sample markets to test event category extraction"""
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Parameters for sample markets
     params = {

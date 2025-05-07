@@ -10,7 +10,7 @@ import json
 def find_related_markets():
     """Find markets that are related to each other via events"""
     # Base API URL
-    base_url = "https://gamma-api.polymarket.com/markets"
+    base_url = "https://gamma-api.polymarket.com/markets?closed=false&archived=false&active=true&limit=100"
     
     # Try to find a specific type of event that might have related markets
     # Let's try fetching sports markets as they might be more likely to have related events
