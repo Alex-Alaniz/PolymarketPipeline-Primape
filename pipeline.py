@@ -25,9 +25,11 @@ import time
 import json
 import logging
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 
 import sqlalchemy as sa
+
+from utils.batch_categorizer import batch_categorize_markets
 from models import db, Market, ProcessedMarket, PipelineRun
 from filter_active_markets import fetch_markets, filter_active_markets
 from fetch_active_markets_with_tracker import post_new_markets, filter_new_markets
@@ -174,14 +176,34 @@ class PolymarketPipeline:
         self.update_stats(markets_filtered=len(filtered_markets))
         logger.info(f"Filtered to {len(filtered_markets)} active markets")
         
-        # Check category distribution
+        # Check initial category distribution
         categories = {}
         for market in filtered_markets:
             # Use event_category when available, otherwise leave as "uncategorized"
             category = market.get("event_category", "uncategorized")
             categories[category] = categories.get(category, 0) + 1
         
-        logger.info("Market category distribution:")
+        logger.info("Initial market category distribution:")
+        for category, count in categories.items():
+            logger.info(f"  - {category}: {count} markets")
+        
+        # Batch categorize markets using GPT-4o-mini
+        logger.info("Categorizing markets with GPT-4o-mini")
+        categorized_markets = batch_categorize_markets(filtered_markets)
+        
+        # Update markets with their AI categories
+        for i, market in enumerate(filtered_markets):
+            if i < len(categorized_markets):
+                market["ai_category"] = categorized_markets[i].get("ai_category", "news")
+                market["needs_manual_categorization"] = categorized_markets[i].get("needs_manual_categorization", False)
+        
+        # Check final category distribution after AI categorization
+        categories = {}
+        for market in filtered_markets:
+            category = market.get("ai_category", "news")
+            categories[category] = categories.get(category, 0) + 1
+        
+        logger.info("Final market category distribution after AI categorization:")
         for category, count in categories.items():
             logger.info(f"  - {category}: {count} markets")
         
