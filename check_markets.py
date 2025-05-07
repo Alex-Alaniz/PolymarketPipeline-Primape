@@ -4,8 +4,16 @@
 Check the status of markets in the database.
 """
 
-from main import app
-from models import Market
+from flask import Flask
+app = Flask(__name__)
+app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:postgres@localhost:5432/postgres"
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
+}
+
+from models_updated import db, Market
+db.init_app(app)
 
 def check_markets():
     """Display all markets in the database."""
