@@ -137,14 +137,11 @@ def create_market_entry(pending_market: PendingMarket) -> bool:
         
         # Create market entry
         market = Market(
-            poly_id=pending_market.poly_id,
+            id=pending_market.poly_id,  # Market uses id, not poly_id as primary key
             question=pending_market.question,
             category=pending_market.category,
-            banner_url=pending_market.banner_url,
-            icon_url=pending_market.icon_url,
             options=json.dumps(options) if isinstance(options, list) else options,
             expiry=pending_market.expiry,
-            raw_data=pending_market.raw_data,
             status="approved",
             event_id=pending_market.event_id,
             event_name=pending_market.event_name
